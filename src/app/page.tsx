@@ -1,187 +1,61 @@
-'use client';
+"use client";
 
 import { useEffect, useState, type FormEvent } from "react";
 import "./personal.css";
+import MatrixRain from "@/components/MatrixRain";
+import InteractiveTerminal from "@/components/InteractiveTerminal";
+import {
+  UI, PERSONAL, SOCIALS, SKILLS, BOOKS, ARTICLES, TUTORIALS,
+  type Lang, DEFAULT_LANG, LANGS,
+} from "@/lib/content";
 
-type Lang = "fa" | "en";
-
-const t = {
-  fa: {
-    dir: "rtl",
-    langName: "FA",
-    otherLang: "EN",
-    brand: "yourname",
-    nav: { about: "درباره", skills: "مهارت‌ها", projects: "پروژه‌ها", contact: "تماس" },
-    hero: {
-      eyebrow: "سلام، من",
-      title: "اسم شما",
-      subtitle: "من ", subtitleAccent: "تجربه‌های دیجیتال تمیز", subtitleEnd: " می‌سازم",
-      desc: "توسعه‌دهنده‌ای پرشور با تمرکز روی ساختن محصولاتی پالایش‌شده، دسترس‌پذیر و سریع. به جزئیاتی اهمیت می‌دم که نرم‌افزار رو برای کاربر خوشایند می‌کنن.",
-      cta1: "نمونه‌کارها", cta2: "تماس بگیر",
-    },
-    about: {
-      num: "۰۱", label: "درباره",
-      title: "کمی درباره من",
-      p1: "توسعه‌دهنده‌ای هستم که عاشق تبدیل ایده به محصوله. طی چند سال اخیر در سراسر استک کار کردم — از طراحی دیتابیس تا رابط کاربری pixel-perfect. معتقدم نرم‌افزار عالی از همدلی با کاربر همراه با مهندسی منضبط به دست میاد.",
-      p2: "وقتی کد نمی‌زنم، دارم درباره سیستم‌های طراحی می‌خونم، روی پروژه‌های جانبی کار می‌کنم، یا یه کافه‌ی جدید رو امتحان می‌کنم. همیشه آماده‌م برای گفت‌وگوهای جالب و همکاری.",
-      stats: [
-        { v: "+۵", l: "سال تجربه" },
-        { v: "+۳۰", l: "پروژه تحویل‌شده" },
-        { v: "∞", l: "فنجان قهوه" },
-      ],
-      cardTitle: "اطلاعات سریع",
-      facts: [
-        { k: "موقعیت", v: "زمین 🌍" },
-        { k: "زبان‌ها", v: "فارسی، انگلیسی" },
-        { k: "تمرکز", v: "وب و محصول" },
-        { k: "وضعیت", v: "آماده‌ی همکاری" },
-      ],
-    },
-    skills: {
-      num: "۰۲", label: "مهارت‌ها",
-      title: "ابزارهایی که باهاشون کار می‌کنم",
-      cards: [
-        { t: "فرانت‌اند", d: "ساخت رابط‌های واکنش‌گرا و دسترس‌پذیر با ابزار مدرن.", tags: ["HTML", "CSS", "JavaScript", "TypeScript", "React", "Next.js", "Tailwind"] },
-        { t: "بک‌اند", d: "طراحی API و سرویس‌هایی که مقیاس‌پذیر و قابل نگهداری هستن.", tags: ["Node.js", "Express", "Python", "FastAPI", "REST", "GraphQL", "WebSocket"] },
-        { t: "داده", d: "مدل‌سازی، کوئری و بهینه‌سازی ذخیره‌گاه‌های داده.", tags: ["PostgreSQL", "MySQL", "MongoDB", "Redis", "Prisma", "SQLite"] },
-        { t: "ابزار", d: "تحویل با اعتماد به نفس با گردش‌کار اثبات‌شده.", tags: ["Git", "Docker", "CI/CD", "Vercel", "Linux", "Figma"] },
-      ],
-    },
-    projects: {
-      num: "۰۳", label: "پروژه‌ها",
-      title: "کارهای منتخب",
-      items: [
-        { n: "۰۱", t: "پروژه آلفا", d: "یک داشبورد SaaS برای ردیابی لحظه‌ای متریک‌ها، ساخته‌شده با Next.js و WebSocket.", tags: ["Next.js", "Prisma", "WebSocket"] },
-        { n: "۰۲", t: "پروژه بتا", d: "دستیار نوشتاری هوش مصنوعی که محتوا را پیش‌نویس، ویرایش و خلاصه می‌کند.", tags: ["Python", "FastAPI", "LLM"] },
-        { n: "۰۳", t: "پروژه گاما", d: "فروشگاه موبایل‌محور با سبد خرید، تسویه و پرداخت Stripe.", tags: ["React", "Stripe", "Tailwind"] },
-        { n: "۰۴", t: "پروژه دلتا", d: "برنامه یادداشت‌برداری مشارکتی با همگام‌سازی لحظه‌ای و پشتیبانی آفلاین.", tags: ["Vue", "IndexedDB", "PWA"] },
-      ],
-      live: "نمایش زنده →", code: "کد →",
-    },
-    contact: {
-      num: "۰۴", label: "تماس",
-      title: "بیاید چیزی بسازیم",
-      desc: "پروژه‌ای در ذهن دارید، سؤالی دارید، یا فقط می‌خواید سلام کنید؟ پیام بذارید تا ظرف یک دو روز جواب بدم.",
-      emailLabel: "ایمیل", githubLabel: "گیت‌هاب", linkedinLabel: "لینکدین",
-      form: {
-        name: "نام", namePh: "مثلاً مهدی رضایی",
-        email: "ایمیل", emailPh: "example@domain.com",
-        message: "پیام", messagePh: "درباره ایده‌ت بنویس...",
-        submit: "ارسال پیام",
-        sending: "در حال ارسال...",
-        success: "✓ پیام ذخیره شد. ممنون!",
-        errors: {
-          missing: "لطفاً همه فیلدها را پر کنید.",
-          email: "لطفاً یک ایمیل معتبر وارد کنید.",
-          short: "پیام باید حداقل ۱۰ کاراکتر باشد.",
-          rate: "تعداد درخواست‌ها زیاد بود. ۱۰ دقیقه بعد دوباره تلاش کنید.",
-          spam: "پیام شما اسپم تشخیص داده شد.",
-          server: "خطای سرور. لطفاً بعداً تلاش کنید.",
-        },
-      },
-    },
-    footer: { rights: "کپی‌رایت", built: "ساخته‌شده با عشق." },
-    toTop: "بازگشت به بالا",
-  },
-  en: {
-    dir: "ltr",
-    langName: "EN",
-    otherLang: "FA",
-    brand: "yourname",
-    nav: { about: "About", skills: "Skills", projects: "Projects", contact: "Contact" },
-    hero: {
-      eyebrow: "Hello, I'm",
-      title: "Your Name",
-      subtitle: "I build ", subtitleAccent: "clean digital experiences", subtitleEnd: "",
-      desc: "A passionate developer focused on creating polished, accessible, and performant products. I care about the details that make software feel great to use.",
-      cta1: "View my work", cta2: "Get in touch",
-    },
-    about: {
-      num: "01", label: "About",
-      title: "A bit about me",
-      p1: "I'm a developer who loves turning ideas into products. Over the past few years I've worked across the stack — from designing database schemas to polishing pixel-perfect UIs. I believe great software comes from empathy for the user combined with disciplined engineering.",
-      p2: "When I'm not coding, you'll find me reading about design systems, experimenting with side projects, or exploring a new coffee shop. I'm always open to interesting conversations and collaborations.",
-      stats: [
-        { v: "5+", l: "Years building things" },
-        { v: "30+", l: "Projects shipped" },
-        { v: "∞", l: "Cups of coffee" },
-      ],
-      cardTitle: "Quick facts",
-      facts: [
-        { k: "Location", v: "Earth 🌍" },
-        { k: "Languages", v: "English, Persian" },
-        { k: "Focus", v: "Web & Product" },
-        { k: "Availability", v: "Open to work" },
-      ],
-    },
-    skills: {
-      num: "02", label: "Skills",
-      title: "Tools I work with",
-      cards: [
-        { t: "Frontend", d: "Building responsive, accessible interfaces with modern tooling.", tags: ["HTML", "CSS", "JavaScript", "TypeScript", "React", "Next.js", "Tailwind"] },
-        { t: "Backend", d: "Designing APIs and services that scale and stay maintainable.", tags: ["Node.js", "Express", "Python", "FastAPI", "REST", "GraphQL", "WebSockets"] },
-        { t: "Data", d: "Modeling, querying, and optimizing data stores.", tags: ["PostgreSQL", "MySQL", "MongoDB", "Redis", "Prisma", "SQLite"] },
-        { t: "Tooling", d: "Shipping with confidence using proven workflows.", tags: ["Git", "Docker", "CI/CD", "Vercel", "Linux", "Figma"] },
-      ],
-    },
-    projects: {
-      num: "03", label: "Projects",
-      title: "Selected work",
-      items: [
-        { n: "01", t: "Project Alpha", d: "A SaaS dashboard for tracking metrics in real time, built with Next.js and WebSockets.", tags: ["Next.js", "Prisma", "WebSocket"] },
-        { n: "02", t: "Project Beta", d: "An AI-powered writing assistant that drafts, edits, and summarizes content with style.", tags: ["Python", "FastAPI", "LLM"] },
-        { n: "03", t: "Project Gamma", d: "A mobile-first e-commerce storefront with cart, checkout, and Stripe payments.", tags: ["React", "Stripe", "Tailwind"] },
-        { n: "04", t: "Project Delta", d: "A collaborative note-taking app with real-time sync and offline support.", tags: ["Vue", "IndexedDB", "PWA"] },
-      ],
-      live: "Live →", code: "Code →",
-    },
-    contact: {
-      num: "04", label: "Contact",
-      title: "Let's build something",
-      desc: "Have a project in mind, a question, or just want to say hi? Drop a message and I'll get back to you within a day or two.",
-      emailLabel: "Email", githubLabel: "GitHub", linkedinLabel: "LinkedIn",
-      form: {
-        name: "Name", namePh: "Jane Doe",
-        email: "Email", emailPh: "jane@example.com",
-        message: "Message", messagePh: "Tell me about your idea...",
-        submit: "Send message",
-        sending: "Sending...",
-        success: "✓ Message saved. Thank you!",
-        errors: {
-          missing: "Please fill in all fields.",
-          email: "Please enter a valid email address.",
-          short: "Message must be at least 10 characters.",
-          rate: "Too many requests. Try again in 10 minutes.",
-          spam: "Your message was flagged as spam.",
-          server: "Server error. Please try again later.",
-        },
-      },
-    },
-    footer: { rights: "©", built: "Built with care." },
-    toTop: "Back to top",
-  },
+type FormStatus = { text: string; kind: "success" | "error" | "" };
+type MessageRow = {
+  id: string; name: string; email: string; message: string;
+  ip: string | null; createdAt: string;
 };
 
-const faNum = (s: string) => s; // already fa in source
+const langLabel: Record<Lang, string> = { en: "EN", de: "DE", fa: "FA" };
 
 export default function Home() {
-  const [lang, setLang] = useState<Lang>("fa");
+  const [lang, setLang] = useState<Lang>(DEFAULT_LANG);
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [toTop, setToTop] = useState(false);
   const [year, setYear] = useState<number | null>(null);
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
-  const [formStatus, setFormStatus] = useState<{ text: string; kind: "success" | "error" | "" }>({ text: "", kind: "" });
+  const [formStatus, setFormStatus] = useState<FormStatus>({ text: "", kind: "" });
+  const [utcTime, setUtcTime] = useState("");
+  const [activeTutorial, setActiveTutorial] = useState<typeof TUTORIALS[number] | null>(null);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [adminPwd, setAdminPwd] = useState("");
+  const [adminMsgs, setAdminMsgs] = useState<MessageRow[] | null>(null);
+  const [adminErr, setAdminErr] = useState("");
 
-  const tt = t[lang];
-  const isFa = lang === "fa";
+  const tt = UI[lang];
 
+  // sync html lang/dir
   useEffect(() => {
     document.documentElement.lang = lang;
     document.documentElement.dir = tt.dir;
   }, [lang, tt.dir]);
 
+  // hash change → open admin
+  useEffect(() => {
+    const onHash = () => {
+      if (window.location.hash === "#admin") {
+        setAdminOpen(true);
+      } else {
+        setAdminOpen(false);
+      }
+    };
+    onHash();
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  // scroll listener
   useEffect(() => {
     const onScroll = () => {
       setScrolled(window.scrollY > 20);
@@ -193,6 +67,19 @@ export default function Home() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // live UTC clock
+  useEffect(() => {
+    const tick = () => {
+      const d = new Date();
+      const iso = d.toISOString().replace("T", " ").slice(0, 19);
+      setUtcTime(iso + " UTC");
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // reveal on scroll
   useEffect(() => {
     const els = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"));
     const io = new IntersectionObserver(
@@ -211,24 +98,43 @@ export default function Home() {
     return () => io.disconnect();
   }, []);
 
+  // lock body when menu/modal open
   useEffect(() => {
-    document.body.style.overflow = menuOpen ? "hidden" : "";
+    const locked = menuOpen || activeTutorial || adminOpen;
+    document.body.style.overflow = locked ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
-  }, [menuOpen]);
+  }, [menuOpen, activeTutorial, adminOpen]);
 
   const closeMenu = () => setMenuOpen(false);
 
   const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
-    if (href.startsWith("#") && href.length > 1) {
+    if (href.startsWith("#") && href.length > 1 && href !== "#admin") {
       const target = document.querySelector(href);
       if (target) {
         e.preventDefault();
-        const top = target.getBoundingClientRect().top + window.scrollY - 70;
+        const top = target.getBoundingClientRect().top + window.scrollY - 80;
         window.scrollTo({ top, behavior: "smooth" });
       }
     }
     closeMenu();
   };
+
+  // close modal on esc
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (activeTutorial) setActiveTutorial(null);
+        if (adminOpen) {
+          setAdminOpen(false);
+          if (window.location.hash === "#admin") {
+            history.replaceState(null, "", window.location.pathname);
+          }
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [activeTutorial, adminOpen]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -241,8 +147,8 @@ export default function Home() {
     const email = (fd.get("email") as string)?.trim();
     const message = (fd.get("message") as string)?.trim();
     const errs = tt.contact.form.errors;
-
     const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
     if (!name || !email || !message) {
       setFormStatus({ text: errs.missing, kind: "error" });
       setSubmitting(false);
@@ -271,7 +177,8 @@ export default function Home() {
         (e.target as HTMLFormElement).reset();
       } else {
         const err = data.error || "server_error";
-        const msg = err === "rate_limit" ? errs.rate
+        const msg =
+          err === "rate_limit" ? errs.rate
           : err === "spam_detected" ? errs.spam
           : err === "missing_fields" ? errs.missing
           : err === "invalid_email" ? errs.email
@@ -286,33 +193,89 @@ export default function Home() {
     }
   };
 
-  const reveal = (id: string) =>
-    revealed.has(id) ? "reveal visible" : "reveal";
+  const adminUnlock = async (e: FormEvent) => {
+    e.preventDefault();
+    setAdminErr("");
+    try {
+      const res = await fetch(`/api/messages?password=${encodeURIComponent(adminPwd)}`);
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setAdminMsgs(data.messages);
+      } else {
+        setAdminErr(tt.admin.wrong);
+      }
+    } catch {
+      setAdminErr(tt.admin.wrong);
+    }
+  };
+
+  const closeAdmin = () => {
+    setAdminOpen(false);
+    setAdminMsgs(null);
+    setAdminPwd("");
+    setAdminErr("");
+    if (window.location.hash === "#admin") {
+      history.replaceState(null, "", window.location.pathname);
+    }
+  };
+
+  const reveal = (id: string) => (revealed.has(id) ? "reveal visible" : "reveal");
 
   return (
-    <>
+    <div className="app">
+      <MatrixRain />
+
+      {/* STATUS BAR */}
+      <div className="statusbar">
+        <div className="statusbar-left">
+          <span className="statusbar-item">
+            <span className="dot"></span>
+            <span className="value">online</span>
+          </span>
+          <span className="statusbar-item">
+            <span className="label">uptime:</span>
+            <span className="value">{utcTime || "—"}</span>
+          </span>
+        </div>
+        <div className="statusbar-right">
+          <span className="statusbar-item">
+            <span className="label">pid:</span>
+            <span className="value">#{(typeof window !== "undefined" ? window.location.pathname.length : 1) + 1337}</span>
+          </span>
+          <span className="statusbar-item">
+            <span className="label">tty:</span>
+            <span className="value">/dev/pts/0</span>
+          </span>
+        </div>
+      </div>
+
       {/* NAVBAR */}
       <header className={`navbar ${scrolled ? "scrolled" : ""}`}>
         <div className="container nav-inner">
           <a href="#hero" className="brand" onClick={(e) => handleNavClick(e, "#hero")}>
-            <span className="brand-dot"></span>
-            <span className="brand-name">{tt.brand}</span>
+            <span className="brand-name">{PERSONAL.handle}</span>
           </a>
           <nav className={`nav-links ${menuOpen ? "open" : ""}`}>
             <a href="#about" onClick={(e) => handleNavClick(e, "#about")}>{tt.nav.about}</a>
             <a href="#skills" onClick={(e) => handleNavClick(e, "#skills")}>{tt.nav.skills}</a>
-            <a href="#projects" onClick={(e) => handleNavClick(e, "#projects")}>{tt.nav.projects}</a>
+            <a href="#books" onClick={(e) => handleNavClick(e, "#books")}>{tt.nav.books}</a>
+            <a href="#articles" onClick={(e) => handleNavClick(e, "#articles")}>{tt.nav.articles}</a>
+            <a href="#tutorials" onClick={(e) => handleNavClick(e, "#tutorials")}>{tt.nav.tutorials}</a>
             <a href="#contact" onClick={(e) => handleNavClick(e, "#contact")}>{tt.nav.contact}</a>
           </nav>
           <div className="nav-right">
-            <button
-              className="lang-toggle"
-              onClick={() => setLang((p) => (p === "fa" ? "en" : "fa"))}
-              aria-label="Switch language"
-              title={isFa ? "Switch to English" : "تغییر به فارسی"}
-            >
-              {tt.otherLang}
-            </button>
+            <div className="lang-toggle">
+              {LANGS.map((l) => (
+                <button
+                  key={l}
+                  className={lang === l ? "active" : ""}
+                  onClick={() => setLang(l)}
+                  aria-label={`Switch to ${l}`}
+                >
+                  {langLabel[l]}
+                </button>
+              ))}
+            </div>
             <button
               className={`nav-toggle ${menuOpen ? "active" : ""}`}
               aria-label="Toggle menu"
@@ -328,47 +291,36 @@ export default function Home() {
       <section className="hero" id="hero">
         <div className="container hero-grid">
           <div className={`hero-text ${reveal("hero-text")}`} data-reveal="hero-text">
-            <p className="eyebrow">{tt.hero.eyebrow}</p>
-            <h1 className="hero-title">{tt.hero.title}</h1>
-            <h2 className="hero-subtitle">
-              {tt.hero.subtitle}<span className="gradient-text">{tt.hero.subtitleAccent}</span>{tt.hero.subtitleEnd}
-            </h2>
-            <p className="hero-desc">{tt.hero.desc}</p>
+            <p className="hero-greeting">{tt.hero.greeting}</p>
+            <h1 className="hero-title">{PERSONAL.fullName[lang]}</h1>
+            <p className="hero-subtitle">{PERSONAL.tagline[lang]}</p>
             <div className="hero-cta">
-              <a href="#projects" className="btn btn-primary" onClick={(e) => handleNavClick(e, "#projects")}>{tt.hero.cta1}</a>
-              <a href="#contact" className="btn btn-ghost" onClick={(e) => handleNavClick(e, "#contact")}>{tt.hero.cta2}</a>
+              <a href="#articles" className="btn btn-primary" onClick={(e) => handleNavClick(e, "#articles")}>{tt.hero.cta}</a>
+              <a href="#contact" className="btn btn-ghost" onClick={(e) => handleNavClick(e, "#contact")}>{tt.hero.ctaContact}</a>
             </div>
             <div className="hero-socials">
-              <a href="https://github.com/" target="_blank" rel="noopener noreferrer">GitHub</a>
-              <a href="https://linkedin.com/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
-              <a href="https://twitter.com/" target="_blank" rel="noopener noreferrer">Twitter</a>
+              {SOCIALS.map((s) => (
+                <a
+                  key={s.id}
+                  href={`${s.url}${s.handle}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="social-chip"
+                >
+                  <span>{s.label}</span>
+                  <span className="chip-handle">/{s.handle}</span>
+                </a>
+              ))}
             </div>
           </div>
-          <div className={`hero-visual ${reveal("hero-visual")}`} data-reveal="hero-visual" aria-hidden="true">
-            <div className="blob blob-1"></div>
-            <div className="blob blob-2"></div>
-            <div className="hero-card">
-              <div className="hero-card-row">
-                <span className="dot dot-red"></span>
-                <span className="dot dot-yellow"></span>
-                <span className="dot dot-green"></span>
-              </div>
-              <pre className="hero-code"><code>{`const `}<span className="k">developer</span>{` = {
-  name: `}<span className="s">'Your Name'</span>{`,
-  role: `}<span className="s">'Full-stack Developer'</span>{`,
-  stack: [`}<span className="s">'JS'</span>{`, `}<span className="s">'TS'</span>{`, `}<span className="s">'React'</span>{`],
-  available: `}<span className="k">true</span>{`,
-};`}</code></pre>
-            </div>
+          <div className={`hero-visual ${reveal("hero-visual")}`} data-reveal="hero-visual">
+            <InteractiveTerminal lang={lang} />
           </div>
         </div>
-        <a href="#about" className="scroll-cue" aria-label="Scroll down" onClick={(e) => handleNavClick(e, "#about")}>
-          <span></span>
-        </a>
       </section>
 
       {/* ABOUT */}
-      <section className="section" id="about">
+      <section className="section section-alt" id="about">
         <div className="container">
           <header className="section-head">
             <p className="section-eyebrow">{tt.about.num} — {tt.about.label}</p>
@@ -385,7 +337,7 @@ export default function Home() {
               </ul>
             </div>
             <aside className={`about-card ${reveal("about-card")}`} data-reveal="about-card">
-              <h3>{tt.about.cardTitle}</h3>
+              <h3>{tt.about.factsTitle}</h3>
               <dl>
                 {tt.about.facts.map((f, i) => (
                   <div key={i}>
@@ -399,45 +351,102 @@ export default function Home() {
       </section>
 
       {/* SKILLS */}
-      <section className="section section-alt" id="skills">
+      <section className="section" id="skills">
         <div className="container">
           <header className="section-head">
             <p className="section-eyebrow">{tt.skills.num} — {tt.skills.label}</p>
             <h2 className="section-title">{tt.skills.title}</h2>
+            <p className="section-subtitle">{tt.skills.subtitle}</p>
           </header>
           <div className="skills-grid">
-            {tt.skills.cards.map((s, i) => (
+            {SKILLS.map((s, i) => (
               <article key={i} className={`skill-card ${reveal(`skill-${i}`)}`} data-reveal={`skill-${i}`}>
-                <h3>{s.t}</h3>
-                <p>{s.d}</p>
-                <ul className="tags">{s.tags.map((tag) => <li key={tag}>{tag}</li>)}</ul>
+                <h3>{s.category[lang]}</h3>
+                <ul className="tags">{s.items.map((tag) => <li key={tag}>{tag}</li>)}</ul>
               </article>
             ))}
           </div>
         </div>
       </section>
 
-      {/* PROJECTS */}
-      <section className="section" id="projects">
+      {/* BOOKS */}
+      <section className="section section-alt" id="books">
         <div className="container">
           <header className="section-head">
-            <p className="section-eyebrow">{tt.projects.num} — {tt.projects.label}</p>
-            <h2 className="section-title">{tt.projects.title}</h2>
+            <p className="section-eyebrow">{tt.books.num} — {tt.books.label}</p>
+            <h2 className="section-title">{tt.books.title}</h2>
+            <p className="section-subtitle">{tt.books.subtitle}</p>
           </header>
-          <div className="projects-grid">
-            {tt.projects.items.map((p, i) => (
-              <article key={i} className={`project-card ${reveal(`project-${i}`)}`} data-reveal={`project-${i}`}>
-                <div className="project-thumb" style={{ ["--c1" as string]: projectColors[i].c1, ["--c2" as string]: projectColors[i].c2 }}>
-                  <span className="project-num">{p.n}</span>
+          <div className="books-grid">
+            {BOOKS.map((b, i) => (
+              <article key={b.id} className={`book-card ${reveal(`book-${i}`)}`} data-reveal={`book-${i}`}>
+                <div className="book-cover" style={{ background: b.cover }}>
+                  <div className="book-cover-title">{b.title[lang]}</div>
                 </div>
-                <div className="project-body">
-                  <h3>{p.t}</h3>
-                  <p>{p.d}</p>
-                  <ul className="tags">{p.tags.map((tag) => <li key={tag}>{tag}</li>)}</ul>
-                  <div className="project-links">
-                    <a href="#" target="_blank" rel="noopener noreferrer">{tt.projects.live}</a>
-                    <a href="#" target="_blank" rel="noopener noreferrer">{tt.projects.code}</a>
+                <div className="book-body">
+                  <div className="book-meta">
+                    <span>{b.year}</span>
+                    <span>{b.publisher[lang]}</span>
                   </div>
+                  <h3>{b.title[lang]}</h3>
+                  <p>{b.description[lang]}</p>
+                  <a href={b.link} target="_blank" rel="noopener noreferrer" className="book-link">{tt.books.view}</a>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ARTICLES */}
+      <section className="section" id="articles">
+        <div className="container">
+          <header className="section-head">
+            <p className="section-eyebrow">{tt.articles.num} — {tt.articles.label}</p>
+            <h2 className="section-title">{tt.articles.title}</h2>
+            <p className="section-subtitle">{tt.articles.subtitle}</p>
+          </header>
+          <div className="articles-list">
+            {ARTICLES.map((a, i) => (
+              <article key={a.id} className={`article-row ${reveal(`article-${i}`)}`} data-reveal={`article-${i}`}>
+                <span className="article-date">{a.date}</span>
+                <div className="article-main">
+                  <p className="article-type">{a.type[lang]}</p>
+                  <h3>{a.title[lang]}</h3>
+                  <p className="article-venue">{a.venue[lang]}</p>
+                  <p className="article-summary">{a.summary[lang]}</p>
+                </div>
+                <a href={a.link} target="_blank" rel="noopener noreferrer" className="article-link">{tt.articles.read}</a>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* TUTORIALS */}
+      <section className="section section-alt" id="tutorials">
+        <div className="container">
+          <header className="section-head">
+            <p className="section-eyebrow">{tt.tutorials.num} — {tt.tutorials.label}</p>
+            <h2 className="section-title">{tt.tutorials.title}</h2>
+            <p className="section-subtitle">{tt.tutorials.subtitle}</p>
+          </header>
+          <div className="tutorials-grid">
+            {TUTORIALS.map((t, i) => (
+              <article
+                key={t.id}
+                className={`tutorial-card ${reveal(`tut-${i}`)}`}
+                data-reveal={`tut-${i}`}
+                onClick={() => setActiveTutorial(t)}
+              >
+                <div className="tutorial-thumb">
+                  <div className="tutorial-play"></div>
+                  <span className="tutorial-duration">{t.duration}</span>
+                </div>
+                <div className="tutorial-body">
+                  <p className="tutorial-level">{t.level[lang]}</p>
+                  <h3>{t.title[lang]}</h3>
+                  <p>{t.description[lang]}</p>
                 </div>
               </article>
             ))}
@@ -446,11 +455,12 @@ export default function Home() {
       </section>
 
       {/* CONTACT */}
-      <section className="section section-alt" id="contact">
+      <section className="section" id="contact">
         <div className="container">
           <header className="section-head">
             <p className="section-eyebrow">{tt.contact.num} — {tt.contact.label}</p>
             <h2 className="section-title">{tt.contact.title}</h2>
+            <p className="section-subtitle">{tt.contact.subtitle}</p>
           </header>
           <div className="contact-grid">
             <div className={`contact-info ${reveal("contact-info")}`} data-reveal="contact-info">
@@ -458,17 +468,24 @@ export default function Home() {
               <ul className="contact-list">
                 <li>
                   <span className="contact-label">{tt.contact.emailLabel}</span>
-                  <a href="mailto:you@example.com">you@example.com</a>
-                </li>
-                <li>
-                  <span className="contact-label">{tt.contact.githubLabel}</span>
-                  <a href="https://github.com/" target="_blank" rel="noopener noreferrer">github.com/yourname</a>
-                </li>
-                <li>
-                  <span className="contact-label">{tt.contact.linkedinLabel}</span>
-                  <a href="https://linkedin.com/" target="_blank" rel="noopener noreferrer">linkedin.com/in/yourname</a>
+                  <a href={`mailto:${PERSONAL.email}`}>{PERSONAL.email}</a>
                 </li>
               </ul>
+              <p className="contact-label" style={{ marginTop: 24 }}>{tt.contact.socialsLabel}</p>
+              <div className="socials-grid">
+                {SOCIALS.map((s) => (
+                  <a
+                    key={s.id}
+                    href={`${s.url}${s.handle}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="social-chip"
+                  >
+                    <span>{s.label}</span>
+                    <span className="chip-handle">/{s.handle}</span>
+                  </a>
+                ))}
+              </div>
             </div>
             <form className={`contact-form ${reveal("contact-form")}`} data-reveal="contact-form" onSubmit={handleSubmit} noValidate>
               <div className="field">
@@ -495,12 +512,21 @@ export default function Home() {
       {/* FOOTER */}
       <footer className="footer">
         <div className="container footer-inner">
-          <p>{tt.footer.rights} {year ?? ""} {tt.hero.title}. {tt.footer.built}</p>
+          <p>© {year ?? ""} {PERSONAL.fullName[lang]}. {tt.footer.built}</p>
           <ul className="footer-links">
             <li><a href="#about" onClick={(e) => handleNavClick(e, "#about")}>{tt.nav.about}</a></li>
-            <li><a href="#skills" onClick={(e) => handleNavClick(e, "#skills")}>{tt.nav.skills}</a></li>
-            <li><a href="#projects" onClick={(e) => handleNavClick(e, "#projects")}>{tt.nav.projects}</a></li>
+            <li><a href="#books" onClick={(e) => handleNavClick(e, "#books")}>{tt.nav.books}</a></li>
+            <li><a href="#tutorials" onClick={(e) => handleNavClick(e, "#tutorials")}>{tt.nav.tutorials}</a></li>
             <li><a href="#contact" onClick={(e) => handleNavClick(e, "#contact")}>{tt.nav.contact}</a></li>
+            <li>
+              <a
+                href="#admin"
+                className="footer-admin"
+                onClick={(e) => { e.preventDefault(); setAdminOpen(true); window.location.hash = "admin"; }}
+              >
+                {tt.footer.admin}
+              </a>
+            </li>
           </ul>
         </div>
       </footer>
@@ -512,13 +538,80 @@ export default function Home() {
       >
         ↑
       </button>
-    </>
+
+      {/* TUTORIAL MODAL */}
+      {activeTutorial && (
+        <div className="tutorial-modal" onClick={() => setActiveTutorial(null)}>
+          <div className="tutorial-modal-inner" onClick={(e) => e.stopPropagation()}>
+            <div className="tutorial-modal-bar">
+              <span className="tutorial-modal-bar-title">
+                {activeTutorial.title[lang]} · {activeTutorial.duration} · {activeTutorial.level[lang]}
+              </span>
+              <button className="tutorial-modal-close" onClick={() => setActiveTutorial(null)}>
+                {tt.tutorials.close}
+              </button>
+            </div>
+            <div className="tutorial-modal-video">
+              <iframe
+                src={activeTutorial.embedUrl}
+                title={activeTutorial.title[lang]}
+                allowFullScreen
+                allow="autoplay; fullscreen; picture-in-picture"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADMIN MODAL */}
+      {adminOpen && (
+        <div className="admin-modal" onClick={closeAdmin}>
+          <div className="admin-modal-inner" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-bar">
+              <span className="admin-modal-bar-title">{tt.admin.title}</span>
+              <button className="tutorial-modal-close" onClick={closeAdmin}>×</button>
+            </div>
+            <div className="admin-modal-body">
+              {!adminMsgs ? (
+                <form className="admin-login" onSubmit={adminUnlock}>
+                  <div className="field">
+                    <label htmlFor="admin-pwd">{tt.admin.passwordLabel}</label>
+                    <input
+                      id="admin-pwd"
+                      type="password"
+                      value={adminPwd}
+                      onChange={(e) => setAdminPwd(e.target.value)}
+                      placeholder={tt.admin.passwordPh}
+                      autoFocus
+                    />
+                  </div>
+                  <button type="submit" className="btn btn-primary btn-block">{tt.admin.unlock}</button>
+                  {adminErr && <p className="form-status error" style={{ marginTop: 10 }}>{adminErr}</p>}
+                  <p style={{ marginTop: 16, fontSize: "0.72rem", color: "var(--text-faint)" }}>
+                    {tt.admin.subtitle}
+                  </p>
+                </form>
+              ) : adminMsgs.length === 0 ? (
+                <p style={{ color: "var(--text-dim)", textAlign: "center", padding: 20 }}>{tt.admin.empty}</p>
+              ) : (
+                <div className="admin-messages">
+                  {adminMsgs.map((m) => (
+                    <div key={m.id} className="admin-message">
+                      <div className="admin-message-head">
+                        <span>
+                          {tt.admin.from}: <span className="admin-message-from">{m.name}</span> &lt;{m.email}&gt;
+                        </span>
+                        <span>{tt.admin.at}: {new Date(m.createdAt).toLocaleString()}</span>
+                      </div>
+                      <div className="admin-message-text">{m.message}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
-
-const projectColors = [
-  { c1: "#6366f1", c2: "#a855f7" },
-  { c1: "#06b6d4", c2: "#3b82f6" },
-  { c1: "#f59e0b", c2: "#ef4444" },
-  { c1: "#10b981", c2: "#06b6d4" },
-];
