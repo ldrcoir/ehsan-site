@@ -96,6 +96,13 @@ export async function POST(req: Request) {
       data: { name, email, message, ip, userAgent },
     });
 
+    // Send Bale notification (async, non-blocking)
+    import("@/lib/bale")
+      .then(({ notifyNewContactMessage }) =>
+        notifyNewContactMessage({ id: saved.id, name, email, message })
+      )
+      .catch(() => {});
+
     return NextResponse.json({
       ok: true,
       id: saved.id,

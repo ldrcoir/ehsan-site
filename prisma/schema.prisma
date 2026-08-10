@@ -68,3 +68,21 @@ model ChatMessage {
   @@index([sessionId])
   @@index([createdAt])
 }
+
+// Admin replies to contact messages (visible only to admin, optionally pushed to Bale)
+model MessageReply {
+  id        String   @id @default(cuid())
+  messageId String   // references ContactMessage.id
+  reply     String
+  createdAt DateTime @default(now())
+
+  @@index([messageId])
+}
+
+// Key-value store for site settings editable from admin panel
+// (name, tagline, status, apiEnabled, baleEnabled, etc.)
+model SiteSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

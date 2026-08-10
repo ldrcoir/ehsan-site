@@ -26,11 +26,25 @@ export const PERSONAL = {
     de: "RF/Mikrowellen-Forscher · AI/ML-Programmierer · Autor & Übersetzer",
     fa: "پژوهشگر RF/مایکروویو · برنامه‌نویس AI/ML · نویسنده و مترجم",
   },
-  // Public email shown in the contact section
-  email: "you@example.com",
+  // No public email shown on site — admin sees messages via panel or Bale
   // Admin password to view messages at #admin
   adminPassword: "admin123",
 };
+
+// ----------------------------------------------------------------------------
+//  RF LAB EQUIPMENT — shown as a styled "equipment rack" in the About section
+//  These names reinforce the RF/electronic engineering identity.
+// ----------------------------------------------------------------------------
+export const RF_EQUIPMENT = [
+  { id: "vna", name: "Vector Network Analyzer", model: "Keysight PNA-X", status: "online" },
+  { id: "sa", name: "Spectrum Analyzer", model: "R&S FSW", status: "online" },
+  { id: "sg", name: "Signal Generator", model: "Keysight EXG", status: "online" },
+  { id: "osc", name: "Oscilloscope", model: "Tektronix MSO64", status: "standby" },
+  { id: "pm", name: "Power Meter", model: "Anritsu ML2495", status: "online" },
+  { id: "fc", name: "Frequency Counter", model: "Keysight 53220A", status: "standby" },
+  { id: "ac", name: "Anechoic Chamber", model: "ETS-Lindgren", status: "online" },
+  { id: "sim", name: "EM Simulator", model: "CST Studio / HFSS", status: "online" },
+];
 
 // ----------------------------------------------------------------------------
 //  SOCIAL LINKS  —  shown as styled chips in the hero & contact
@@ -337,12 +351,11 @@ export const UI = {
       num: "06", label: "contact",
       title: "Open Channel",
       subtitle: "// open a channel",
-      desc: "Have a project, question, or just want to talk? Drop a message — I read everything and reply within a day or two.",
-      emailLabel: "email",
+      desc: "Have a project, question, or just want to talk? Drop a message via the form below — I read everything and reply within a day or two. No email exposed; your message goes straight to my private inbox.",
       socialsLabel: "channels",
       form: {
         name: "Name", namePh: "Jane Doe",
-        email: "Email", emailPh: "jane@example.com",
+        email: "Your Email (for reply)", emailPh: "jane@example.com",
         message: "Message", messagePh: "Type your message...",
         submit: "send [enter]",
         sending: "transmitting...",
@@ -455,12 +468,11 @@ export const UI = {
       num: "06", label: "kontakt",
       title: "Kanal öffnen",
       subtitle: "// Kanal öffnen",
-      desc: "Projekt, Frage oder einfach Hallo? Nachricht hinterlassen — ich antworte innerhalb von 1–2 Tagen.",
-      emailLabel: "email",
+      desc: "Projekt, Frage oder einfach Hallo? Nachricht über das Formular — ich antworte innerhalb von 1–2 Tagen. Keine E-Mail öffentlich; Nachricht geht an meinen privaten Posteingang.",
       socialsLabel: "kanäle",
       form: {
         name: "Name", namePh: "Max Mustermann",
-        email: "E-Mail", emailPh: "max@example.com",
+        email: "Deine E-Mail (für Antwort)", emailPh: "max@example.com",
         message: "Nachricht", messagePh: "Nachricht eingeben...",
         submit: "senden [enter]",
         sending: "übertrage...",
@@ -573,12 +585,11 @@ export const UI = {
       num: "۰۶", label: "تماس",
       title: "باز کردن کانال",
       subtitle: "// باز کردن کانال",
-      desc: "پروژه، سؤال یا فقط سلام؟ پیام بذار — همه رو می‌خونم و ظرف ۱–۲ روز جواب می‌دم.",
-      emailLabel: "ایمیل",
+      desc: "پروژه، سؤال یا فقط سلام؟ از طریق فرم زیر پیام بذار — همه رو می‌خونم و ظرف ۱–۲ روز جواب می‌دم. ایمیل عمومی در سایت قرار داده نشده؛ پیام مستقیم به صندوق خصوصی من می‌رسه.",
       socialsLabel: "کانال‌ها",
       form: {
         name: "نام", namePh: "مثلاً مهدی رضایی",
-        email: "ایمیل", emailPh: "example@domain.com",
+        email: "ایمیل شما (برای پاسخ)", emailPh: "example@domain.com",
         message: "پیام", messagePh: "پیام خود را بنویسید...",
         submit: "ارسال [enter]",
         sending: "در حال ارسال...",
