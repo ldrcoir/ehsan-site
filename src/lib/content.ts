@@ -278,7 +278,7 @@ export const TUTORIALS = [
 export const UI = {
   en: {
     dir: "ltr",
-    nav: { about: "about", skills: "skills", books: "books", articles: "articles", tutorials: "tutorials", contact: "contact" },
+    nav: { about: "about", skills: "skills", books: "books", articles: "articles", tutorials: "tutorials", chat: "chat", contact: "contact" },
     hero: {
       prompt: "guest@portfolio:~$",
       greeting: "Hello, world.",
@@ -335,7 +335,7 @@ export const UI = {
     },
     contact: {
       num: "06", label: "contact",
-      title: "Establish Connection",
+      title: "Open Channel",
       subtitle: "// open a channel",
       desc: "Have a project, question, or just want to talk? Drop a message — I read everything and reply within a day or two.",
       emailLabel: "email",
@@ -373,6 +373,9 @@ export const UI = {
         "  whoami   — short intro",
         "  clear    — clear terminal",
         "  date     — current UTC time",
+        "  scan     — scan RF spectrum",
+        "  chat     — jump to AI chat",
+        "  admin    — open admin panel",
       ].join("\n"),
       cleared: "",
     },
@@ -393,7 +396,7 @@ export const UI = {
   },
   de: {
     dir: "ltr",
-    nav: { about: "über", skills: "fähigkeiten", books: "bücher", articles: "artikel", tutorials: "tutorials", contact: "kontakt" },
+    nav: { about: "über", skills: "fähigkeiten", books: "bücher", articles: "artikel", tutorials: "tutorials", chat: "chat", contact: "kontakt" },
     hero: {
       prompt: "guest@portfolio:~$",
       greeting: "Hallo, Welt.",
@@ -450,7 +453,7 @@ export const UI = {
     },
     contact: {
       num: "06", label: "kontakt",
-      title: "Verbindung aufbauen",
+      title: "Kanal öffnen",
       subtitle: "// Kanal öffnen",
       desc: "Projekt, Frage oder einfach Hallo? Nachricht hinterlassen — ich antworte innerhalb von 1–2 Tagen.",
       emailLabel: "email",
@@ -488,6 +491,9 @@ export const UI = {
         "  whoami   — kurze Vorstellung",
         "  clear    — Terminal leeren",
         "  date     — aktuelle UTC-Zeit",
+        "  scan     — RF-Spektrum scannen",
+        "  chat     — zum KI-Chat",
+        "  admin    — Admin-Panel öffnen",
       ].join("\n"),
       cleared: "",
     },
@@ -508,7 +514,7 @@ export const UI = {
   },
   fa: {
     dir: "rtl",
-    nav: { about: "درباره", skills: "مهارت‌ها", books: "کتاب‌ها", articles: "مقالات", tutorials: "آموزش‌ها", contact: "تماس" },
+    nav: { about: "درباره", skills: "مهارت‌ها", books: "کتاب‌ها", articles: "مقالات", tutorials: "آموزش‌ها", chat: "گفت‌وگو", contact: "تماس" },
     hero: {
       prompt: "guest@portfolio:~$",
       greeting: "سلام، دنیا.",
@@ -565,7 +571,7 @@ export const UI = {
     },
     contact: {
       num: "۰۶", label: "تماس",
-      title: "ایجاد اتصال",
+      title: "باز کردن کانال",
       subtitle: "// باز کردن کانال",
       desc: "پروژه، سؤال یا فقط سلام؟ پیام بذار — همه رو می‌خونم و ظرف ۱–۲ روز جواب می‌دم.",
       emailLabel: "ایمیل",
@@ -603,6 +609,9 @@ export const UI = {
         "  whoami   — معرفی کوتاه",
         "  clear    — پاک‌سازی ترمینال",
         "  date     — زمان فعلی UTC",
+        "  scan     — اسکن طیف RF",
+        "  chat     — پرش به گفت‌وگو",
+        "  admin    — باز کردن پنل ادمین",
       ].join("\n"),
       cleared: "",
     },

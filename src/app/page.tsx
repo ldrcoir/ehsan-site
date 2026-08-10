@@ -4,6 +4,10 @@ import { useEffect, useState, type FormEvent } from "react";
 import "./personal.css";
 import MatrixRain from "@/components/MatrixRain";
 import InteractiveTerminal from "@/components/InteractiveTerminal";
+import Oscilloscope from "@/components/Oscilloscope";
+import SmithChart from "@/components/SmithChart";
+import SignalBars from "@/components/SignalBars";
+import ChatSection from "@/components/ChatSection";
 import {
   UI, PERSONAL, SOCIALS, SKILLS, BOOKS, ARTICLES, TUTORIALS,
   type Lang, DEFAULT_LANG, LANGS,
@@ -14,8 +18,15 @@ type MessageRow = {
   id: string; name: string; email: string; message: string;
   ip: string | null; createdAt: string;
 };
+type ChatSessionRow = {
+  id: string; visitorId: string; ip: string | null; createdAt: string; updatedAt: string;
+  messages: { id: string; role: string; content: string; createdAt: string }[];
+};
 
 const langLabel: Record<Lang, string> = { en: "EN", de: "DE", fa: "FA" };
+
+// TUTORIAL_PAGE_SIZE — show N tutorials at a time, "load more" reveals the rest
+const TUTORIAL_PAGE_SIZE = 6;
 
 export default function Home() {
   const [lang, setLang] = useState<Lang>(DEFAULT_LANG);
@@ -31,7 +42,14 @@ export default function Home() {
   const [adminOpen, setAdminOpen] = useState(false);
   const [adminPwd, setAdminPwd] = useState("");
   const [adminMsgs, setAdminMsgs] = useState<MessageRow[] | null>(null);
+  const [adminChats, setAdminChats] = useState<ChatSessionRow[] | null>(null);
+  const [adminStats, setAdminStats] = useState<{ contactMessages: number; chatMessages: number; chatSessions: number } | null>(null);
   const [adminErr, setAdminErr] = useState("");
+  const [adminTab, setAdminTab] = useState<"messages" | "chats">("messages");
+
+  // tutorial filter + pagination
+  const [tutFilter, setTutFilter] = useState<string>("all");
+  const [tutPage, setTutPage] = useState(TUTORIAL_PAGE_SIZE);
 
   const tt = UI[lang];
 
@@ -55,6 +73,21 @@ export default function Home() {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
+  // keyboard shortcut: Ctrl+Shift+A → admin
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && (e.key === "A" || e.key === "a")) {
+        e.preventDefault();
+        setAdminOpen(true);
+        if (window.location.hash !== "#admin") {
+          window.location.hash = "admin";
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // scroll listener
   useEffect(() => {
     const onScroll = () => {
@@ -72,7 +105,7 @@ export default function Home() {
     const tick = () => {
       const d = new Date();
       const iso = d.toISOString().replace("T", " ").slice(0, 19);
-      setUtcTime(iso + " UTC");
+      setUtcTime(iso);
     };
     tick();
     const id = setInterval(tick, 1000);
@@ -197,12 +230,24 @@ export default function Home() {
     e.preventDefault();
     setAdminErr("");
     try {
-      const res = await fetch(`/api/messages?password=${encodeURIComponent(adminPwd)}`);
-      const data = await res.json();
-      if (res.ok && data.ok) {
-        setAdminMsgs(data.messages);
+      // fetch both messages and chats in parallel
+      const [msgRes, chatRes] = await Promise.all([
+        fetch(`/api/messages?password=${encodeURIComponent(adminPwd)}`),
+        fetch(`/api/chat?password=${encodeURIComponent(adminPwd)}`),
+      ]);
+      const msgData = await msgRes.json();
+      const chatData = await chatRes.json();
+      if (msgRes.ok && msgData.ok) {
+        setAdminMsgs(msgData.messages);
+        setAdminStats(msgData.stats);
       } else {
         setAdminErr(tt.admin.wrong);
+        return;
+      }
+      if (chatRes.ok && chatData.ok) {
+        setAdminChats(chatData.sessions);
+      } else {
+        setAdminChats([]);
       }
     } catch {
       setAdminErr(tt.admin.wrong);
@@ -212,6 +257,8 @@ export default function Home() {
   const closeAdmin = () => {
     setAdminOpen(false);
     setAdminMsgs(null);
+    setAdminChats(null);
+    setAdminStats(null);
     setAdminPwd("");
     setAdminErr("");
     if (window.location.hash === "#admin") {
@@ -221,11 +268,36 @@ export default function Home() {
 
   const reveal = (id: string) => (revealed.has(id) ? "reveal visible" : "reveal");
 
+  // Tutorial filter logic
+  const filteredTutorials = tutFilter === "all"
+    ? TUTORIALS
+    : TUTORIALS.filter((t) => {
+        const lvl = t.level[lang].toLowerCase();
+        if (tutFilter === "beginner") return lvl.includes("begin") || lvl.includes("مقدم") || lvl.includes("anf");
+        if (tutFilter === "intermediate") return lvl.includes("inter") || lvl.includes("متوسط") || lvl.includes("fort");
+        if (tutFilter === "advanced") return lvl.includes("advan") || lvl.includes("پیش") || lvl.includes("fortgeschritten") && !lvl.includes("anf");
+        return true;
+      });
+  const visibleTutorials = filteredTutorials.slice(0, tutPage);
+  const hasMoreTutorials = filteredTutorials.length > tutPage;
+
+  // Wave divider SVG
+  const WaveDivider = () => (
+    <svg className="wave-divider" viewBox="0 0 800 40" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0,20 Q100,5 200,20 T400,20 T600,20 T800,20" />
+      <path d="M0,20 Q100,35 200,20 T400,20 T600,20 T800,20" opacity="0.5" />
+    </svg>
+  );
+
   return (
     <div className="app">
       <MatrixRain />
+      {/* Anti-clone watermark (invisible, identifies your deployment) */}
+      <div className="anti-clone-watermark" aria-hidden="true">
+        portfolio-deployment-{typeof window !== "undefined" ? btoa(window.location.hostname).slice(0, 12) : "preview"}-rf-terminal-v2
+      </div>
 
-      {/* STATUS BAR */}
+      {/* STATUS BAR with RF elements */}
       <div className="statusbar">
         <div className="statusbar-left">
           <span className="statusbar-item">
@@ -233,14 +305,17 @@ export default function Home() {
             <span className="value">online</span>
           </span>
           <span className="statusbar-item">
-            <span className="label">uptime:</span>
-            <span className="value">{utcTime || "—"}</span>
+            <SignalBars />
+            <span className="value">-67dBm</span>
+          </span>
+          <span className="statusbar-item">
+            <span className="freq-display">2.4GHz</span>
           </span>
         </div>
         <div className="statusbar-right">
           <span className="statusbar-item">
-            <span className="label">pid:</span>
-            <span className="value">#{(typeof window !== "undefined" ? window.location.pathname.length : 1) + 1337}</span>
+            <span className="label">utc:</span>
+            <span className="value">{utcTime || "—"}</span>
           </span>
           <span className="statusbar-item">
             <span className="label">tty:</span>
@@ -261,6 +336,7 @@ export default function Home() {
             <a href="#books" onClick={(e) => handleNavClick(e, "#books")}>{tt.nav.books}</a>
             <a href="#articles" onClick={(e) => handleNavClick(e, "#articles")}>{tt.nav.articles}</a>
             <a href="#tutorials" onClick={(e) => handleNavClick(e, "#tutorials")}>{tt.nav.tutorials}</a>
+            <a href="#chat" onClick={(e) => handleNavClick(e, "#chat")}>{tt.nav.chat || "chat"}</a>
             <a href="#contact" onClick={(e) => handleNavClick(e, "#contact")}>{tt.nav.contact}</a>
           </nav>
           <div className="nav-right">
@@ -317,9 +393,13 @@ export default function Home() {
             <InteractiveTerminal lang={lang} />
           </div>
         </div>
+        {/* Oscilloscope under hero — RF vibe */}
+        <div className="container">
+          <Oscilloscope height={70} />
+        </div>
       </section>
 
-      {/* ABOUT */}
+      {/* ABOUT — with Smith Chart decoration */}
       <section className="section section-alt" id="about">
         <div className="container">
           <header className="section-head">
@@ -345,10 +425,15 @@ export default function Home() {
                   </div>
                 ))}
               </dl>
+              <div className="smith-chart-wrap">
+                <SmithChart size={140} />
+              </div>
             </aside>
           </div>
         </div>
       </section>
+
+      <WaveDivider />
 
       {/* SKILLS */}
       <section className="section" id="skills">
@@ -398,6 +483,8 @@ export default function Home() {
         </div>
       </section>
 
+      <WaveDivider />
+
       {/* ARTICLES */}
       <section className="section" id="articles">
         <div className="container">
@@ -423,7 +510,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* TUTORIALS */}
+      {/* TUTORIALS — with filter + pagination */}
       <section className="section section-alt" id="tutorials">
         <div className="container">
           <header className="section-head">
@@ -431,8 +518,26 @@ export default function Home() {
             <h2 className="section-title">{tt.tutorials.title}</h2>
             <p className="section-subtitle">{tt.tutorials.subtitle}</p>
           </header>
+          <div className="tutorial-filters">
+            <button
+              className={`tutorial-filter ${tutFilter === "all" ? "active" : ""}`}
+              onClick={() => { setTutFilter("all"); setTutPage(TUTORIAL_PAGE_SIZE); }}
+            >all ({TUTORIALS.length})</button>
+            <button
+              className={`tutorial-filter ${tutFilter === "beginner" ? "active" : ""}`}
+              onClick={() => { setTutFilter("beginner"); setTutPage(TUTORIAL_PAGE_SIZE); }}
+            >beginner</button>
+            <button
+              className={`tutorial-filter ${tutFilter === "intermediate" ? "active" : ""}`}
+              onClick={() => { setTutFilter("intermediate"); setTutPage(TUTORIAL_PAGE_SIZE); }}
+            >intermediate</button>
+            <button
+              className={`tutorial-filter ${tutFilter === "advanced" ? "active" : ""}`}
+              onClick={() => { setTutFilter("advanced"); setTutPage(TUTORIAL_PAGE_SIZE); }}
+            >advanced</button>
+          </div>
           <div className="tutorials-grid">
-            {TUTORIALS.map((t, i) => (
+            {visibleTutorials.map((t, i) => (
               <article
                 key={t.id}
                 className={`tutorial-card ${reveal(`tut-${i}`)}`}
@@ -451,11 +556,21 @@ export default function Home() {
               </article>
             ))}
           </div>
+          {hasMoreTutorials && (
+            <div className="tutorial-load-more">
+              <button className="btn btn-ghost" onClick={() => setTutPage((p) => p + TUTORIAL_PAGE_SIZE)}>
+                load more ({filteredTutorials.length - tutPage} remaining)
+              </button>
+            </div>
+          )}
         </div>
       </section>
 
+      {/* CHAT — AI concierge */}
+      <ChatSection lang={lang} />
+
       {/* CONTACT */}
-      <section className="section" id="contact">
+      <section className="section section-alt" id="contact">
         <div className="container">
           <header className="section-head">
             <p className="section-eyebrow">{tt.contact.num} — {tt.contact.label}</p>
@@ -517,14 +632,16 @@ export default function Home() {
             <li><a href="#about" onClick={(e) => handleNavClick(e, "#about")}>{tt.nav.about}</a></li>
             <li><a href="#books" onClick={(e) => handleNavClick(e, "#books")}>{tt.nav.books}</a></li>
             <li><a href="#tutorials" onClick={(e) => handleNavClick(e, "#tutorials")}>{tt.nav.tutorials}</a></li>
+            <li><a href="#chat" onClick={(e) => handleNavClick(e, "#chat")}>{tt.nav.chat || "chat"}</a></li>
             <li><a href="#contact" onClick={(e) => handleNavClick(e, "#contact")}>{tt.nav.contact}</a></li>
             <li>
               <a
                 href="#admin"
                 className="footer-admin"
                 onClick={(e) => { e.preventDefault(); setAdminOpen(true); window.location.hash = "admin"; }}
+                title="Ctrl+Shift+A"
               >
-                {tt.footer.admin}
+                [{tt.footer.admin}]
               </a>
             </li>
           </ul>
@@ -590,23 +707,84 @@ export default function Home() {
                   <p style={{ marginTop: 16, fontSize: "0.72rem", color: "var(--text-faint)" }}>
                     {tt.admin.subtitle}
                   </p>
+                  <p style={{ marginTop: 8, fontSize: "0.68rem", color: "var(--text-faint)" }}>
+                    shortcut: Ctrl+Shift+A · default password: admin123 (change in content.ts)
+                  </p>
                 </form>
-              ) : adminMsgs.length === 0 ? (
-                <p style={{ color: "var(--text-dim)", textAlign: "center", padding: 20 }}>{tt.admin.empty}</p>
               ) : (
-                <div className="admin-messages">
-                  {adminMsgs.map((m) => (
-                    <div key={m.id} className="admin-message">
-                      <div className="admin-message-head">
-                        <span>
-                          {tt.admin.from}: <span className="admin-message-from">{m.name}</span> &lt;{m.email}&gt;
-                        </span>
-                        <span>{tt.admin.at}: {new Date(m.createdAt).toLocaleString()}</span>
-                      </div>
-                      <div className="admin-message-text">{m.message}</div>
+                <>
+                  {adminStats && (
+                    <div className="admin-stats">
+                      <div className="admin-stat"><strong>{adminStats.contactMessages}</strong>contact msgs</div>
+                      <div className="admin-stat"><strong>{adminStats.chatSessions}</strong>chat sessions</div>
+                      <div className="admin-stat"><strong>{adminStats.chatMessages}</strong>chat msgs</div>
                     </div>
-                  ))}
-                </div>
+                  )}
+                  <div className="admin-tabs">
+                    <button
+                      className={`admin-tab ${adminTab === "messages" ? "active" : ""}`}
+                      onClick={() => setAdminTab("messages")}
+                    >
+                      contact messages ({adminMsgs.length})
+                    </button>
+                    <button
+                      className={`admin-tab ${adminTab === "chats" ? "active" : ""}`}
+                      onClick={() => setAdminTab("chats")}
+                    >
+                      AI chat logs ({adminChats?.length || 0})
+                    </button>
+                  </div>
+
+                  {adminTab === "messages" && (
+                    adminMsgs.length === 0 ? (
+                      <p style={{ color: "var(--text-dim)", textAlign: "center", padding: 20 }}>{tt.admin.empty}</p>
+                    ) : (
+                      <div className="admin-messages">
+                        {adminMsgs.map((m) => (
+                          <div key={m.id} className="admin-message">
+                            <div className="admin-message-head">
+                              <span>
+                                {tt.admin.from}: <span className="admin-message-from">{m.name}</span> &lt;{m.email}&gt;
+                              </span>
+                              <span>{tt.admin.at}: {new Date(m.createdAt).toLocaleString()}</span>
+                            </div>
+                            <div className="admin-message-text">{m.message}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  )}
+
+                  {adminTab === "chats" && (
+                    !adminChats || adminChats.length === 0 ? (
+                      <p style={{ color: "var(--text-dim)", textAlign: "center", padding: 20 }}>
+                        {lang === "fa" ? "هنوز چتی نیست." : lang === "de" ? "Noch keine Chats." : "No chats yet."}
+                      </p>
+                    ) : (
+                      <div className="admin-messages">
+                        {adminChats.map((s) => (
+                          <div key={s.id} className="admin-session">
+                            <div className="admin-session-head">
+                              <span>session: {s.visitorId} ({s.ip || "—"})</span>
+                              <span>{new Date(s.updatedAt).toLocaleString()}</span>
+                            </div>
+                            <div className="admin-session-msgs">
+                              {s.messages.map((m) => (
+                                <div
+                                  key={m.id}
+                                  className={`admin-session-msg ${m.role}`}
+                                  data-role={m.role === "user" ? ">" : "<"}
+                                >
+                                  {m.content}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  )}
+                </>
               )}
             </div>
           </div>
