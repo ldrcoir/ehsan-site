@@ -74,6 +74,30 @@ export default function InteractiveTerminal({ lang }: { lang: Lang }) {
         return out(SOCIALS.map((s) => `  ${s.label.padEnd(10)} → ${s.url}${s.handle}`).join("\n"));
       case "date":
         return out(`${new Date().toUTCString()}`);
+      case "admin":
+      case "root":
+        if (typeof window !== "undefined") {
+          window.location.hash = "admin";
+          return [{ kind: "success", text: ">> opening admin panel..." }];
+        }
+        return out("admin panel: visit #admin");
+      case "chat":
+        if (typeof window !== "undefined") {
+          document.getElementById("chat")?.scrollIntoView({ behavior: "smooth" });
+          return [{ kind: "success", text: ">> scrolling to chat..." }];
+        }
+        return out("chat section below");
+      case "scan":
+        return out(
+          [
+            "scanning RF spectrum...",
+            "  2.400 GHz  ████████░░  -42 dBm",
+            "  2.442 GHz  ██████░░░░  -58 dBm",
+            "  5.180 GHz  ███░░░░░░░  -71 dBm",
+            "  5.745 GHz  █████████░  -39 dBm",
+            "done. 4 networks found."
+          ].join("\n")
+        );
       case "clear":
       case "cls":
         return []; // signal cleared — handled below
