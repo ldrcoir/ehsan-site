@@ -98,13 +98,35 @@ export default function InteractiveTerminal({ lang }: { lang: Lang }) {
             "done. 4 networks found."
           ].join("\n")
         );
+      case "matrix":
+        return out(
+          [
+            "Wake up, Neo...",
+            "The Matrix has you...",
+            "Follow the white rabbit. 🐇",
+            "",
+            "Knock, knock, Neo."
+          ].join("\n")
+        );
+      case "coffee":
+        return out("☕ brewing... the real fuel behind this portfolio.");
+      case "42":
+        return out("The Answer to the Ultimate Question of Life, the Universe, and Everything.");
+      case "sudo":
+        return [{ kind: "error", text: "user is not in the sudoers file. This incident will be reported." }];
+      case "hack":
+        return out("hacking in progress...\n░░░░░░░░░░ 0%\njust kidding. this is a portfolio, not a pentest target. 😄");
+      case "hello":
+      case "hi":
+      case "hey":
+        return out(lang === "fa" ? "سلام! خوش اومدی. `help` رو بزن تا ببینی چی می‌تونی انجام بدی." : lang === "de" ? "Hallo! Willkommen. Tippe `help` für Optionen." : "hey there! type `help` to see what you can do.");
+      case "visitor":
+        return out("you are visitor #" + (Math.floor(Math.random() * 9999) + 1000) + " · welcome 👋");
       case "clear":
       case "cls":
         return []; // signal cleared — handled below
-      case "sudo":
-        return [{ kind: "error", text: "user is not in the sudoers file. This incident will be reported." }];
       case "ls":
-        return out("about/  skills/  books/  articles/  tutorials/  contact/");
+        return out("about/  skills/  books/  articles/  tutorials/  contact/  chat/");
       case "pwd":
         return out("/home/guest/portfolio");
       case "exit":

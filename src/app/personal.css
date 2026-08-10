@@ -50,8 +50,8 @@ body {
   font-family: var(--font-mono);
   background: var(--bg);
   color: var(--text);
-  line-height: 1.55;
-  font-size: 14px;
+  line-height: 1.65;
+  font-size: 15px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
@@ -1694,4 +1694,265 @@ html[dir="rtl"] .footer-admin { direction: ltr; }
 .statusbar .freq-display::before {
   content: "f=";
   color: var(--text-faint);
+}
+
+/* ============================================================================
+   SPECTRUM ANALYZER (replaces Smith Chart)
+   ========================================================================== */
+.spectrum-analyzer {
+  width: 100%;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-bright);
+  overflow: hidden;
+  position: relative;
+  margin: 16px 0;
+}
+.spectrum-analyzer canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ============================================================================
+   RF EQUIPMENT RACK
+   ========================================================================== */
+.equipment-rack {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-bright);
+  padding: 20px;
+  margin-top: 24px;
+}
+.equipment-rack-title {
+  font-size: 0.8rem;
+  color: var(--green-dim);
+  letter-spacing: 0.06em;
+  margin-bottom: 14px;
+  font-family: var(--font-mono);
+}
+.equipment-rack-title::before { content: "// "; }
+.equipment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+.equipment-item {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.82rem;
+  transition: all var(--transition);
+}
+.equipment-item:hover {
+  border-color: var(--green-dim);
+  background: var(--green-bg);
+}
+.equipment-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.equipment-name {
+  color: var(--green-bright);
+  font-weight: 500;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.equipment-model {
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.equipment-led {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.equipment-led.online {
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+  animation: pulse 2s ease-in-out infinite;
+}
+.equipment-led.standby {
+  background: var(--amber);
+  box-shadow: 0 0 4px var(--amber);
+}
+.equipment-led.offline {
+  background: var(--text-faint);
+}
+
+/* ============================================================================
+   LARGER FONTS for readability
+   ========================================================================== */
+.section-title {
+  font-size: clamp(1.8rem, 3.5vw, 2.8rem) !important;
+}
+.section-subtitle {
+  font-size: 0.95rem !important;
+}
+.about-text p {
+  font-size: 0.98rem !important;
+  line-height: 1.75 !important;
+}
+.skill-card p,
+.book-body p,
+.article-summary,
+.tutorial-body p {
+  font-size: 0.85rem !important;
+}
+.tags li {
+  font-size: 0.75rem !important;
+  padding: 4px 9px !important;
+}
+.terminal-body {
+  font-size: 0.85rem !important;
+}
+.chat-body {
+  font-size: 0.88rem !important;
+}
+
+/* Status bar — more visible */
+.statusbar {
+  font-size: 0.75rem !important;
+  padding: 7px 16px !important;
+}
+.statusbar-item .value {
+  font-size: 0.75rem !important;
+}
+
+/* ============================================================================
+   ADMIN PANEL — enhanced with reply, settings, kill switch
+   ========================================================================== */
+.admin-reply-box {
+  margin-top: 10px;
+  padding: 10px;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border);
+}
+.admin-reply-box label {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--green-dim);
+  margin-bottom: 6px;
+}
+.admin-reply-box textarea {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--green-bright);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  padding: 8px;
+  resize: vertical;
+  min-height: 60px;
+}
+.admin-reply-box textarea:focus {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 1px var(--green);
+}
+.admin-reply-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: center;
+}
+.admin-reply-status {
+  font-size: 0.75rem;
+  color: var(--green-bright);
+  margin-left: 8px;
+}
+.admin-reply-status.error { color: var(--red); }
+
+.admin-settings-section {
+  margin-bottom: 20px;
+}
+.admin-settings-section h4 {
+  font-size: 0.85rem;
+  color: var(--green-bright);
+  margin-bottom: 10px;
+  font-family: var(--font-mono);
+}
+.admin-settings-section h4::before { content: "## "; color: var(--green-dim); }
+.admin-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.admin-setting-label {
+  font-size: 0.82rem;
+  color: var(--text);
+}
+.admin-setting-input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--green-bright);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  padding: 6px 10px;
+  flex: 1;
+  max-width: 300px;
+}
+.admin-setting-input:focus {
+  outline: none;
+  border-color: var(--green);
+}
+.admin-toggle {
+  position: relative;
+  width: 44px;
+  height: 22px;
+  background: var(--bg);
+  border: 1px solid var(--border-bright);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.admin-toggle.on {
+  background: var(--green);
+  border-color: var(--green);
+}
+.admin-toggle::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: var(--text);
+  border-radius: 50%;
+  transition: transform var(--transition);
+}
+.admin-toggle.on::after {
+  transform: translateX(22px);
+  background: #000;
+}
+.admin-save-btn {
+  margin-top: 12px;
+}
+.admin-bale-status {
+  padding: 10px;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border);
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  margin-top: 8px;
+}
+.admin-bale-status code {
+  color: var(--green);
+  background: var(--bg);
+  padding: 2px 6px;
+  font-size: 0.75rem;
+  word-break: break-all;
 }

@@ -95,6 +95,24 @@ export async function POST(req: Request) {
       );
     }
 
+    // --- Check API kill switch ---
+    const { isApiEnabled } = await import("@/lib/settings");
+    const apiEnabled = await isApiEnabled();
+    if (!apiEnabled) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "api_disabled",
+          message: lang === "fa"
+            ? "چت موقتاً غیرفعال است. لطفاً بعداً تلاش کنید."
+            : lang === "de"
+            ? "Chat ist vorübergehend deaktiviert."
+            : "Chat is temporarily disabled.",
+        },
+        { status: 503 }
+      );
+    }
+
     // --- Get or create session ---
     let session;
     if (sessionId) {
@@ -115,6 +133,19 @@ export async function POST(req: Request) {
     await db.chatMessage.create({
       data: { sessionId, role: "user", content: message },
     });
+
+    // --- Send Bale notification (async, non-blocking) ---
+    const isFirstMessage = session.messages.length === 0;
+    import("@/lib/bale")
+      .then(({ notifyNewChat }) =>
+        notifyNewChat({
+          sessionId,
+          visitorId,
+          message,
+          isFirst: isFirstMessage,
+        })
+      )
+      .catch(() => {});
 
     // --- Build conversation for LLM ---
     const systemPrompt = buildSystemPrompt(lang);
