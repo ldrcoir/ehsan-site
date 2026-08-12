@@ -2302,3 +2302,101 @@ html[dir="rtl"] .footer-admin { direction: ltr; }
 .admin-export-btn {
   margin-bottom: 16px;
 }
+
+/* ============================================================================
+   REAL OSCILLOSCOPE + SIGNAL GENERATOR CONTROLS
+   ========================================================================== */
+.signal-lab-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 16px 0;
+}
+.signal-lab-vertical > .signal-device {
+  margin-bottom: 0;
+}
+
+.signal-link-vertical {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px;
+  background: var(--bg-panel-2);
+  border: 1px dashed var(--border-bright);
+  border-left: 0;
+  border-right: 0;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--green-dim);
+  letter-spacing: 0.06em;
+}
+.signal-link-label {
+  text-transform: uppercase;
+}
+.signal-link-vertical .signal-link-waves {
+  display: flex;
+  gap: 2px;
+  align-items: flex-end;
+}
+
+/* Oscilloscope control panel */
+.osc-controls {
+  padding: 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+}
+.osc-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.osc-control-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.osc-control-label .value {
+  color: var(--green-bright);
+  font-weight: 600;
+  text-transform: none;
+}
+.osc-button-row {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+.osc-button-row .signal-waveform-btn {
+  flex: 1;
+  min-width: 30px;
+  padding: 5px 4px;
+  font-size: 0.68rem;
+}
+.osc-arrow-btn {
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border);
+  color: var(--green);
+  padding: 5px 10px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all var(--transition);
+  flex: 1;
+}
+.osc-arrow-btn:hover {
+  border-color: var(--green);
+  background: var(--green-bg);
+  color: var(--green-bright);
+}
+
+/* Mobile: stack controls vertically */
+@media (max-width: 720px) {
+  .osc-controls {
+    grid-template-columns: 1fr;
+  }
+}
