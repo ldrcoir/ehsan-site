@@ -5,7 +5,7 @@ import "./personal.css";
 import MatrixRain from "@/components/MatrixRain";
 import InteractiveTerminal from "@/components/InteractiveTerminal";
 import Oscilloscope from "@/components/Oscilloscope";
-import SpectrumAnalyzer from "@/components/SpectrumAnalyzer";
+import SignalLab from "@/components/SignalLab";
 import SignalBars from "@/components/SignalBars";
 import ChatSection from "@/components/ChatSection";
 import {
@@ -59,6 +59,11 @@ export default function Home() {
   const [tutFilter, setTutFilter] = useState<string>("all");
   const [tutPage, setTutPage] = useState(TUTORIAL_PAGE_SIZE);
 
+  // theme + anti-theft
+  const [theme, setTheme] = useState<"terminal" | "clean" | "midnight">("terminal");
+  const [antiTheftWarning, setAntiTheftWarning] = useState(false);
+  const [adminSearch, setAdminSearch] = useState("");
+
   const tt = UI[lang];
 
   // sync html lang/dir
@@ -66,6 +71,56 @@ export default function Home() {
     document.documentElement.lang = lang;
     document.documentElement.dir = tt.dir;
   }, [lang, tt.dir]);
+
+  // Load theme from localStorage + apply to <html>
+  useEffect(() => {
+    const saved = localStorage.getItem("portfolio_theme") as "terminal" | "clean" | "midnight" | null;
+    if (saved) setTheme(saved);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("portfolio_theme", theme);
+  }, [theme]);
+
+  // Anti-theft: disable right-click + detect devtools
+  useEffect(() => {
+    const onContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+    const onKeydown = (e: KeyboardEvent) => {
+      // Disable F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U, Ctrl+S
+      if (
+        e.key === "F12" ||
+        (e.ctrlKey && e.shiftKey && (e.key === "I" || e.key === "i" || e.key === "J" || e.key === "j")) ||
+        (e.ctrlKey && (e.key === "u" || e.key === "U" || e.key === "s" || e.key === "S"))
+      ) {
+        e.preventDefault();
+        return false;
+      }
+    };
+    // DevTools detection (simple threshold-based)
+    const threshold = 160;
+    const checkDevtools = () => {
+      const widthDiff = window.outerWidth - window.innerWidth > threshold;
+      const heightDiff = window.outerHeight - window.innerHeight > threshold;
+      if (widthDiff || heightDiff) {
+        setAntiTheftWarning(true);
+      } else {
+        setAntiTheftWarning(false);
+      }
+    };
+    const devtoolsInterval = setInterval(checkDevtools, 1000);
+
+    document.addEventListener("contextmenu", onContextMenu);
+    document.addEventListener("keydown", onKeydown);
+
+    return () => {
+      document.removeEventListener("contextmenu", onContextMenu);
+      document.removeEventListener("keydown", onKeydown);
+      clearInterval(devtoolsInterval);
+    };
+  }, []);
 
   // hash change → open admin
   useEffect(() => {
@@ -429,8 +484,22 @@ export default function Home() {
       <MatrixRain />
       {/* Anti-clone watermark (invisible, identifies your deployment) */}
       <div className="anti-clone-watermark" aria-hidden="true">
-        portfolio-deployment-preview-rf-terminal-v3
+        portfolio-deployment-preview-rf-terminal-v4
       </div>
+
+      {/* Anti-theft warning (shown when devtools detected) */}
+      {antiTheftWarning && (
+        <div className="anti-theft-warning show">
+          <div className="anti-theft-warning-content">
+            <h2>⚠ DevTools Detected</h2>
+            <p>This site is protected against template theft.</p>
+            <p>Please close the developer tools to continue browsing.</p>
+            <p style={{ fontSize: "0.75rem", color: "#666" }}>
+              If you're the owner, you can disable this in page.tsx → anti-theft useEffect.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* STATUS BAR with RF elements */}
       <div className="statusbar">
@@ -475,6 +544,32 @@ export default function Home() {
             <a href="#contact" onClick={(e) => handleNavClick(e, "#contact")}>{tt.nav.contact}</a>
           </nav>
           <div className="nav-right">
+            <div className="theme-switcher">
+              <button
+                className={theme === "terminal" ? "active" : ""}
+                onClick={() => setTheme("terminal")}
+                aria-label="Terminal theme"
+                title="Terminal"
+              >
+                <span className="theme-icon" style={{ background: "#00ff41" }}></span>
+              </button>
+              <button
+                className={theme === "midnight" ? "active" : ""}
+                onClick={() => setTheme("midnight")}
+                aria-label="Midnight theme"
+                title="Midnight"
+              >
+                <span className="theme-icon" style={{ background: "#4a9eff" }}></span>
+              </button>
+              <button
+                className={theme === "clean" ? "active" : ""}
+                onClick={() => setTheme("clean")}
+                aria-label="Clean theme"
+                title="Clean"
+              >
+                <span className="theme-icon" style={{ background: "#0066cc" }}></span>
+              </button>
+            </div>
             <div className="lang-toggle">
               {LANGS.map((l) => (
                 <button
@@ -579,8 +674,8 @@ export default function Home() {
                 </div>
               ))}
             </div>
-            {/* Spectrum Analyzer visualization */}
-            <SpectrumAnalyzer height={120} />
+            {/* Signal Lab — Generator + Oscilloscope (wirelessly connected) */}
+            <SignalLab />
           </div>
         </div>
       </section>
@@ -893,8 +988,41 @@ export default function Home() {
                     adminMsgs.length === 0 ? (
                       <p style={{ color: "var(--text-dim)", textAlign: "center", padding: 20 }}>{tt.admin.empty}</p>
                     ) : (
-                      <div className="admin-messages">
-                        {adminMsgs.map((m) => (
+                      <>
+                        <input
+                          type="text"
+                          className="admin-search"
+                          placeholder="search by name, email, or message..."
+                          value={adminSearch}
+                          onChange={(e) => setAdminSearch(e.target.value)}
+                        />
+                        <button
+                          className="btn btn-ghost btn-sm admin-export-btn"
+                          onClick={() => {
+                            const csv = adminMsgs
+                              .filter((m) => {
+                                const s = adminSearch.toLowerCase();
+                                return !s || m.name.toLowerCase().includes(s) || m.email.toLowerCase().includes(s) || m.message.toLowerCase().includes(s);
+                              })
+                              .map((m) => `"${m.name}","${m.email}","${m.message.replace(/"/g, '""')}","${new Date(m.createdAt).toISOString()}"`)
+                              .join("\n");
+                            const blob = new Blob(["Name,Email,Message,Date\n" + csv], { type: "text/csv" });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = "messages.csv";
+                            a.click();
+                          }}
+                        >
+                          export CSV
+                        </button>
+                        <div className="admin-messages">
+                          {adminMsgs
+                            .filter((m) => {
+                              const s = adminSearch.toLowerCase();
+                              return !s || m.name.toLowerCase().includes(s) || m.email.toLowerCase().includes(s) || m.message.toLowerCase().includes(s);
+                            })
+                            .map((m) => (
                           <div key={m.id} className="admin-message">
                             <div className="admin-message-head">
                               <span>
@@ -933,7 +1061,8 @@ export default function Home() {
                             </div>
                           </div>
                         ))}
-                      </div>
+                        </div>
+                      </>
                     )
                   )}
 

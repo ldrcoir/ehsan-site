@@ -4,6 +4,11 @@
    Edit colors in :root if you want to tweak the palette.
    ========================================================================== */
 
+/* ============================================================================
+   THEME SYSTEM — 3 themes: terminal (default), clean (light), midnight (dark blue)
+   Switch via data-theme attribute on <html>.
+   ========================================================================== */
+
 :root {
   --bg: #000000;
   --bg-soft: #030a03;
@@ -30,6 +35,81 @@
   --shadow-glow: 0 0 12px rgba(0, 255, 65, 0.4);
   --shadow-glow-strong: 0 0 20px rgba(0, 255, 65, 0.7);
   --transition: 120ms linear;
+  --scanlines: 1;
+}
+
+/* ---- CLEAN THEME: light, professional, elegant ---- */
+html[data-theme="clean"] {
+  --bg: #f5f6f8;
+  --bg-soft: #ebedf0;
+  --bg-panel: #ffffff;
+  --bg-panel-2: #f0f1f4;
+  --green: #0066cc;
+  --green-dim: #4a8fde;
+  --green-bright: #004499;
+  --green-soft: rgba(0, 102, 204, 0.5);
+  --green-faint: rgba(0, 102, 204, 0.12);
+  --green-bg: rgba(0, 102, 204, 0.03);
+  --amber: #cc7700;
+  --red: #cc0033;
+  --cyan: #006688;
+  --text: #1a1a2e;
+  --text-dim: #6a6a7a;
+  --text-faint: #a0a0b0;
+  --border: #dde0e6;
+  --border-bright: #b8bcc8;
+  --shadow-glow: 0 2px 12px rgba(0, 102, 204, 0.15);
+  --shadow-glow-strong: 0 4px 20px rgba(0, 102, 204, 0.25);
+  --scanlines: 0;
+}
+html[data-theme="clean"] body {
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+}
+html[data-theme="clean"] .terminal-body,
+html[data-theme="clean"] .hero-code,
+html[data-theme="clean"] .statusbar,
+html[data-theme="clean"] .chat-body,
+html[data-theme="clean"] .chat-input {
+  font-family: var(--font-mono);
+}
+html[data-theme="clean"] .hero-title {
+  text-shadow: none;
+}
+html[data-theme="clean"] .section-title {
+  text-shadow: none !important;
+}
+
+/* ---- MIDNIGHT THEME: dark blue, softer than pure black ---- */
+html[data-theme="midnight"] {
+  --bg: #0a0e1a;
+  --bg-soft: #0e1320;
+  --bg-panel: #131829;
+  --bg-panel-2: #181e33;
+  --green: #4a9eff;
+  --green-dim: #2a6ec0;
+  --green-bright: #7ab8ff;
+  --green-soft: rgba(74, 158, 255, 0.5);
+  --green-faint: rgba(74, 158, 255, 0.12);
+  --green-bg: rgba(74, 158, 255, 0.04);
+  --amber: #ffaa00;
+  --red: #ff4466;
+  --cyan: #00ddcc;
+  --text: #c8d4e8;
+  --text-dim: #6a7a9a;
+  --text-faint: #3a4a6a;
+  --border: #1e2540;
+  --border-bright: #2e385f;
+  --shadow-glow: 0 0 12px rgba(74, 158, 255, 0.3);
+  --shadow-glow-strong: 0 0 20px rgba(74, 158, 255, 0.5);
+  --scanlines: 0;
+}
+html[data-theme="midnight"] body::before {
+  opacity: 0.2;
+}
+
+/* Scanlines only in terminal theme */
+html:not([data-theme="terminal"]) body::before {
+  display: none;
 }
 
 *,
@@ -1955,4 +2035,270 @@ html[dir="rtl"] .footer-admin { direction: ltr; }
   padding: 2px 6px;
   font-size: 0.75rem;
   word-break: break-all;
+}
+
+/* ============================================================================
+   THEME SWITCHER
+   ========================================================================== */
+.theme-switcher {
+  display: flex;
+  border: 1px solid var(--border-bright);
+  background: var(--bg-panel);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  overflow: hidden;
+}
+.theme-switcher button {
+  background: transparent;
+  border: 0;
+  color: var(--text-dim);
+  padding: 5px 8px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  transition: all var(--transition);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.theme-switcher button:hover { color: var(--green); }
+.theme-switcher button.active {
+  background: var(--green);
+  color: var(--bg);
+  font-weight: 600;
+}
+.theme-icon {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+}
+
+/* ============================================================================
+   SIGNAL LAB — Signal Generator + Oscilloscope (wirelessly connected)
+   ========================================================================== */
+.signal-lab {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 8px;
+  margin: 16px 0;
+  align-items: stretch;
+}
+.signal-lab > .signal-link {
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 8px;
+  align-self: center;
+}
+.signal-lab > .signal-link .signal-link-waves {
+  flex-direction: row;
+  align-items: flex-end;
+}
+@media (max-width: 720px) {
+  .signal-lab { grid-template-columns: 1fr; }
+  .signal-lab > .signal-link {
+    flex-direction: row;
+  }
+  .signal-lab > .signal-link .signal-link-waves {
+    flex-direction: row;
+  }
+}
+
+.signal-device {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-bright);
+  overflow: hidden;
+}
+.signal-device-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--bg-panel-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+}
+.signal-device-name {
+  color: var(--green-bright);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.signal-device-model {
+  color: var(--text-faint);
+  font-size: 0.68rem;
+}
+.signal-device-screen {
+  position: relative;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.signal-device-screen canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Signal generator controls */
+.signal-controls {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.signal-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.signal-control-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+.signal-control-label .value {
+  color: var(--green-bright);
+  font-weight: 600;
+}
+.signal-control-input {
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border);
+  outline: none;
+  cursor: pointer;
+}
+.signal-control-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  background: var(--green);
+  border: 1px solid var(--green-bright);
+  cursor: pointer;
+  box-shadow: 0 0 6px var(--green-soft);
+}
+.signal-control-input::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: var(--green);
+  border: 1px solid var(--green-bright);
+  cursor: pointer;
+  box-shadow: 0 0 6px var(--green-soft);
+}
+.signal-waveform-selector {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+.signal-waveform-btn {
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 6px 4px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  cursor: pointer;
+  transition: all var(--transition);
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+.signal-waveform-btn:hover { border-color: var(--green-dim); color: var(--green); }
+.signal-waveform-btn.active {
+  background: var(--green);
+  color: var(--bg);
+  border-color: var(--green);
+  font-weight: 600;
+}
+
+/* Wireless link indicator between the two devices */
+.signal-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px;
+  font-size: 0.68rem;
+  color: var(--green-dim);
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+.signal-link-waves {
+  display: flex;
+  gap: 2px;
+}
+.signal-link-wave {
+  width: 3px;
+  height: 8px;
+  background: var(--green);
+  border-radius: 1px;
+  animation: signalPulse 1.5s ease-in-out infinite;
+}
+.signal-link-wave:nth-child(2) { height: 12px; animation-delay: 0.2s; }
+.signal-link-wave:nth-child(3) { height: 16px; animation-delay: 0.4s; }
+.signal-link-wave:nth-child(4) { height: 12px; animation-delay: 0.6s; }
+.signal-link-wave:nth-child(5) { height: 8px; animation-delay: 0.8s; }
+@keyframes signalPulse {
+  0%, 100% { opacity: 0.3; transform: scaleY(0.6); }
+  50% { opacity: 1; transform: scaleY(1); }
+}
+
+/* ============================================================================
+   ANTI-THEFT WARNING (shown when devtools detected)
+   ========================================================================== */
+.anti-theft-warning {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.95);
+  z-index: 10000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  color: var(--red, #ff0040);
+  font-family: var(--font-mono);
+  text-align: center;
+  padding: 40px;
+}
+.anti-theft-warning.show { display: flex; }
+.anti-theft-warning-content {
+  max-width: 500px;
+}
+.anti-theft-warning h2 {
+  font-size: 1.5rem;
+  margin-bottom: 16px;
+}
+.anti-theft-warning p {
+  color: #ccc;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+
+/* ============================================================================
+   ADMIN SEARCH + EXPORT
+   ========================================================================== */
+.admin-search {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--green-bright);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+  outline: none;
+}
+.admin-search:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 1px var(--green);
+}
+.admin-search::placeholder { color: var(--text-faint); }
+.admin-export-btn {
+  margin-bottom: 16px;
 }
