@@ -38,10 +38,15 @@ model ContactMessage {
   message   String
   ip        String?
   userAgent String?
+  status    String   @default("new") // new, read, replied, archived
   createdAt DateTime @default(now())
+  replies   MessageReply[]
+  notes     MessageNote[]
+  tags      MessageTagRelation[]
 
   @@index([createdAt])
   @@index([email])
+  @@index([status])
 }
 
 model ChatSession {
@@ -75,6 +80,7 @@ model MessageReply {
   messageId String   // references ContactMessage.id
   reply     String
   createdAt DateTime @default(now())
+  message   ContactMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   @@index([messageId])
 }
@@ -86,3 +92,52 @@ model SiteSetting {
   value     String
   updatedAt DateTime @updatedAt
 }
+
+// AI Provider configuration — multiple providers with API keys
+model AiProvider {
+  id        String   @id @default(cuid())
+  name      String   // "openai", "anthropic", "zai", "ollama"
+  label     String   // Display name
+  apiKey    String?  // Encrypted API key (or null for local)
+  baseUrl   String?  // Custom base URL (for Ollama, etc.)
+  model     String   // Model name to use
+  enabled   Boolean  @default(false)
+  priority  Int      @default(0) // Lower = higher priority (fallback order)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enabled, priority])
+}
+
+// CRM: Tags for messages
+model MessageTag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  color     String   @default("#00ff41")
+  createdAt DateTime @default(now())
+  messages  MessageTagRelation[]
+}
+
+// Junction: messages can have multiple tags
+model MessageTagRelation {
+  messageId String
+  tagId     String
+  message   ContactMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  tag       MessageTag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, tagId])
+}
+
+// CRM: Admin notes on messages
+model MessageNote {
+  id        String   @id @default(cuid())
+  messageId String
+  note      String
+  createdAt DateTime @default(now())
+  message   ContactMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+}
+
+// CRM: Message status tracking
+// Status stored as SiteSetting key-value to avoid schema changes, but we add this for structure

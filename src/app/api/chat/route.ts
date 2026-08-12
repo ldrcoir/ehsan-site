@@ -157,20 +157,21 @@ export async function POST(req: Request) {
       { role: "user" as const, content: message },
     ];
 
-    // --- Call z-ai LLM ---
+    // --- Call LLM with provider fallback chain ---
     let reply = "";
+    let providerId = "default";
     try {
-      // Dynamic import to avoid issues if SDK is missing in some envs
-      const ZAI = (await import("z-ai-web-dev-sdk")).default;
-      const zai = await ZAI.create();
-      const completion = await zai.chat.completions.create({
-        messages: [
-          { role: "assistant", content: systemPrompt },
-          ...history,
-        ],
-        thinking: { type: "disabled" },
-      });
-      reply = completion.choices[0]?.message?.content || "";
+      const { callLLMWithFallback } = await import("@/lib/providers");
+      // Seed providers on first use
+      const { seedDefaultProviders } = await import("@/lib/providers");
+      await seedDefaultProviders();
+
+      const result = await callLLMWithFallback([
+        { role: "system", content: systemPrompt },
+        ...history,
+      ]);
+      reply = result.text;
+      providerId = result.providerId;
     } catch (llmErr) {
       console.error("[/api/chat] LLM error:", llmErr);
       // Fallback reply if LLM fails
