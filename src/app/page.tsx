@@ -8,12 +8,18 @@ import Oscilloscope from "@/components/Oscilloscope";
 import SignalLab from "@/components/SignalLab";
 import SignalBars from "@/components/SignalBars";
 import ChatSection from "@/components/ChatSection";
+import ContentManager from "@/components/ContentManager";
+import LabEquipmentRack from "@/components/LabEquipmentRack";
+import ArchiveGrid from "@/components/ArchiveGrid";
 import {
-  UI, PERSONAL, SOCIALS, SKILLS, BOOKS, ARTICLES, TUTORIALS, RF_EQUIPMENT,
+  UI, PERSONAL, SOCIALS,
   type Lang, DEFAULT_LANG, LANGS,
 } from "@/lib/content";
+import { useContent } from "@/lib/useContent";
 
 type FormStatus = { text: string; kind: "success" | "error" | "" };
+
+const langLabel: Record<Lang, string> = { en: "EN", de: "DE", fa: "FA" };
 type MessageRow = {
   id: string; name: string; email: string; message: string;
   ip: string | null; createdAt: string;
@@ -23,12 +29,25 @@ type ChatSessionRow = {
   messages: { id: string; role: string; content: string; createdAt: string }[];
 };
 
-const langLabel: Record<Lang, string> = { en: "EN", de: "DE", fa: "FA" };
-
-// TUTORIAL_PAGE_SIZE — show N tutorials at a time, "load more" reveals the rest
-const TUTORIAL_PAGE_SIZE = 6;
+// Tutorial types
+type TutorialItem = {
+  id: string;
+  titleEn?: string;
+  titleFa?: string;
+  titleDe?: string;
+  duration?: string;
+  levelEn?: string;
+  levelFa?: string;
+  levelDe?: string;
+  descEn?: string;
+  descFa?: string;
+  descDe?: string;
+  embedUrl: string;
+  platform?: string;
+};
 
 export default function Home() {
+  const { content: siteContent, loading: contentLoading } = useContent();
   const [lang, setLang] = useState<Lang>(DEFAULT_LANG);
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -46,7 +65,7 @@ export default function Home() {
   const [adminChats, setAdminChats] = useState<ChatSessionRow[] | null>(null);
   const [adminStats, setAdminStats] = useState<{ contactMessages: number; chatMessages: number; chatSessions: number } | null>(null);
   const [adminErr, setAdminErr] = useState("");
-  const [adminTab, setAdminTab] = useState<"messages" | "chats" | "settings">("messages");
+  const [adminTab, setAdminTab] = useState<"messages" | "chats" | "content" | "settings">("messages");
   const [adminSettings, setAdminSettings] = useState<Record<string, string> | null>(null);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
@@ -54,10 +73,6 @@ export default function Home() {
   const [chatReplyingTo, setChatReplyingTo] = useState<string | null>(null);
   const [chatReplyText, setChatReplyText] = useState("");
   const [chatReplyStatus, setChatReplyStatus] = useState<{ id: string; text: string; ok: boolean } | null>(null);
-
-  // tutorial filter + pagination
-  const [tutFilter, setTutFilter] = useState<string>("all");
-  const [tutPage, setTutPage] = useState(TUTORIAL_PAGE_SIZE);
 
   // theme + anti-theft
   const [theme, setTheme] = useState<"terminal" | "clean" | "midnight">("terminal");
@@ -458,19 +473,6 @@ export default function Home() {
 
   const reveal = (id: string) => (revealed.has(id) ? "reveal visible" : "reveal");
 
-  // Tutorial filter logic
-  const filteredTutorials = tutFilter === "all"
-    ? TUTORIALS
-    : TUTORIALS.filter((t) => {
-        const lvl = t.level[lang].toLowerCase();
-        if (tutFilter === "beginner") return lvl.includes("begin") || lvl.includes("مقدم") || lvl.includes("anf");
-        if (tutFilter === "intermediate") return lvl.includes("inter") || lvl.includes("متوسط") || lvl.includes("fort");
-        if (tutFilter === "advanced") return lvl.includes("advan") || lvl.includes("پیش") || lvl.includes("fortgeschritten") && !lvl.includes("anf");
-        return true;
-      });
-  const visibleTutorials = filteredTutorials.slice(0, tutPage);
-  const hasMoreTutorials = filteredTutorials.length > tutPage;
-
   // Wave divider SVG
   const WaveDivider = () => (
     <svg className="wave-divider" viewBox="0 0 800 40" preserveAspectRatio="none" aria-hidden="true">
@@ -658,25 +660,10 @@ export default function Home() {
             </aside>
           </div>
 
-          {/* RF Equipment Rack — lab equipment display */}
-          <div className={`equipment-rack ${reveal("equipment")}`} data-reveal="equipment">
-            <div className="equipment-rack-title">
-              {lang === "fa" ? "// رک تجهیزات آزمایشگاه" : lang === "de" ? "// Laborausstattung" : "// lab equipment rack"}
-            </div>
-            <div className="equipment-grid">
-              {RF_EQUIPMENT.map((eq) => (
-                <div key={eq.id} className="equipment-item">
-                  <div className="equipment-info">
-                    <span className="equipment-name">{eq.name}</span>
-                    <span className="equipment-model">{eq.model}</span>
-                  </div>
-                  <span className={`equipment-led ${eq.status}`} title={eq.status}></span>
-                </div>
-              ))}
-            </div>
-            {/* Signal Lab — Generator + Oscilloscope (wirelessly connected) */}
-            <SignalLab />
-          </div>
+          {/* RF Equipment Rack — lab equipment from DB */}
+          <LabEquipmentRack equipment={siteContent.equipment} />
+          {/* Signal Lab — Generator + Oscilloscope (wirelessly connected) */}
+          <SignalLab />
         </div>
       </section>
 
@@ -691,12 +678,17 @@ export default function Home() {
             <p className="section-subtitle">{tt.skills.subtitle}</p>
           </header>
           <div className="skills-grid">
-            {SKILLS.map((s, i) => (
-              <article key={i} className={`skill-card ${reveal(`skill-${i}`)}`} data-reveal={`skill-${i}`}>
-                <h3>{s.category[lang]}</h3>
-                <ul className="tags">{s.items.map((tag) => <li key={tag}>{tag}</li>)}</ul>
-              </article>
-            ))}
+            {siteContent.skills.map((s: any, i: number) => {
+              const catField = `category${lang.charAt(0).toUpperCase() + lang.slice(1)}`;
+              const category = s[catField] || s.categoryEn || "";
+              const items = Array.isArray(s.items) ? s.items : (typeof s.items === "string" ? s.items.split(",").map((x:string)=>x.trim()).filter(Boolean) : []);
+              return (
+                <article key={s.id || i} className={`skill-card ${reveal(`skill-${i}`)}`} data-reveal={`skill-${i}`}>
+                  <h3>{category}</h3>
+                  <ul className="tags">{items.map((tag: string) => <li key={tag}>{tag}</li>)}</ul>
+                </article>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -709,24 +701,11 @@ export default function Home() {
             <h2 className="section-title">{tt.books.title}</h2>
             <p className="section-subtitle">{tt.books.subtitle}</p>
           </header>
-          <div className="books-grid">
-            {BOOKS.map((b, i) => (
-              <article key={b.id} className={`book-card ${reveal(`book-${i}`)}`} data-reveal={`book-${i}`}>
-                <div className="book-cover" style={{ background: b.cover }}>
-                  <div className="book-cover-title">{b.title[lang]}</div>
-                </div>
-                <div className="book-body">
-                  <div className="book-meta">
-                    <span>{b.year}</span>
-                    <span>{b.publisher[lang]}</span>
-                  </div>
-                  <h3>{b.title[lang]}</h3>
-                  <p>{b.description[lang]}</p>
-                  <a href={b.link} target="_blank" rel="noopener noreferrer" className="book-link">{tt.books.view}</a>
-                </div>
-              </article>
-            ))}
-          </div>
+          <ArchiveGrid
+            items={siteContent.books}
+            type="book"
+            lang={lang}
+          />
         </div>
       </section>
 
@@ -740,24 +719,15 @@ export default function Home() {
             <h2 className="section-title">{tt.articles.title}</h2>
             <p className="section-subtitle">{tt.articles.subtitle}</p>
           </header>
-          <div className="articles-list">
-            {ARTICLES.map((a, i) => (
-              <article key={a.id} className={`article-row ${reveal(`article-${i}`)}`} data-reveal={`article-${i}`}>
-                <span className="article-date">{a.date}</span>
-                <div className="article-main">
-                  <p className="article-type">{a.type[lang]}</p>
-                  <h3>{a.title[lang]}</h3>
-                  <p className="article-venue">{a.venue[lang]}</p>
-                  <p className="article-summary">{a.summary[lang]}</p>
-                </div>
-                <a href={a.link} target="_blank" rel="noopener noreferrer" className="article-link">{tt.articles.read}</a>
-              </article>
-            ))}
-          </div>
+          <ArchiveGrid
+            items={siteContent.articles}
+            type="article"
+            lang={lang}
+          />
         </div>
       </section>
 
-      {/* TUTORIALS — with filter + pagination */}
+      {/* TUTORIALS — with ArchiveGrid (search, sort, pagination) */}
       <section className="section section-alt" id="tutorials">
         <div className="container">
           <header className="section-head">
@@ -765,51 +735,12 @@ export default function Home() {
             <h2 className="section-title">{tt.tutorials.title}</h2>
             <p className="section-subtitle">{tt.tutorials.subtitle}</p>
           </header>
-          <div className="tutorial-filters">
-            <button
-              className={`tutorial-filter ${tutFilter === "all" ? "active" : ""}`}
-              onClick={() => { setTutFilter("all"); setTutPage(TUTORIAL_PAGE_SIZE); }}
-            >all ({TUTORIALS.length})</button>
-            <button
-              className={`tutorial-filter ${tutFilter === "beginner" ? "active" : ""}`}
-              onClick={() => { setTutFilter("beginner"); setTutPage(TUTORIAL_PAGE_SIZE); }}
-            >beginner</button>
-            <button
-              className={`tutorial-filter ${tutFilter === "intermediate" ? "active" : ""}`}
-              onClick={() => { setTutFilter("intermediate"); setTutPage(TUTORIAL_PAGE_SIZE); }}
-            >intermediate</button>
-            <button
-              className={`tutorial-filter ${tutFilter === "advanced" ? "active" : ""}`}
-              onClick={() => { setTutFilter("advanced"); setTutPage(TUTORIAL_PAGE_SIZE); }}
-            >advanced</button>
-          </div>
-          <div className="tutorials-grid">
-            {visibleTutorials.map((t, i) => (
-              <article
-                key={t.id}
-                className={`tutorial-card ${reveal(`tut-${i}`)}`}
-                data-reveal={`tut-${i}`}
-                onClick={() => setActiveTutorial(t)}
-              >
-                <div className="tutorial-thumb">
-                  <div className="tutorial-play"></div>
-                  <span className="tutorial-duration">{t.duration}</span>
-                </div>
-                <div className="tutorial-body">
-                  <p className="tutorial-level">{t.level[lang]}</p>
-                  <h3>{t.title[lang]}</h3>
-                  <p>{t.description[lang]}</p>
-                </div>
-              </article>
-            ))}
-          </div>
-          {hasMoreTutorials && (
-            <div className="tutorial-load-more">
-              <button className="btn btn-ghost" onClick={() => setTutPage((p) => p + TUTORIAL_PAGE_SIZE)}>
-                load more ({filteredTutorials.length - tutPage} remaining)
-              </button>
-            </div>
-          )}
+          <ArchiveGrid
+            items={siteContent.tutorials}
+            type="tutorial"
+            lang={lang}
+            onItemClick={(t) => setActiveTutorial(t as any)}
+          />
         </div>
       </section>
 
@@ -976,12 +907,23 @@ export default function Home() {
                       AI chat logs ({adminChats?.length || 0})
                     </button>
                     <button
+                      className={`admin-tab ${adminTab === "content" ? "active" : ""}`}
+                      onClick={() => setAdminTab("content")}
+                    >
+                      {lang === "fa" ? "محتوا" : "content"}
+                    </button>
+                    <button
                       className={`admin-tab ${adminTab === "settings" ? "active" : ""}`}
                       onClick={() => setAdminTab("settings")}
                     >
                       settings
                     </button>
                   </div>
+
+                  {/* CONTENT TAB */}
+                  {adminTab === "content" && (
+                    <ContentManager password={adminPwd} lang={lang} />
+                  )}
 
                   {/* CONTACT MESSAGES TAB with reply */}
                   {adminTab === "messages" && (

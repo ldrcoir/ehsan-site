@@ -14,7 +14,8 @@ export const LANGS: Lang[] = ["en", "de", "fa"];
 // ----------------------------------------------------------------------------
 export const PERSONAL = {
   // Display name / handle shown in the navbar, hero, footer
-  handle: "your_handle",
+  // This is your username/brand name (e.g. "max_mustermann" or "your_name")
+  handle: "your_name",
   fullName: {
     en: "Your Name",
     de: "Ihr Name",

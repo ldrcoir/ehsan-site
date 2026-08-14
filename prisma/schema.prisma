@@ -141,3 +141,145 @@ model MessageNote {
 
 // CRM: Message status tracking
 // Status stored as SiteSetting key-value to avoid schema changes, but we add this for structure
+// Lab Equipment — manageable from admin panel, with live status display
+model LabEquipment {
+  id          String   @id @default(cuid())
+  name        String
+  model       String
+  category    String   @default("general") // vna, sa, sg, osc, etc.
+  status      String   @default("online") // online, standby, offline, maintenance
+  description String?
+  specs       String?  // JSON string of key specs
+  order       Int      @default(0)
+  visible     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([visible, order])
+  @@index([category])
+}
+
+// Page views — for analytics dashboard
+model PageView {
+  id        String   @id @default(cuid())
+  path      String
+  referrer  String?
+  userAgent String?
+  ip        String?
+  lang      String?
+  createdAt DateTime @default(now())
+
+  @@index([path, createdAt])
+  @@index([createdAt])
+}
+
+// Tutorial views — track which tutorials are watched most
+model TutorialView {
+  id          String   @id @default(cuid())
+  tutorialId  String
+  ip          String?
+  createdAt   DateTime @default(now())
+
+  @@index([tutorialId])
+  @@index([createdAt])
+}
+
+// ============================================================================
+//  CONTENT MODELS — editable from admin panel
+// ============================================================================
+
+model Book {
+  id          String   @id @default(cuid())
+  titleEn     String
+  titleDe     String?
+  titleFa     String?
+  year        String
+  publisherEn String
+  publisherDe String?
+  publisherFa String?
+  descEn      String
+  descDe      String?
+  descFa      String?
+  cover       String   @default("linear-gradient(135deg,#003b00,#00ff41)")
+  link        String?
+  order       Int      @default(0)
+  visible     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([visible, order])
+}
+
+model Article {
+  id        String   @id @default(cuid())
+  titleEn   String
+  titleDe   String?
+  titleFa   String?
+  venueEn   String
+  venueDe   String?
+  venueFa   String?
+  date      String
+  typeEn    String   @default("Article")
+  typeDe    String?
+  typeFa    String?
+  summaryEn String
+  summaryDe String?
+  summaryFa String?
+  link      String?
+  order     Int      @default(0)
+  visible   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([visible, order])
+}
+
+model Tutorial {
+  id          String   @id @default(cuid())
+  titleEn     String
+  titleDe     String?
+  titleFa     String?
+  duration    String   @default("00:00")
+  levelEn     String   @default("Beginner")
+  levelDe     String?
+  levelFa     String?
+  descEn      String
+  descDe      String?
+  descFa      String?
+  embedUrl   String
+  platform    String   @default("aparat")
+  playlist    String?
+  order       Int      @default(0)
+  visible     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([visible, order])
+  @@index([playlist])
+}
+
+model Skill {
+  id          String   @id @default(cuid())
+  categoryEn  String
+  categoryDe  String?
+  categoryFa  String?
+  items       String
+  order       Int      @default(0)
+  visible     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([visible, order])
+}
+
+model AiInstruction {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  content   String
+  enabled   Boolean  @default(true)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enabled, order])
+}
