@@ -24,6 +24,9 @@ type TriggerEdge = "RISE" | "FALL";
  */
 
 const TIME_DIV_OPTIONS = [
+  { label: "100µs", value: 0.0001 },
+  { label: "200µs", value: 0.0002 },
+  { label: "500µs", value: 0.0005 },
   { label: "1ms", value: 0.001 },
   { label: "2ms", value: 0.002 },
   { label: "5ms", value: 0.005 },
@@ -239,14 +242,14 @@ export default function RealOscilloscope({
         } else {
           // Determine if we're in "high frequency" mode (many cycles per screen)
           const cyclesOnScreen = frequency * timeWindow;
-          const isHighFreq = cyclesOnScreen > samples / 4; // more than 4 samples per cycle threshold
+          const isHighFreq = cyclesOnScreen > samples / 4;
+          // Use more sub-samples for better envelope quality
+          const subSamples = isHighFreq ? 16 : 1;
 
           if (isHighFreq && coupling !== "GND") {
-            // ENVELOPE MODE: when frequency is too high for proper rendering,
-            // sample multiple points per pixel and show min/max envelope
+            // ENVELOPE MODE: smooth min/max envelope
             ctx.beginPath();
             const startTime = accumulatedTime - timeWindow;
-            const subSamples = 8; // sample 8 points per pixel for envelope
             const points: { x: number; yMin: number; yMax: number }[] = [];
 
             for (let i = 0; i <= samples; i++) {
@@ -258,7 +261,6 @@ export default function RealOscilloscope({
                 let v = waveValue(2 * Math.PI * frequency * subTime, waveform, amplitude);
                 if (v > vMax) vMax = v;
                 if (v < vMin) vMin = v;
-                // Accumulate measurements
                 if (v > vppMax) vppMax = v;
                 if (v < vppMin) vppMin = v;
                 sumV += v;
@@ -270,7 +272,7 @@ export default function RealOscilloscope({
               points.push({ x: i, yMin, yMax });
             }
 
-            // Draw envelope as filled shape
+            // Filled envelope
             ctx.fillStyle = `rgba(${hexToRgb(greenColor)}, 0.15)`;
             ctx.beginPath();
             ctx.moveTo(points[0].x, points[0].yMax);
@@ -279,20 +281,25 @@ export default function RealOscilloscope({
             ctx.closePath();
             ctx.fill();
 
-            // Draw center line through envelope
+            // Top + bottom edges
             ctx.strokeStyle = greenBright;
-            ctx.lineWidth = 1;
+            ctx.lineWidth = 1.2;
+            ctx.shadowColor = `rgba(${hexToRgb(greenColor)}, 0.4)`;
+            ctx.shadowBlur = 4;
             ctx.beginPath();
-            for (let i = 0; i < points.length; i++) {
-              const yMid = (points[i].yMin + points[i].yMax) / 2;
-              if (i === 0) ctx.moveTo(points[i].x, yMid);
-              else ctx.lineTo(points[i].x, yMid);
-            }
+            for (const p of points) ctx.lineTo(p.x, p.yMax);
+            ctx.moveTo(points[0].x, points[0].yMin);
+            for (const p of points) ctx.lineTo(p.x, p.yMin);
             ctx.stroke();
+            ctx.shadowBlur = 0;
           } else {
-            // NORMAL MODE: sample one point per pixel, smooth waveform
+            // NORMAL MODE: smooth continuous waveform
             ctx.beginPath();
             const startTime = accumulatedTime - timeWindow;
+            ctx.shadowColor = `rgba(${hexToRgb(greenColor)}, 0.5)`;
+            ctx.shadowBlur = 6;
+            ctx.strokeStyle = greenBright;
+            ctx.lineWidth = 1.8;
             for (let i = 0; i <= samples; i++) {
               const frac = i / samples;
               const time = startTime + frac * timeWindow;
@@ -308,6 +315,7 @@ export default function RealOscilloscope({
               else ctx.lineTo(i, y);
             }
             ctx.stroke();
+            ctx.shadowBlur = 0;
           }
         }
         ctx.shadowBlur = 0;
@@ -405,12 +413,12 @@ export default function RealOscilloscope({
           <div className="osc-button-row">
             <button className="osc-arrow-btn" onClick={() => {
               const idx = VOLT_DIV_OPTIONS.findIndex(o => o.value === voltDiv);
-              if (idx < VOLT_DIV_OPTIONS.length - 1) setVoltDiv(VOLT_DIV_OPTIONS[idx + 1].value);
-            }}>▼</button>
-            <button className="osc-arrow-btn" onClick={() => {
-              const idx = VOLT_DIV_OPTIONS.findIndex(o => o.value === voltDiv);
               if (idx > 0) setVoltDiv(VOLT_DIV_OPTIONS[idx - 1].value);
             }}>▲</button>
+            <button className="osc-arrow-btn" onClick={() => {
+              const idx = VOLT_DIV_OPTIONS.findIndex(o => o.value === voltDiv);
+              if (idx < VOLT_DIV_OPTIONS.length - 1) setVoltDiv(VOLT_DIV_OPTIONS[idx + 1].value);
+            }}>▼</button>
           </div>
         </div>
 
