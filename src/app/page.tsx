@@ -11,6 +11,7 @@ import ChatSection from "@/components/ChatSection";
 import ContentManager from "@/components/ContentManager";
 import LabEquipmentRack from "@/components/LabEquipmentRack";
 import ArchiveGrid from "@/components/ArchiveGrid";
+import ThemeBuilder from "@/components/ThemeBuilder";
 import {
   UI, PERSONAL, SOCIALS,
   type Lang, DEFAULT_LANG, LANGS,
@@ -65,7 +66,7 @@ export default function Home() {
   const [adminChats, setAdminChats] = useState<ChatSessionRow[] | null>(null);
   const [adminStats, setAdminStats] = useState<{ contactMessages: number; chatMessages: number; chatSessions: number } | null>(null);
   const [adminErr, setAdminErr] = useState("");
-  const [adminTab, setAdminTab] = useState<"messages" | "chats" | "content" | "settings">("messages");
+  const [adminTab, setAdminTab] = useState<"messages" | "chats" | "content" | "themes" | "settings">("messages");
   const [adminSettings, setAdminSettings] = useState<Record<string, string> | null>(null);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
@@ -927,6 +928,12 @@ export default function Home() {
                       {lang === "fa" ? "محتوا" : "content"}
                     </button>
                     <button
+                      className={`admin-tab ${adminTab === "themes" ? "active" : ""}`}
+                      onClick={() => setAdminTab("themes")}
+                    >
+                      {lang === "fa" ? "تم‌ساز" : "themes"}
+                    </button>
+                    <button
                       className={`admin-tab ${adminTab === "settings" ? "active" : ""}`}
                       onClick={() => setAdminTab("settings")}
                     >
@@ -937,6 +944,11 @@ export default function Home() {
                   {/* CONTENT TAB */}
                   {adminTab === "content" && (
                     <ContentManager password={adminPwd} lang={lang} />
+                  )}
+
+                  {/* THEMES TAB — Theme Builder */}
+                  {adminTab === "themes" && (
+                    <ThemeBuilder password={adminPwd} lang={lang} />
                   )}
 
                   {/* CONTACT MESSAGES TAB with reply */}

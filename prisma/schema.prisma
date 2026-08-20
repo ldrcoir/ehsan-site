@@ -305,3 +305,31 @@ model TelegramConfig {
   enabled   Boolean  @default(false)
   updatedAt DateTime @updatedAt
 }
+
+// Custom Themes — created from admin Theme Builder
+model CustomTheme {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  bg          String   @default("#000000")
+  bgSoft      String   @default("#030303")
+  bgPanel     String   @default("#050505")
+  bgPanel2    String   @default("#080808")
+  primary     String   @default("#00ff41")
+  primaryDim  String   @default("#008f11")
+  primaryBright String @default("#39ff14")
+  text        String   @default("#c8ffc8")
+  textDim     String   @default("#4a7a4a")
+  textFaint   String   @default("#2a4a2a")
+  border      String   @default("#1a3a1a")
+  borderBright String   @default("#2a6a2a")
+  accent      String   @default("#ffb000")
+  red         String   @default("#ff0040")
+  cyan        String   @default("#00fff0")
+  scanlines   Boolean  @default(false)
+  visible     Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([visible, order])
+}
