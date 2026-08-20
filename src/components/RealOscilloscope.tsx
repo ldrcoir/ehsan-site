@@ -351,6 +351,12 @@ export default function RealOscilloscope({
       // Bottom-right: sweep status
       ctx.fillStyle = textFaint;
       ctx.fillText(triggerMode === "SINGLE" && triggerFiredRef.current ? "STOPPED" : "RUN", w - 60, h - 8);
+
+      // === ANTI-COPY PROTECTION ===
+      // Watermark the canvas + domain lock
+      import("@/lib/canvas-protect").then(({ watermarkCanvas }) => {
+        watermarkCanvas(ctx, w, h);
+      });
     };
 
     if (!reduce) {
