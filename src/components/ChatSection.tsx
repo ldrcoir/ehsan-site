@@ -51,6 +51,32 @@ export default function ChatSection({ lang }: { lang: Lang }) {
     }
   }, [messages]);
 
+  // State for polling
+  const [lastPollTs, setLastPollTs] = useState(Date.now());
+
+  // Poll for new messages from admin (via Bale or admin panel)
+  useEffect(() => {
+    if (!sessionId) return;
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/chat/messages?sessionId=${sessionId}&since=${lastPollTs}`);
+        const data = await res.json();
+        if (data.ok && data.messages && data.messages.length > 0) {
+          setMessages((prev) => {
+            const newMsgs = data.messages.map((m: any) => ({
+              role: "assistant" as const,
+              content: m.content,
+              ts: new Date(m.createdAt).getTime(),
+            }));
+            return [...prev, ...newMsgs];
+          });
+          setLastPollTs(data.serverTime || Date.now());
+        }
+      } catch {}
+    }, 3000);
+    return () => clearInterval(pollInterval);
+  }, [sessionId, lastPollTs]);
+
   const send = async (e: FormEvent) => {
     e.preventDefault();
     if (sending || !input.trim()) return;
@@ -78,6 +104,8 @@ export default function ChatSection({ lang }: { lang: Lang }) {
           ...prev,
           { role: "assistant", content: data.reply, ts: Date.now() },
         ]);
+        // Update poll timestamp to avoid re-fetching this reply
+        setLastPollTs(Date.now());
       } else {
         const err = data.error || "server_error";
         const msg =

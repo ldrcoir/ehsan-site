@@ -1188,6 +1188,188 @@ export default function Home() {
                           <br/>/disable · /enable · /stats · /help
                         </div>
                       </div>
+
+                      {/* Security — Change Password & Handle */}
+                      <div className="admin-settings-section">
+                        <h4>Security — Password & Handle</h4>
+                        <div className="admin-setting-row">
+                          <span className="admin-setting-label">New password (min 6 chars)</span>
+                          <input
+                            className="admin-setting-input"
+                            type="password"
+                            id="newPassword"
+                            placeholder="new password..."
+                          />
+                        </div>
+                        <button
+                          className="btn btn-primary btn-sm admin-save-btn"
+                          onClick={async () => {
+                            const el = document.getElementById("newPassword") as HTMLInputElement;
+                            const newPwd = el.value;
+                            if (!newPwd || newPwd.length < 6) {
+                              alert("Password must be at least 6 characters");
+                              return;
+                            }
+                            const res = await fetch("/api/admin/security", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ password: adminPwd, action: "change_password", newPassword: newPwd }),
+                            });
+                            const data = await res.json();
+                            if (data.ok) {
+                              alert("✓ Password changed! Use new password next time: " + newPwd);
+                              setAdminPwd(newPwd);
+                              el.value = "";
+                            } else {
+                              alert("Error: " + (data.error || "unknown"));
+                            }
+                          }}
+                        >
+                          change password
+                        </button>
+                        <div className="admin-setting-row" style={{ marginTop: 12 }}>
+                          <span className="admin-setting-label">New handle (username)</span>
+                          <input
+                            className="admin-setting-input"
+                            type="text"
+                            id="newHandle"
+                            placeholder="new_handle"
+                          />
+                        </div>
+                        <button
+                          className="btn btn-primary btn-sm admin-save-btn"
+                          onClick={async () => {
+                            const el = document.getElementById("newHandle") as HTMLInputElement;
+                            const newH = el.value;
+                            if (!newH) return;
+                            const res = await fetch("/api/admin/security", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ password: adminPwd, action: "change_handle", newHandle: newH }),
+                            });
+                            const data = await res.json();
+                            if (data.ok) {
+                              alert("✓ Handle changed to: " + newH + ". Reload to see changes.");
+                              el.value = "";
+                            } else {
+                              alert("Error: " + (data.error || "unknown"));
+                            }
+                          }}
+                        >
+                          change handle
+                        </button>
+                      </div>
+
+                      {/* AI Providers — API Key Management */}
+                      <div className="admin-settings-section">
+                        <h4>AI Providers — API Keys</h4>
+                        <p style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginBottom: 10 }}>
+                          Configure which AI providers to use. Lower priority = tried first.
+                          If one fails, the next is tried (fallback chain).
+                        </p>
+                        <div id="aiProvidersList" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          <p style={{ color: "var(--text-dim)", fontSize: "0.78rem" }}>Loading providers...</p>
+                        </div>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          style={{ marginTop: 10 }}
+                          onClick={async () => {
+                            const res = await fetch(`/api/admin/providers?password=${adminPwd}`);
+                            const data = await res.json();
+                            if (data.ok) {
+                              const container = document.getElementById("aiProvidersList");
+                              if (container) {
+                                container.innerHTML = data.providers.map((p: any) => `
+                                  <div style="border:1px solid var(--border);padding:10px;display:flex;flex-direction:column;gap:6px;">
+                                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                                      <strong style="color:var(--green-bright);font-size:0.85rem;">${p.label}</strong>
+                                      <span style="font-size:0.7rem;color:${p.enabled ? 'var(--green)' : 'var(--text-dim)'};">${p.enabled ? '● enabled' : '○ disabled'}</span>
+                                    </div>
+                                    <div style="font-size:0.72rem;color:var(--text-dim);">Model: ${p.model} · Priority: ${p.priority}</div>
+                                    <input type="password" placeholder="API Key: ${p.apiKey || 'not set'}" style="background:var(--bg);border:1px solid var(--border);color:var(--green-bright);font-family:var(--font-mono);font-size:0.75rem;padding:4px;" id="key_${p.id}" />
+                                    <input type="text" placeholder="Model name" value="${p.model}" style="background:var(--bg);border:1px solid var(--border);color:var(--green-bright);font-family:var(--font-mono);font-size:0.75rem;padding:4px;" id="model_${p.id}" />
+                                    <div style="display:flex;gap:4px;">
+                                      <button onclick="window.__updateProvider('${p.id}', '${p.id}')" style="background:var(--green);color:#000;border:0;padding:4px 8px;font-size:0.7rem;cursor:pointer;font-family:var(--font-mono);">save</button>
+                                      <button onclick="window.__toggleProvider('${p.id}')" style="background:var(--bg-panel-2);border:1px solid var(--border);color:var(--green);padding:4px 8px;font-size:0.7rem;cursor:pointer;font-family:var(--font-mono);">${p.enabled ? 'disable' : 'enable'}</button>
+                                    </div>
+                                  </div>
+                                `).join("");
+                              }
+                            }
+                          }}
+                        >
+                          refresh providers
+                        </button>
+                      </div>
+
+                      {/* Email/SMTP Configuration */}
+                      <div className="admin-settings-section">
+                        <h4>Email — SMTP Configuration</h4>
+                        <p style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginBottom: 10 }}>
+                          Configure SMTP to send email replies to visitors.
+                          Works with Gmail, Outlook, or any SMTP server.
+                        </p>
+                        <div className="admin-setting-row">
+                          <span className="admin-setting-label">SMTP Host</span>
+                          <input className="admin-setting-input" type="text" id="smtpHost" placeholder="smtp.gmail.com" />
+                        </div>
+                        <div className="admin-setting-row">
+                          <span className="admin-setting-label">SMTP Port</span>
+                          <input className="admin-setting-input" type="text" id="smtpPort" placeholder="587" />
+                        </div>
+                        <div className="admin-setting-row">
+                          <span className="admin-setting-label">SMTP User</span>
+                          <input className="admin-setting-input" type="text" id="smtpUser" placeholder="your@email.com" />
+                        </div>
+                        <div className="admin-setting-row">
+                          <span className="admin-setting-label">SMTP Password</span>
+                          <input className="admin-setting-input" type="password" id="smtpPass" placeholder="app password" />
+                        </div>
+                        <div className="admin-setting-row">
+                          <span className="admin-setting-label">From Email</span>
+                          <input className="admin-setting-input" type="text" id="fromEmail" placeholder="noreply@yoursite.com" />
+                        </div>
+                        <div className="admin-setting-row">
+                          <span className="admin-setting-label">From Name</span>
+                          <input className="admin-setting-input" type="text" id="fromName" placeholder="Your Name" />
+                        </div>
+                        <div className="admin-setting-row">
+                          <span className="admin-setting-label">Enable email sending</span>
+                          <div
+                            className={`admin-toggle ${false ? "on" : ""}`}
+                            id="emailToggle"
+                            onClick={async () => {
+                              const el = document.getElementById("emailToggle");
+                              const isOn = el.classList.contains("on");
+                              if (isOn) el.classList.remove("on"); else el.classList.add("on");
+                            }}
+                            role="button"
+                            tabIndex={0}
+                          />
+                        </div>
+                        <button
+                          className="btn btn-primary btn-sm admin-save-btn"
+                          onClick={async () => {
+                            const smtpHost = (document.getElementById("smtpHost") as HTMLInputElement).value;
+                            const smtpPort = (document.getElementById("smtpPort") as HTMLInputElement).value;
+                            const smtpUser = (document.getElementById("smtpUser") as HTMLInputElement).value;
+                            const smtpPass = (document.getElementById("smtpPass") as HTMLInputElement).value;
+                            const fromEmail = (document.getElementById("fromEmail") as HTMLInputElement).value;
+                            const fromName = (document.getElementById("fromName") as HTMLInputElement).value;
+                            const enabled = document.getElementById("emailToggle").classList.contains("on");
+                            const res = await fetch("/api/admin/email", {
+                              method: "PUT",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ password: adminPwd, smtpHost, smtpPort, smtpUser, smtpPass, fromEmail, fromName, enabled }),
+                            });
+                            const data = await res.json();
+                            if (data.ok) alert("✓ Email config saved");
+                            else alert("Error: " + (data.error || "unknown"));
+                          }}
+                        >
+                          save email config
+                        </button>
+                      </div>
                     </div>
                   )}
                 </>

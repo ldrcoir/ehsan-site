@@ -111,19 +111,20 @@ export default function RealOscilloscope({
     const divW = () => w / GRID_DIVS_X;
     const divH = () => h / GRID_DIVS_Y;
 
-    // Trigger hold
-    let sweepStarted = false;
-    let sweepPhase = 0;
-    let lastTriggerTime = 0;
-
-    let t = 0;
+    let lastTime = 0;
+    let accumulatedTime = 0;
     let sampleCount = 0;
     let vppMax = -Infinity, vppMin = Infinity;
     let sumV = 0, sumV2 = 0;
+    let measurementTimer = 0;
 
-    const draw = () => {
+    const draw = (now: number) => {
       rafRef.current = requestAnimationFrame(draw);
-      t += 0.016; // ~60fps
+
+      const dt = lastTime === 0 ? 0.016 : Math.min((now - lastTime) / 1000, 0.05);
+      lastTime = now;
+      accumulatedTime += dt;
+      measurementTimer += dt;
 
       const styles = getComputedStyle(document.documentElement);
       const bgColor = styles.getPropertyValue("--bg").trim() || "#000";
@@ -236,35 +237,78 @@ export default function RealOscilloscope({
           ctx.lineTo(w, offsetY);
           ctx.stroke();
         } else {
-          ctx.beginPath();
-          // Show waveform across the full time window
-          // Left edge = current time - timeWindow, right edge = current time
-          // This makes the waveform scroll right-to-left
-          const startTime = t - timeWindow;
-          for (let i = 0; i <= samples; i++) {
-            const frac = i / samples;
-            const time = startTime + frac * timeWindow;
-            // Generate the actual signal value
-            let v = waveValue(2 * Math.PI * frequency * time, waveform, amplitude);
-            if (coupling === "AC") {
-              // For symmetric waves, DC component is ~0
-              // AC coupling removes DC offset
-              v = v - 0;
+          // Determine if we're in "high frequency" mode (many cycles per screen)
+          const cyclesOnScreen = frequency * timeWindow;
+          const isHighFreq = cyclesOnScreen > samples / 4; // more than 4 samples per cycle threshold
+
+          if (isHighFreq && coupling !== "GND") {
+            // ENVELOPE MODE: when frequency is too high for proper rendering,
+            // sample multiple points per pixel and show min/max envelope
+            ctx.beginPath();
+            const startTime = accumulatedTime - timeWindow;
+            const subSamples = 8; // sample 8 points per pixel for envelope
+            const points: { x: number; yMin: number; yMax: number }[] = [];
+
+            for (let i = 0; i <= samples; i++) {
+              const frac = i / samples;
+              const time = startTime + frac * timeWindow;
+              let vMin = Infinity, vMax = -Infinity;
+              for (let j = 0; j < subSamples; j++) {
+                const subTime = time + (j / subSamples) * (timeWindow / samples);
+                let v = waveValue(2 * Math.PI * frequency * subTime, waveform, amplitude);
+                if (v > vMax) vMax = v;
+                if (v < vMin) vMin = v;
+                // Accumulate measurements
+                if (v > vppMax) vppMax = v;
+                if (v < vppMin) vppMin = v;
+                sumV += v;
+                sumV2 += v * v;
+                sampleCount++;
+              }
+              const yMax = cy - ((vMax + offset) / voltDiv) * divH();
+              const yMin = cy - ((vMin + offset) / voltDiv) * divH();
+              points.push({ x: i, yMin, yMax });
             }
-            // Apply vertical offset (position control)
-            const y = cy - ((v + offset) / voltDiv) * divH();
 
-            // Accumulate measurements
-            if (v > vppMax) vppMax = v;
-            if (v < vppMin) vppMin = v;
-            sumV += v;
-            sumV2 += v * v;
-            sampleCount++;
+            // Draw envelope as filled shape
+            ctx.fillStyle = `rgba(${hexToRgb(greenColor)}, 0.15)`;
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].yMax);
+            for (const p of points) ctx.lineTo(p.x, p.yMax);
+            for (let i = points.length - 1; i >= 0; i--) ctx.lineTo(points[i].x, points[i].yMin);
+            ctx.closePath();
+            ctx.fill();
 
-            if (i === 0) ctx.moveTo(i, y);
-            else ctx.lineTo(i, y);
+            // Draw center line through envelope
+            ctx.strokeStyle = greenBright;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for (let i = 0; i < points.length; i++) {
+              const yMid = (points[i].yMin + points[i].yMax) / 2;
+              if (i === 0) ctx.moveTo(points[i].x, yMid);
+              else ctx.lineTo(points[i].x, yMid);
+            }
+            ctx.stroke();
+          } else {
+            // NORMAL MODE: sample one point per pixel, smooth waveform
+            ctx.beginPath();
+            const startTime = accumulatedTime - timeWindow;
+            for (let i = 0; i <= samples; i++) {
+              const frac = i / samples;
+              const time = startTime + frac * timeWindow;
+              let v = waveValue(2 * Math.PI * frequency * time, waveform, amplitude);
+              if (coupling === "AC") { v = v - 0; }
+              const y = cy - ((v + offset) / voltDiv) * divH();
+              if (v > vppMax) vppMax = v;
+              if (v < vppMin) vppMin = v;
+              sumV += v;
+              sumV2 += v * v;
+              sampleCount++;
+              if (i === 0) ctx.moveTo(i, y);
+              else ctx.lineTo(i, y);
+            }
+            ctx.stroke();
           }
-          ctx.stroke();
         }
         ctx.shadowBlur = 0;
       }
@@ -304,7 +348,7 @@ export default function RealOscilloscope({
     if (!reduce) {
       rafRef.current = requestAnimationFrame(draw);
     } else {
-      draw();
+      draw(performance.now());
       cancelAnimationFrame(rafRef.current);
     }
 
@@ -312,7 +356,7 @@ export default function RealOscilloscope({
       cancelAnimationFrame(rafRef.current);
       ro.disconnect();
     };
-  }, [waveform, frequency, amplitude, timeDiv, voltDiv, offset, coupling, triggerMode, triggerEdge, triggerLevel, channelOn, measurements]);
+  }, [waveform, frequency, amplitude, timeDiv, voltDiv, offset, coupling, triggerMode, triggerEdge, triggerLevel, channelOn]);
 
   const controlBtn = (label: string, active: boolean, onClick: () => void) => (
     <button

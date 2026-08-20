@@ -283,3 +283,25 @@ model AiInstruction {
 
   @@index([enabled, order])
 }
+
+// Email configuration — SMTP settings for sending replies via email
+model EmailConfig {
+  id        String   @id @default("default")
+  smtpHost  String?
+  smtpPort  String?
+  smtpUser  String?
+  smtpPass  String?
+  fromEmail String?
+  fromName  String?
+  enabled   Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+}
+
+// Telegram configuration — alternative to Bale
+model TelegramConfig {
+  id        String   @id @default("default")
+  botToken  String?
+  chatId    String?
+  enabled   Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+}
