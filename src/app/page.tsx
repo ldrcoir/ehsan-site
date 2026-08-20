@@ -983,6 +983,20 @@ export default function Home() {
                                   reply
                                 </button>
                               )}
+                              <button
+                                className="btn btn-ghost btn-sm"
+                                style={{ color: "var(--red)", borderColor: "var(--red)" }}
+                                onClick={async () => {
+                                  if (!confirm("Delete this message?")) return;
+                                  await fetch("/api/admin/clear", {
+                                    method: "POST", headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ password: adminPwd, target: "message", id: m.id }),
+                                  });
+                                  setAdminMsgs(prev => prev.filter(x => x.id !== m.id));
+                                }}
+                              >
+                                delete
+                              </button>
                             </div>
                           </div>
                         ))}
@@ -1043,6 +1057,20 @@ export default function Home() {
                                   reply as AI
                                 </button>
                               )}
+                              <button
+                                className="btn btn-ghost btn-sm"
+                                style={{ color: "var(--red)", borderColor: "var(--red)" }}
+                                onClick={async () => {
+                                  if (!confirm("Delete this chat session?")) return;
+                                  await fetch("/api/admin/clear", {
+                                    method: "POST", headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ password: adminPwd, target: "chat_session", id: s.id }),
+                                  });
+                                  setAdminChats(prev => (prev || []).filter(x => x.id !== s.id));
+                                }}
+                              >
+                                delete
+                              </button>
                             </div>
                           </div>
                         ))}
@@ -1285,73 +1313,72 @@ export default function Home() {
                         </button>
                       </div>
 
-                      {/* Email/SMTP Configuration */}
+                      {/* Simple Email Forwarding — just one field */}
                       <div className="admin-settings-section">
-                        <h4>Email — SMTP Configuration</h4>
+                        <h4>Email Forwarding</h4>
                         <p style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginBottom: 10 }}>
-                          Configure SMTP to send email replies to visitors.
-                          Works with Gmail, Outlook, or any SMTP server.
+                          Enter your email. All contact form messages will be forwarded there automatically.
+                          No SMTP needed — uses a free service (formsubmit.co).
+                          First time: you'll get a confirmation email from formsubmit.co to activate.
                         </p>
                         <div className="admin-setting-row">
-                          <span className="admin-setting-label">SMTP Host</span>
-                          <input className="admin-setting-input" type="text" id="smtpHost" placeholder="smtp.gmail.com" />
-                        </div>
-                        <div className="admin-setting-row">
-                          <span className="admin-setting-label">SMTP Port</span>
-                          <input className="admin-setting-input" type="text" id="smtpPort" placeholder="587" />
-                        </div>
-                        <div className="admin-setting-row">
-                          <span className="admin-setting-label">SMTP User</span>
-                          <input className="admin-setting-input" type="text" id="smtpUser" placeholder="your@email.com" />
-                        </div>
-                        <div className="admin-setting-row">
-                          <span className="admin-setting-label">SMTP Password</span>
-                          <input className="admin-setting-input" type="password" id="smtpPass" placeholder="app password" />
-                        </div>
-                        <div className="admin-setting-row">
-                          <span className="admin-setting-label">From Email</span>
-                          <input className="admin-setting-input" type="text" id="fromEmail" placeholder="noreply@yoursite.com" />
-                        </div>
-                        <div className="admin-setting-row">
-                          <span className="admin-setting-label">From Name</span>
-                          <input className="admin-setting-input" type="text" id="fromName" placeholder="Your Name" />
-                        </div>
-                        <div className="admin-setting-row">
-                          <span className="admin-setting-label">Enable email sending</span>
-                          <div
-                            className={`admin-toggle ${false ? "on" : ""}`}
-                            id="emailToggle"
-                            onClick={async () => {
-                              const el = document.getElementById("emailToggle");
-                              const isOn = el.classList.contains("on");
-                              if (isOn) el.classList.remove("on"); else el.classList.add("on");
-                            }}
-                            role="button"
-                            tabIndex={0}
-                          />
+                          <span className="admin-setting-label">Your email</span>
+                          <input className="admin-setting-input" type="email" id="forwardEmail" placeholder="your@gmail.com" />
                         </div>
                         <button
                           className="btn btn-primary btn-sm admin-save-btn"
                           onClick={async () => {
-                            const smtpHost = (document.getElementById("smtpHost") as HTMLInputElement).value;
-                            const smtpPort = (document.getElementById("smtpPort") as HTMLInputElement).value;
-                            const smtpUser = (document.getElementById("smtpUser") as HTMLInputElement).value;
-                            const smtpPass = (document.getElementById("smtpPass") as HTMLInputElement).value;
-                            const fromEmail = (document.getElementById("fromEmail") as HTMLInputElement).value;
-                            const fromName = (document.getElementById("fromName") as HTMLInputElement).value;
-                            const enabled = document.getElementById("emailToggle").classList.contains("on");
+                            const email = (document.getElementById("forwardEmail") as HTMLInputElement).value;
                             const res = await fetch("/api/admin/email", {
-                              method: "PUT",
+                              method: "POST",
                               headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ password: adminPwd, smtpHost, smtpPort, smtpUser, smtpPass, fromEmail, fromName, enabled }),
+                              body: JSON.stringify({ password: adminPwd, action: "set_email", email }),
                             });
                             const data = await res.json();
-                            if (data.ok) alert("✓ Email config saved");
-                            else alert("Error: " + (data.error || "unknown"));
+                            if (data.ok) alert("✓ Email saved! First message will trigger a confirmation email from formsubmit.co.");
+                            else alert("Error: " + (data.error || "invalid email"));
                           }}
                         >
-                          save email config
+                          save email
                         </button>
+                      </div>
+
+                      {/* Danger Zone — Clear Data */}
+                      <div className="admin-settings-section">
+                        <h4 style={{ color: "var(--red)" }}>⚠ Danger Zone — Clear Data</h4>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            style={{ borderColor: "var(--red)", color: "var(--red)" }}
+                            onClick={async () => {
+                              if (!confirm("Delete ALL chat sessions and messages? This cannot be undone.")) return;
+                              await fetch("/api/admin/clear", {
+                                method: "POST", headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ password: adminPwd, target: "chat_all" }),
+                              });
+                              alert("✓ All chats cleared");
+                              // Reload admin data
+                              setAdminChats([]);
+                            }}
+                          >
+                            clear all chats
+                          </button>
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            style={{ borderColor: "var(--red)", color: "var(--red)" }}
+                            onClick={async () => {
+                              if (!confirm("Delete ALL contact messages? This cannot be undone.")) return;
+                              await fetch("/api/admin/clear", {
+                                method: "POST", headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ password: adminPwd, target: "message_all" }),
+                              });
+                              alert("✓ All messages cleared");
+                              setAdminMsgs([]);
+                            }}
+                          >
+                            clear all messages
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
