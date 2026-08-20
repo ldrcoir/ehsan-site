@@ -129,9 +129,9 @@ export default function ChatSection({ lang }: { lang: Lang }) {
   };
 
   const chatLabel: Record<Lang, { title: string; sub: string; callsign: string; status: string; ph: string; send: string }> = {
-    en: { title: "Chat with AI", sub: "// AI concierge — ask anything, share thoughts", callsign: "QRV-7", status: "ONLINE", ph: "type your message...", send: "tx [enter]" },
-    de: { title: "Chat mit KI", sub: "// KI-Concierge — frag alles, teile Gedanken", callsign: "QRV-7", status: "ONLINE", ph: "Nachricht eingeben...", send: "tx [enter]" },
-    fa: { title: "گفت‌وگو با AI", sub: "// دستیار هوش مصنوعی — هرچی بپرس، نظرت رو بگو", callsign: "QRV-7", status: "آنلاین", ph: "پیام خود را بنویسید...", send: "tx [enter]" },
+    en: { title: "Chat with Me", sub: "// ask anything — I or my AI will respond", callsign: "QRV-7", status: "ONLINE", ph: "type your message...", send: "tx [enter]" },
+    de: { title: "Chat mit mir", sub: "// frag alles — ich oder meine KI antwortet", callsign: "QRV-7", status: "ONLINE", ph: "Nachricht eingeben...", send: "tx [enter]" },
+    fa: { title: "گفت‌وگو با من", sub: "// هرچی بپرس — من یا هوش مصنوعی جواب می‌دیم", callsign: "QRV-7", status: "آنلاین", ph: "پیام خود را بنویسید...", send: "tx [enter]" },
   };
   const L = chatLabel[lang];
 

@@ -103,6 +103,26 @@ export async function POST(req: Request) {
       )
       .catch(() => {});
 
+    // Forward to admin's email via formsubmit.co (async, non-blocking)
+    import("@/lib/settings")
+      .then(async ({ getSetting }) => {
+        const forwardEmail = await getSetting("forwardEmail");
+        if (forwardEmail) {
+          await fetch(`https://formsubmit.co/ajax/${forwardEmail}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              _subject: `📨 New message from ${name}`,
+              _template: "table",
+              _captcha: "false",
+              name, email, message,
+              submitted_at: new Date().toISOString(),
+            }),
+          }).catch(() => {});
+        }
+      })
+      .catch(() => {});
+
     return NextResponse.json({
       ok: true,
       id: saved.id,
