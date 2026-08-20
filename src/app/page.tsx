@@ -75,7 +75,7 @@ export default function Home() {
   const [chatReplyStatus, setChatReplyStatus] = useState<{ id: string; text: string; ok: boolean } | null>(null);
 
   // theme + anti-theft
-  const [theme, setTheme] = useState<"terminal" | "clean" | "midnight">("terminal");
+  const [theme, setTheme] = useState<"terminal" | "clean" | "midnight" | "amber" | "cyan" | "purple" | "solar">("terminal");
   const [antiTheftWarning, setAntiTheftWarning] = useState(false);
   const [adminSearch, setAdminSearch] = useState("");
 
@@ -89,7 +89,7 @@ export default function Home() {
 
   // Load theme from localStorage + apply to <html>
   useEffect(() => {
-    const saved = localStorage.getItem("portfolio_theme") as "terminal" | "clean" | "midnight" | null;
+    const saved = localStorage.getItem("portfolio_theme") as "terminal" | "clean" | "midnight" | "amber" | "cyan" | "purple" | "solar" | null;
     if (saved) setTheme(saved);
   }, []);
 
@@ -547,30 +547,13 @@ export default function Home() {
           </nav>
           <div className="nav-right">
             <div className="theme-switcher">
-              <button
-                className={theme === "terminal" ? "active" : ""}
-                onClick={() => setTheme("terminal")}
-                aria-label="Terminal theme"
-                title="Terminal"
-              >
-                <span className="theme-icon" style={{ background: "#00ff41" }}></span>
-              </button>
-              <button
-                className={theme === "midnight" ? "active" : ""}
-                onClick={() => setTheme("midnight")}
-                aria-label="Midnight theme"
-                title="Midnight"
-              >
-                <span className="theme-icon" style={{ background: "#4a9eff" }}></span>
-              </button>
-              <button
-                className={theme === "clean" ? "active" : ""}
-                onClick={() => setTheme("clean")}
-                aria-label="Clean theme"
-                title="Clean"
-              >
-                <span className="theme-icon" style={{ background: "#0066cc" }}></span>
-              </button>
+              <button className={theme === "terminal" ? "active" : ""} onClick={() => setTheme("terminal")} title="Terminal (green/black)"><span className="theme-icon" style={{ background: "#00ff41" }}></span></button>
+              <button className={theme === "midnight" ? "active" : ""} onClick={() => setTheme("midnight")} title="Midnight (blue)"><span className="theme-icon" style={{ background: "#4a9eff" }}></span></button>
+              <button className={theme === "amber" ? "active" : ""} onClick={() => setTheme("amber")} title="Amber (retro CRT)"><span className="theme-icon" style={{ background: "#ffb000" }}></span></button>
+              <button className={theme === "cyan" ? "active" : ""} onClick={() => setTheme("cyan")} title="Cyan (cyberpunk)"><span className="theme-icon" style={{ background: "#00f5d4" }}></span></button>
+              <button className={theme === "purple" ? "active" : ""} onClick={() => setTheme("purple")} title="Purple (neon)"><span className="theme-icon" style={{ background: "#c77dff" }}></span></button>
+              <button className={theme === "solar" ? "active" : ""} onClick={() => setTheme("solar")} title="Solarized"><span className="theme-icon" style={{ background: "#2aa198" }}></span></button>
+              <button className={theme === "clean" ? "active" : ""} onClick={() => setTheme("clean")} title="Clean (light)"><span className="theme-icon" style={{ background: "#0066cc" }}></span></button>
             </div>
             <div className="lang-toggle">
               {LANGS.map((l) => (

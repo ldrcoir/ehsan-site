@@ -2530,3 +2530,168 @@ select.admin-search option {
   background: var(--bg);
   color: var(--green-bright);
 }
+
+/* ============================================================================
+   LAB DEVICE VISUALIZER
+   ========================================================================== */
+.lab-visualizer-wrapper {
+  margin-top: 10px;
+}
+.lab-visualize-btn {
+  width: 100%;
+  background: var(--bg-panel-2);
+  border: 1px dashed var(--border-bright);
+  color: var(--green-dim);
+  padding: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: all var(--transition);
+  letter-spacing: 0.04em;
+}
+.lab-visualize-btn:hover {
+  border-color: var(--green);
+  color: var(--green-bright);
+  background: var(--green-bg);
+}
+.lab-visualizer {
+  border: 1px solid var(--border-bright);
+  background: var(--bg-panel);
+  margin-top: 8px;
+  overflow: hidden;
+}
+.lab-visualizer-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: var(--bg-panel-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.72rem;
+}
+.lab-visualizer-title {
+  color: var(--green-bright);
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+.lab-visualizer-close {
+  background: transparent;
+  border: 1px solid var(--border-bright);
+  color: var(--text-dim);
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all var(--transition);
+}
+.lab-visualizer-close:hover {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+/* ============================================================================
+   NEW THEMES — Amber, Cyan, Purple, Red
+   ========================================================================== */
+
+/* ---- AMBER THEME: retro amber CRT ---- */
+html[data-theme="amber"] {
+  --bg: #0a0500;
+  --bg-soft: #0f0800;
+  --bg-panel: #140a00;
+  --bg-panel-2: #1a0f00;
+  --green: #ffb000;
+  --green-dim: #cc8800;
+  --green-bright: #ffcc44;
+  --green-soft: rgba(255, 176, 0, 0.5);
+  --green-faint: rgba(255, 176, 0, 0.12);
+  --green-bg: rgba(255, 176, 0, 0.04);
+  --amber: #ff8800;
+  --red: #ff4400;
+  --cyan: #ffaa00;
+  --text: #ffd899;
+  --text-dim: #996633;
+  --text-faint: #663300;
+  --border: #332200;
+  --border-bright: #553300;
+  --shadow-glow: 0 0 12px rgba(255, 176, 0, 0.3);
+  --shadow-glow-strong: 0 0 20px rgba(255, 176, 0, 0.5);
+  --scanlines: 0;
+}
+
+/* ---- CYAN THEME: cyberpunk cyan ---- */
+html[data-theme="cyan"] {
+  --bg: #001011;
+  --bg-soft: #001819;
+  --bg-panel: #001a1e;
+  --bg-panel-2: #002025;
+  --green: #00f5d4;
+  --green-dim: #00a884;
+  --green-bright: #00fff5;
+  --green-soft: rgba(0, 245, 212, 0.5);
+  --green-faint: rgba(0, 245, 212, 0.12);
+  --green-bg: rgba(0, 245, 212, 0.04);
+  --amber: #fee440;
+  --red: #ff006e;
+  --cyan: #00f5d4;
+  --text: #80f0e0;
+  --text-dim: #006655;
+  --text-faint: #004444;
+  --border: #003344;
+  --border-bright: #005566;
+  --shadow-glow: 0 0 12px rgba(0, 245, 212, 0.4);
+  --shadow-glow-strong: 0 0 20px rgba(0, 245, 212, 0.6);
+  --scanlines: 0;
+}
+
+/* ---- PURPLE THEME: neon purple ---- */
+html[data-theme="purple"] {
+  --bg: #0d0014;
+  --bg-soft: #130020;
+  --bg-panel: #1a0028;
+  --bg-panel-2: #200030;
+  --green: #c77dff;
+  --green-dim: #9d4edd;
+  --green-bright: #e0aaff;
+  --green-soft: rgba(199, 125, 255, 0.5);
+  --green-faint: rgba(199, 125, 255, 0.12);
+  --green-bg: rgba(199, 125, 255, 0.04);
+  --amber: #ff9e00;
+  --red: #ff006e;
+  --cyan: #00b4d8;
+  --text: #d4a8e8;
+  --text-dim: #6a4488;
+  --text-faint: #3a2244;
+  --border: #2a1040;
+  --border-bright: #4a2070;
+  --shadow-glow: 0 0 12px rgba(199, 125, 255, 0.4);
+  --shadow-glow-strong: 0 0 20px rgba(199, 125, 255, 0.6);
+  --scanlines: 0;
+}
+
+/* ---- SOLARIZED THEME: popular dev theme ---- */
+html[data-theme="solar"] {
+  --bg: #002b36;
+  --bg-soft: #00323d;
+  --bg-panel: #073642;
+  --bg-panel-2: #0a4050;
+  --green: #2aa198;
+  --green-dim: #1a6a64;
+  --green-bright: #5ce0d8;
+  --green-soft: rgba(42, 161, 152, 0.5);
+  --green-faint: rgba(42, 161, 152, 0.12);
+  --green-bg: rgba(42, 161, 152, 0.04);
+  --amber: #b58900;
+  --red: #dc322f;
+  --cyan: #268bd2;
+  --text: #93a1a1;
+  --text-dim: #586e75;
+  --text-faint: #2a4044;
+  --border: #1a3840;
+  --border-bright: #2a5060;
+  --shadow-glow: 0 0 12px rgba(42, 161, 152, 0.3);
+  --shadow-glow-strong: 0 0 20px rgba(42, 161, 152, 0.5);
+  --scanlines: 0;
+}
+html[data-theme="solar"] body {
+  font-family: "Inter", system-ui, sans-serif;
+}
