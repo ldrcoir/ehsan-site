@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import LabDeviceVisualizer from "./LabDeviceVisualizer";
 
 interface EquipmentItem {
   id: string;
@@ -15,8 +16,8 @@ interface EquipmentItem {
 
 /**
  * LabEquipmentRack — Real lab equipment with live status indicators.
- * Equipment comes from database (editable from admin panel).
- * Each device shows: name, model, category, status LED, description, specs.
+ * Each device is interactive — click to expand, then "show live visualization"
+ * renders an animated display specific to that device type.
  */
 export default function LabEquipmentRack({ equipment }: { equipment: EquipmentItem[] }) {
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -40,7 +41,7 @@ export default function LabEquipmentRack({ equipment }: { equipment: EquipmentIt
   return (
     <div className="equipment-rack">
       <div className="equipment-rack-title">
-        // lab equipment rack · {equipment.length} devices
+        // lab equipment rack · {equipment.length} devices · click to expand
       </div>
       <div className="equipment-grid">
         {equipment.map(eq => {
@@ -61,9 +62,11 @@ export default function LabEquipmentRack({ equipment }: { equipment: EquipmentIt
                 </div>
                 <span className={`equipment-led ${eq.status}`} title={eq.status}></span>
               </div>
-              {isExpanded && eq.description && (
-                <div className="equipment-detail">
-                  <p className="equipment-desc">{eq.description}</p>
+              {isExpanded && (
+                <div className="equipment-detail" onClick={(e) => e.stopPropagation()}>
+                  {eq.description && (
+                    <p className="equipment-desc">{eq.description}</p>
+                  )}
                   {eq.specs && (
                     <div className="equipment-specs">
                       {Object.entries(eq.specs).slice(0, 6).map(([k, v]: [string, any]) => (
@@ -76,6 +79,8 @@ export default function LabEquipmentRack({ equipment }: { equipment: EquipmentIt
                       ))}
                     </div>
                   )}
+                  {/* Interactive visualization */}
+                  <LabDeviceVisualizer category={eq.category} specs={eq.specs} />
                 </div>
               )}
             </div>
