@@ -126,20 +126,33 @@ export default function RealSignalGenerator({
 
         for (let i = 0; i <= w; i++) {
           const frac = i / w;
-          // Show 2 cycles
-          const phase = frac * Math.PI * 2 * 2 + t;
-          let v = waveValue(phase, waveform, ampV);
+          // Carrier phase: advances both across screen and in time
+          const carrierCycles = 2; // show 2 carrier cycles
+          const carrierPhase = frac * Math.PI * 2 * carrierCycles + phaseRef.current;
 
-          // Apply modulation
+          // Modulation phase: also varies across screen AND in time
+          const modCycles = carrierCycles * (modFreq / Math.max(visualFreq, 0.1));
+          const modPhase = frac * Math.PI * 2 * modCycles + modPhaseRef.current;
+          const modSignal = Math.sin(modPhase); // -1 to +1
+
+          let v: number;
+
           if (modulation === "AM") {
-            const modSignal = (Math.sin(2 * Math.PI * modFreq * t * 0.1) + 1) / 2; // 0-1
-            v = v * (0.3 + 0.7 * modSignal);
+            // AM: amplitude varies with modulation
+            // v = carrier * (1 + depth * modSignal) / (1 + depth) for normalization
+            const amFactor = 1 + modDepth * modSignal;
+            v = waveValue(carrierPhase, waveform, ampV) * amFactor / (1 + modDepth);
           } else if (modulation === "FM") {
-            const modSignal = Math.sin(2 * Math.PI * modFreq * t * 0.1);
-            v = waveValue(phase + modSignal * 0.5, waveform, ampV);
+            // FM: frequency/phase varies with modulation
+            // Phase deviation = depth * integral of modSignal
+            // For visual: phase shift proportional to modSignal
+            const fmPhaseShift = modDepth * 3 * modSignal; // up to ±3 radians
+            v = waveValue(carrierPhase + fmPhaseShift, waveform, ampV);
+          } else {
+            v = waveValue(carrierPhase, waveform, ampV);
           }
 
-          // Apply offset
+          // Apply DC offset
           v += offset;
 
           // Map to screen (max ±10V → full height)
