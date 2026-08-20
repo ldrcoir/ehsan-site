@@ -397,6 +397,11 @@ export default function LabDeviceVisualizer({ category, specs }: Props) {
           ctx.textAlign = "left";
         }
       }
+
+      // === ANTI-COPY PROTECTION ===
+      import("@/lib/canvas-protect").then(({ watermarkCanvas }) => {
+        watermarkCanvas(ctx, w, h);
+      });
     };
 
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;

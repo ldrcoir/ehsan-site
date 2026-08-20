@@ -190,6 +190,11 @@ export default function RealSignalGenerator({
       // Status
       ctx.fillStyle = outputOn ? greenBright : "#ff0040";
       ctx.fillText(outputOn ? "● OUTPUT" : "○ OFF", w - 60, 12);
+
+      // === ANTI-COPY PROTECTION ===
+      import("@/lib/canvas-protect").then(({ watermarkCanvas }) => {
+        watermarkCanvas(ctx, w, h);
+      });
     };
 
     if (!reduce) {

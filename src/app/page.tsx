@@ -98,8 +98,39 @@ export default function Home() {
     localStorage.setItem("portfolio_theme", theme);
   }, [theme]);
 
-  // Anti-theft: disable right-click + detect devtools
+  // Anti-theft: disable right-click + detect devtools + domain lock
   useEffect(() => {
+    // === DOMAIN LOCK ===
+    // If someone copies this site to another domain, show a warning
+    const authorizedDomains = [
+      "preview-chat-f7fdfef6-aa0f-4780-ac8e-5fa3dafbfbf0.space-z.ai",
+      "localhost",
+      "127.0.0.1",
+    ];
+    const currentHost = window.location.hostname;
+    const isAuthorized = authorizedDomains.some(d =>
+      currentHost === d || currentHost.endsWith("." + d)
+    );
+    if (!isAuthorized) {
+      // Site is running on an unauthorized domain — show protection notice
+      document.body.innerHTML = `
+        <div style="position:fixed;inset:0;background:#000;color:#ff0040;
+          display:flex;align-items:center;justify-content:center;
+          font-family:monospace;text-align:center;padding:40px;z-index:99999;">
+          <div>
+            <h1 style="font-size:2rem;margin-bottom:20px;">⚠ UNAUTHORIZED COPY</h1>
+            <p style="color:#ccc;font-size:0.9rem;">This website is protected.</p>
+            <p style="color:#888;font-size:0.8rem;margin-top:20px;">
+              Deployment ID: PS-RF-V11-2026-0820<br/>
+              This site is domain-locked and cannot be copied.<br/>
+              If you are the owner, add your domain to the authorized list.
+            </p>
+          </div>
+        </div>
+      `;
+      return; // Don't set up other protections — the page is already blocked
+    }
+
     const onContextMenu = (e: MouseEvent) => {
       e.preventDefault();
     };
