@@ -13,6 +13,7 @@ import LabEquipmentRack from "@/components/LabEquipmentRack";
 import ArchiveGrid from "@/components/ArchiveGrid";
 import ThemeBuilder from "@/components/ThemeBuilder";
 import TextEditor from "@/components/TextEditor";
+import NavMenuManager from "@/components/NavMenuManager";
 import {
   UI, PERSONAL, SOCIALS,
   type Lang, DEFAULT_LANG, LANGS,
@@ -67,7 +68,7 @@ export default function Home() {
   const [adminChats, setAdminChats] = useState<ChatSessionRow[] | null>(null);
   const [adminStats, setAdminStats] = useState<{ contactMessages: number; chatMessages: number; chatSessions: number } | null>(null);
   const [adminErr, setAdminErr] = useState("");
-  const [adminTab, setAdminTab] = useState<"messages" | "chats" | "content" | "text" | "themes" | "settings">("messages");
+  const [adminTab, setAdminTab] = useState<"messages" | "chats" | "content" | "text" | "nav" | "themes" | "settings">("messages");
   const [adminSettings, setAdminSettings] = useState<Record<string, string> | null>(null);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
@@ -570,13 +571,33 @@ export default function Home() {
             <span className="brand-name">{PERSONAL.handle}</span>
           </a>
           <nav className={`nav-links ${menuOpen ? "open" : ""}`}>
-            <a href="#about" onClick={(e) => handleNavClick(e, "#about")}>{tt.nav.about}</a>
-            <a href="#skills" onClick={(e) => handleNavClick(e, "#skills")}>{tt.nav.skills}</a>
-            <a href="#books" onClick={(e) => handleNavClick(e, "#books")}>{tt.nav.books}</a>
-            <a href="#articles" onClick={(e) => handleNavClick(e, "#articles")}>{tt.nav.articles}</a>
-            <a href="#tutorials" onClick={(e) => handleNavClick(e, "#tutorials")}>{tt.nav.tutorials}</a>
-            <a href="#chat" onClick={(e) => handleNavClick(e, "#chat")}>{tt.nav.chat || "chat"}</a>
-            <a href="#contact" onClick={(e) => handleNavClick(e, "#contact")}>{tt.nav.contact}</a>
+            {siteContent.navItems.length > 0 ? (
+              siteContent.navItems.map((item: any) => {
+                const labelField = `label${lang.charAt(0).toUpperCase() + lang.slice(1)}`;
+                const label = item[labelField] || item.labelEn || "";
+                return (
+                  <a
+                    key={item.id}
+                    href={item.href}
+                    target={item.target === "_blank" ? "_blank" : undefined}
+                    rel={item.target === "_blank" ? "noopener noreferrer" : undefined}
+                    onClick={item.href.startsWith("#") ? (e) => handleNavClick(e, item.href) : undefined}
+                  >
+                    {label}
+                  </a>
+                );
+              })
+            ) : (
+              <>
+                <a href="#about" onClick={(e) => handleNavClick(e, "#about")}>{tt.nav.about}</a>
+                <a href="#skills" onClick={(e) => handleNavClick(e, "#skills")}>{tt.nav.skills}</a>
+                <a href="#books" onClick={(e) => handleNavClick(e, "#books")}>{tt.nav.books}</a>
+                <a href="#articles" onClick={(e) => handleNavClick(e, "#articles")}>{tt.nav.articles}</a>
+                <a href="#tutorials" onClick={(e) => handleNavClick(e, "#tutorials")}>{tt.nav.tutorials}</a>
+                <a href="#chat" onClick={(e) => handleNavClick(e, "#chat")}>{tt.nav.chat || "chat"}</a>
+                <a href="#contact" onClick={(e) => handleNavClick(e, "#contact")}>{tt.nav.contact}</a>
+              </>
+            )}
           </nav>
           <div className="nav-right">
             <div className="theme-switcher">
@@ -935,6 +956,12 @@ export default function Home() {
                       {lang === "fa" ? "متن‌ها" : "texts"}
                     </button>
                     <button
+                      className={`admin-tab ${adminTab === "nav" ? "active" : ""}`}
+                      onClick={() => setAdminTab("nav")}
+                    >
+                      {lang === "fa" ? "منو" : "menu"}
+                    </button>
+                    <button
                       className={`admin-tab ${adminTab === "themes" ? "active" : ""}`}
                       onClick={() => setAdminTab("themes")}
                     >
@@ -956,6 +983,11 @@ export default function Home() {
                   {/* TEXT EDITOR TAB — edit ALL site text */}
                   {adminTab === "text" && (
                     <TextEditor password={adminPwd} lang={lang} />
+                  )}
+
+                  {/* NAV MENU TAB — manage navigation menu */}
+                  {adminTab === "nav" && (
+                    <NavMenuManager password={adminPwd} lang={lang} />
                   )}
 
                   {/* THEMES TAB — Theme Builder */}
