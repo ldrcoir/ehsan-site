@@ -44,6 +44,9 @@ export default function RealSignalGenerator({
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef(0);
+  const phaseRef = useRef(0); // accumulated carrier phase
+  const modPhaseRef = useRef(0); // accumulated modulation phase
+  const lastTimeRef = useRef(0);
 
   const [freqRange, setFreqRange] = useState(0); // index into FREQ_RANGES
   const [ampV, setAmpV] = useState(2.0); // peak voltage in V
@@ -87,9 +90,17 @@ export default function RealSignalGenerator({
     ro.observe(canvas);
 
     let t = 0;
-    const draw = () => {
+    const draw = (now: number) => {
       rafRef.current = requestAnimationFrame(draw);
-      t += 0.03;
+
+      // Delta time for smooth animation
+      const dt = lastTimeRef.current === 0 ? 0.016 : Math.min((now - lastTimeRef.current) / 1000, 0.05);
+      lastTimeRef.current = now;
+
+      // Visual frequency (capped for display)
+      const visualFreq = Math.min(actualFreq, 50);
+      phaseRef.current += 2 * Math.PI * visualFreq * dt;
+      modPhaseRef.current += 2 * Math.PI * modFreq * dt;
 
       const styles = getComputedStyle(document.documentElement);
       const bgColor = styles.getPropertyValue("--bg").trim() || "#000";
@@ -200,7 +211,7 @@ export default function RealSignalGenerator({
     if (!reduce) {
       rafRef.current = requestAnimationFrame(draw);
     } else {
-      draw();
+      draw(performance.now());
       cancelAnimationFrame(rafRef.current);
     }
 
