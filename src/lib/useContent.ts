@@ -10,6 +10,7 @@ interface SiteContent {
   aiInstructions: any[];
   equipment: any[];
   texts: Record<string, string>;
+  navItems: any[];
 }
 
 const fallback: SiteContent = {
@@ -20,6 +21,7 @@ const fallback: SiteContent = {
   aiInstructions: [],
   equipment: [],
   texts: {},
+  navItems: [],
 };
 
 export function useContent() {
@@ -52,6 +54,7 @@ export function useContent() {
         aiInstructions: contentData.ok ? contentData.aiInstructions || [] : [],
         equipment: contentData.ok ? contentData.equipment || [] : [],
         texts: textData.ok ? textData.texts || {} : {},
+        navItems: contentData.ok ? contentData.navItems || [] : [],
       };
       setContent(result);
       localStorage.setItem("site_content_cache", JSON.stringify(result));

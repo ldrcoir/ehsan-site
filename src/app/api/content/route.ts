@@ -7,13 +7,14 @@ import { db } from "@/lib/db";
  */
 export async function GET() {
   try {
-    const [books, articles, tutorials, skills, instructions, equipment] = await Promise.all([
+    const [books, articles, tutorials, skills, instructions, equipment, navItems] = await Promise.all([
       db.book.findMany({ where: { visible: true }, orderBy: { order: "asc" } }),
       db.article.findMany({ where: { visible: true }, orderBy: { order: "asc" } }),
       db.tutorial.findMany({ where: { visible: true }, orderBy: { order: "asc" } }),
       db.skill.findMany({ where: { visible: true }, orderBy: { order: "asc" } }),
       db.aiInstruction.findMany({ where: { enabled: true }, orderBy: { order: "asc" } }),
       db.labEquipment.findMany({ where: { visible: true }, orderBy: { order: "asc" } }),
+      db.navItem.findMany({ where: { visible: true }, orderBy: { order: "asc" } }),
     ]);
 
     return NextResponse.json({
@@ -30,6 +31,7 @@ export async function GET() {
         ...e,
         specs: e.specs ? (typeof e.specs === "string" ? JSON.parse(e.specs) : e.specs) : null,
       })),
+      navItems,
     });
   } catch (err) {
     console.error("[/api/content] error:", err);
