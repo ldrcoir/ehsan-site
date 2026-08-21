@@ -12,6 +12,7 @@ import ContentManager from "@/components/ContentManager";
 import LabEquipmentRack from "@/components/LabEquipmentRack";
 import ArchiveGrid from "@/components/ArchiveGrid";
 import ThemeBuilder from "@/components/ThemeBuilder";
+import TextEditor from "@/components/TextEditor";
 import {
   UI, PERSONAL, SOCIALS,
   type Lang, DEFAULT_LANG, LANGS,
@@ -66,7 +67,7 @@ export default function Home() {
   const [adminChats, setAdminChats] = useState<ChatSessionRow[] | null>(null);
   const [adminStats, setAdminStats] = useState<{ contactMessages: number; chatMessages: number; chatSessions: number } | null>(null);
   const [adminErr, setAdminErr] = useState("");
-  const [adminTab, setAdminTab] = useState<"messages" | "chats" | "content" | "themes" | "settings">("messages");
+  const [adminTab, setAdminTab] = useState<"messages" | "chats" | "content" | "text" | "themes" | "settings">("messages");
   const [adminSettings, setAdminSettings] = useState<Record<string, string> | null>(null);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
@@ -928,6 +929,12 @@ export default function Home() {
                       {lang === "fa" ? "محتوا" : "content"}
                     </button>
                     <button
+                      className={`admin-tab ${adminTab === "text" ? "active" : ""}`}
+                      onClick={() => setAdminTab("text")}
+                    >
+                      {lang === "fa" ? "متن‌ها" : "texts"}
+                    </button>
+                    <button
                       className={`admin-tab ${adminTab === "themes" ? "active" : ""}`}
                       onClick={() => setAdminTab("themes")}
                     >
@@ -944,6 +951,11 @@ export default function Home() {
                   {/* CONTENT TAB */}
                   {adminTab === "content" && (
                     <ContentManager password={adminPwd} lang={lang} />
+                  )}
+
+                  {/* TEXT EDITOR TAB — edit ALL site text */}
+                  {adminTab === "text" && (
+                    <TextEditor password={adminPwd} lang={lang} />
                   )}
 
                   {/* THEMES TAB — Theme Builder */}

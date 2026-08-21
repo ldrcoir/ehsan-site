@@ -333,3 +333,12 @@ model CustomTheme {
 
   @@index([visible, order])
 }
+
+// All text strings on the site — editable from admin panel
+model SiteText {
+  key       String   @id  // e.g. "hero.greeting", "about.p1", "skills.title"
+  valueEn   String   @default("")
+  valueFa   String   @default("")
+  valueDe   String   @default("")
+  updatedAt DateTime @updatedAt
+}
