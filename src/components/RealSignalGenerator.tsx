@@ -54,6 +54,7 @@ export default function RealSignalGenerator({
   const [impedance, setImpedance] = useState<OutputImpedance>("50Ω");
   const [modulation, setModulation] = useState<Modulation>("NONE");
   const [modFreq, setModFreq] = useState(10); // Hz
+  const [modDepth, setModDepth] = useState(0.5); // 0-1
   const [outputOn, setOutputOn] = useState(true);
 
   // The actual frequency value based on range
@@ -215,7 +216,7 @@ export default function RealSignalGenerator({
       cancelAnimationFrame(rafRef.current);
       ro.disconnect();
     };
-  }, [waveform, frequency, ampV, offset, impedance, modulation, modFreq, outputOn, freqRange]);
+  }, [waveform, frequency, ampV, offset, impedance, modulation, modFreq, modDepth, outputOn, freqRange]);
 
   const waveforms: { id: Waveform; label: string }[] = [
     { id: "sine", label: "∿ sine" },
