@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
  * with fallback chain.
  */
 
-export type ProviderType = "zai" | "openai" | "anthropic" | "ollama" | "custom";
+export type ProviderType = "zai" | "openai" | "anthropic" | "ollama" | "groq" | "openrouter" | "custom";
 
 interface ProviderConfig {
   id: string;
@@ -93,6 +93,8 @@ async function callProvider(
       return callAnthropic(provider, messages);
     case "ollama":
       return callOllama(provider, messages);
+    case "groq":
+      return callGroq(provider, messages);
     case "custom":
       return callCustom(provider, messages);
     default:
@@ -183,6 +185,30 @@ async function callOllama(provider: ProviderConfig, messages: any[]): Promise<st
   return data.message?.content || "";
 }
 
+/** Groq — ultra-fast inference (Llama, Mixtral) */
+async function callGroq(provider: ProviderConfig, messages: any[]): Promise<string> {
+  const baseUrl = provider.baseUrl || "https://api.groq.com/openai/v1";
+  const res = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${provider.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: provider.model,
+      messages,
+      max_tokens: 1000,
+      temperature: 0.7,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Groq error: ${res.status} ${err}`);
+  }
+  const data = await res.json();
+  return data.choices[0]?.message?.content || "";
+}
+
 /** Custom OpenAI-compatible endpoint */
 async function callCustom(provider: ProviderConfig, messages: any[]): Promise<string> {
   return callOpenAI(provider, messages);
@@ -232,6 +258,15 @@ export async function seedDefaultProviders() {
       baseUrl: "http://localhost:11434",
       enabled: false,
       priority: 3,
+    },
+    {
+      name: "groq",
+      label: "Groq (ultra-fast)",
+      model: "llama-3.3-70b-versatile",
+      apiKey: null,
+      baseUrl: "https://api.groq.com/openai/v1",
+      enabled: false,
+      priority: 4,
     },
   ];
 

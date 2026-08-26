@@ -93,11 +93,12 @@ export default function RealSignalGenerator({
     const draw = (now: number) => {
       rafRef.current = requestAnimationFrame(draw);
 
-      // Delta time for smooth animation
+      // Delta time for smooth, frame-rate independent animation
       const dt = lastTimeRef.current === 0 ? 0.016 : Math.min((now - lastTimeRef.current) / 1000, 0.05);
       lastTimeRef.current = now;
+      t += dt;
 
-      // Visual frequency (capped for display)
+      // Accumulate phases — stable, no jitter
       const visualFreq = Math.min(actualFreq, 50);
       phaseRef.current += 2 * Math.PI * visualFreq * dt;
       modPhaseRef.current += 2 * Math.PI * modFreq * dt;
@@ -128,42 +129,37 @@ export default function RealSignalGenerator({
       ctx.beginPath(); ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2); ctx.stroke();
 
       if (outputOn) {
-        // Draw waveform
+        // Draw waveform — stable display with 2 cycles
         ctx.shadowColor = `rgba(${hexToRgb(greenColor)}, 0.6)`;
         ctx.shadowBlur = 6;
         ctx.strokeStyle = greenBright;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
 
+        const carrierCycles = 2;
         for (let i = 0; i <= w; i++) {
           const frac = i / w;
-          // Carrier phase: advances both across screen and in time
-          const carrierCycles = 2; // show 2 carrier cycles
+          // Carrier phase: stable — aligned to cycles
           const carrierPhase = frac * Math.PI * 2 * carrierCycles + phaseRef.current;
-
-          // Modulation phase: also varies across screen AND in time
-          const modCycles = carrierCycles * (modFreq / Math.max(visualFreq, 0.1));
-          const modPhase = frac * Math.PI * 2 * modCycles + modPhaseRef.current;
-          const modSignal = Math.sin(modPhase); // -1 to +1
 
           let v: number;
 
           if (modulation === "AM") {
-            // AM: amplitude varies with modulation
-            // v = carrier * (1 + depth * modSignal) / (1 + depth) for normalization
+            // AM: amplitude varies slowly with modulation signal
+            const modPhase = frac * Math.PI * 2 * carrierCycles * (modFreq / Math.max(visualFreq, 0.1)) + modPhaseRef.current;
+            const modSignal = Math.sin(modPhase);
             const amFactor = 1 + modDepth * modSignal;
             v = waveValue(carrierPhase, waveform, ampV) * amFactor / (1 + modDepth);
           } else if (modulation === "FM") {
-            // FM: frequency/phase varies with modulation
-            // Phase deviation = depth * integral of modSignal
-            // For visual: phase shift proportional to modSignal
-            const fmPhaseShift = modDepth * 3 * modSignal; // up to ±3 radians
+            // FM: phase shift varies with modulation signal
+            const modPhase = frac * Math.PI * 2 * carrierCycles * (modFreq / Math.max(visualFreq, 0.1)) + modPhaseRef.current;
+            const modSignal = Math.sin(modPhase);
+            const fmPhaseShift = modDepth * 2 * modSignal;
             v = waveValue(carrierPhase + fmPhaseShift, waveform, ampV);
           } else {
             v = waveValue(carrierPhase, waveform, ampV);
           }
 
-          // Apply DC offset
           v += offset;
 
           // Map to screen (max ±10V → full height)
