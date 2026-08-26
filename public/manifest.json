@@ -1,0 +1,21 @@
+{
+  "name": "Personal Site",
+  "short_name": "Portfolio",
+  "description": "RF/Microwave Researcher · AI/ML Programmer · Writer",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#00ff41",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
