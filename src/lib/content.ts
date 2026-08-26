@@ -21,6 +21,9 @@ export const PERSONAL = {
     de: "Salar",
     fa: "سalar",
   },
+  // Admin credentials — CHANGE THESE
+  adminUsername: "admin",
+  adminPassword: "admin123",
   // Short tagline shown under the hero name
   tagline: {
     en: "RF/Microwave Researcher · AI/ML Programmer · Writer & Translator",
