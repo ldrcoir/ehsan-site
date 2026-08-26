@@ -18,7 +18,7 @@ import {
   UI, PERSONAL, SOCIALS,
   type Lang, DEFAULT_LANG, LANGS,
 } from "@/lib/content";
-import { useContent } from "@/lib/useContent";
+import { useContent, getText as getDbText } from "@/lib/useContent";
 
 type FormStatus = { text: string; kind: "success" | "error" | "" };
 
@@ -64,6 +64,8 @@ export default function Home() {
   const [activeTutorial, setActiveTutorial] = useState<typeof TUTORIALS[number] | null>(null);
   const [adminOpen, setAdminOpen] = useState(false);
   const [adminPwd, setAdminPwd] = useState("");
+  const [adminUser, setAdminUser] = useState("");
+  const [captcha, setCaptcha] = useState({ q: "1 + 1", a: 2 });
   const [adminMsgs, setAdminMsgs] = useState<MessageRow[] | null>(null);
   const [adminChats, setAdminChats] = useState<ChatSessionRow[] | null>(null);
   const [adminStats, setAdminStats] = useState<{ contactMessages: number; chatMessages: number; chatSessions: number } | null>(null);
@@ -83,6 +85,8 @@ export default function Home() {
   const [adminSearch, setAdminSearch] = useState("");
 
   const tt = UI[lang];
+  // Helper: get text from DB first, fallback to content.ts
+  const tx = (key: string, fallback: string) => getDbText(siteContent.texts, key, fallback);
 
   // sync html lang/dir
   useEffect(() => {
@@ -350,16 +354,34 @@ export default function Home() {
       return;
     }
 
+    // Verify captcha
+    const captchaInput = (fd.get("captcha") as string)?.trim();
+    if (!captchaInput || parseInt(captchaInput) !== captcha.a) {
+      setFormStatus({ text: lang === "fa" ? "پاسخ امنیتی اشتباه است." : "Security answer is wrong.", kind: "error" });
+      setSubmitting(false);
+      return;
+    }
+
     try {
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, message }),
+        body: JSON.stringify({ name, email, message, captchaAnswer: captchaInput, captchaExpected: captcha.a }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.ok) {
-        setFormStatus({ text: tt.contact.form.success, kind: "success" });
+        setFormStatus({ text: tx("contact.success", tt.contact.form.success), kind: "success" });
         (e.target as HTMLFormElement).reset();
+        // Generate new captcha
+        const a = Math.floor(Math.random() * 9) + 1;
+        const b = Math.floor(Math.random() * 9) + 1;
+        const ops = ["+", "-", "*"];
+        const op = ops[Math.floor(Math.random() * ops.length)];
+        let ans: number, q: string;
+        if (op === "+") { ans = a + b; q = `${a} + ${b}`; }
+        else if (op === "-") { ans = a >= b ? a - b : b - a; q = a >= b ? `${a} - ${b}` : `${b} - ${a}`; }
+        else { ans = a * b; q = `${a} * ${b}`; }
+        setCaptcha({ q, a: ans });
       } else {
         const err = data.error || "server_error";
         const msg =
@@ -381,6 +403,13 @@ export default function Home() {
   const adminUnlock = async (e: FormEvent) => {
     e.preventDefault();
     setAdminErr("");
+
+    // Check username + password
+    if (adminUser !== PERSONAL.adminUsername || adminPwd !== PERSONAL.adminPassword) {
+      setAdminErr(tt.admin.wrong);
+      return;
+    }
+
     try {
       // fetch messages, chats, and settings in parallel
       const [msgRes, chatRes, settingsRes] = await Promise.all([
@@ -636,12 +665,12 @@ export default function Home() {
       <section className="hero" id="hero">
         <div className="container hero-grid">
           <div className={`hero-text ${reveal("hero-text")}`} data-reveal="hero-text">
-            <p className="hero-greeting">{tt.hero.greeting}</p>
+            <p className="hero-greeting">{tx("hero.greeting", tt.hero.greeting)}</p>
             <h1 className="hero-title">{PERSONAL.fullName[lang]}</h1>
             <p className="hero-subtitle">{PERSONAL.tagline[lang]}</p>
             <div className="hero-cta">
-              <a href="#articles" className="btn btn-primary" onClick={(e) => handleNavClick(e, "#articles")}>{tt.hero.cta}</a>
-              <a href="#contact" className="btn btn-ghost" onClick={(e) => handleNavClick(e, "#contact")}>{tt.hero.ctaContact}</a>
+              <a href="#articles" className="btn btn-primary" onClick={(e) => handleNavClick(e, "#articles")}>{tx("hero.cta1", tt.hero.cta)}</a>
+              <a href="#contact" className="btn btn-ghost" onClick={(e) => handleNavClick(e, "#contact")}>{tx("hero.cta2", tt.hero.ctaContact)}</a>
             </div>
             <div className="hero-socials">
               {SOCIALS.map((s) => (
@@ -673,12 +702,12 @@ export default function Home() {
         <div className="container">
           <header className="section-head">
             <p className="section-eyebrow">{tt.about.num} — {tt.about.label}</p>
-            <h2 className="section-title">{tt.about.title}</h2>
+            <h2 className="section-title">{tx("about.title", tt.about.title)}</h2>
           </header>
           <div className="about-grid">
             <div className={`about-text ${reveal("about-text")}`} data-reveal="about-text">
-              <p>{tt.about.p1}</p>
-              <p>{tt.about.p2}</p>
+              <p>{tx("about.p1", tt.about.p1)}</p>
+              <p>{tx("about.p2", tt.about.p2)}</p>
               <ul className="about-stats">
                 {tt.about.stats.map((s, i) => (
                   <li key={i}><strong>{s.v}</strong><span>{s.l}</span></li>
@@ -686,7 +715,7 @@ export default function Home() {
               </ul>
             </div>
             <aside className={`about-card ${reveal("about-card")}`} data-reveal="about-card">
-              <h3>{tt.about.factsTitle}</h3>
+              <h3>{tx("about.factsTitle", tt.about.factsTitle)}</h3>
               <dl>
                 {tt.about.facts.map((f, i) => (
                   <div key={i}>
@@ -711,8 +740,8 @@ export default function Home() {
         <div className="container">
           <header className="section-head">
             <p className="section-eyebrow">{tt.skills.num} — {tt.skills.label}</p>
-            <h2 className="section-title">{tt.skills.title}</h2>
-            <p className="section-subtitle">{tt.skills.subtitle}</p>
+            <h2 className="section-title">{tx("skills.title", tt.skills.title)}</h2>
+            <p className="section-subtitle">{tx("skills.subtitle", tt.skills.subtitle)}</p>
           </header>
           <div className="skills-grid">
             {siteContent.skills.map((s: any, i: number) => {
@@ -735,8 +764,8 @@ export default function Home() {
         <div className="container">
           <header className="section-head">
             <p className="section-eyebrow">{tt.books.num} — {tt.books.label}</p>
-            <h2 className="section-title">{tt.books.title}</h2>
-            <p className="section-subtitle">{tt.books.subtitle}</p>
+            <h2 className="section-title">{tx("books.title", tt.books.title)}</h2>
+            <p className="section-subtitle">{tx("books.subtitle", tt.books.subtitle)}</p>
           </header>
           <ArchiveGrid
             items={siteContent.books}
@@ -753,8 +782,8 @@ export default function Home() {
         <div className="container">
           <header className="section-head">
             <p className="section-eyebrow">{tt.articles.num} — {tt.articles.label}</p>
-            <h2 className="section-title">{tt.articles.title}</h2>
-            <p className="section-subtitle">{tt.articles.subtitle}</p>
+            <h2 className="section-title">{tx("articles.title", tt.articles.title)}</h2>
+            <p className="section-subtitle">{tx("articles.subtitle", tt.articles.subtitle)}</p>
           </header>
           <ArchiveGrid
             items={siteContent.articles}
@@ -769,8 +798,8 @@ export default function Home() {
         <div className="container">
           <header className="section-head">
             <p className="section-eyebrow">{tt.tutorials.num} — {tt.tutorials.label}</p>
-            <h2 className="section-title">{tt.tutorials.title}</h2>
-            <p className="section-subtitle">{tt.tutorials.subtitle}</p>
+            <h2 className="section-title">{tx("tutorials.title", tt.tutorials.title)}</h2>
+            <p className="section-subtitle">{tx("tutorials.subtitle", tt.tutorials.subtitle)}</p>
           </header>
           <ArchiveGrid
             items={siteContent.tutorials}
@@ -789,13 +818,13 @@ export default function Home() {
         <div className="container">
           <header className="section-head">
             <p className="section-eyebrow">{tt.contact.num} — {tt.contact.label}</p>
-            <h2 className="section-title">{tt.contact.title}</h2>
-            <p className="section-subtitle">{tt.contact.subtitle}</p>
+            <h2 className="section-title">{tx("contact.title", tt.contact.title)}</h2>
+            <p className="section-subtitle">{tx("contact.subtitle", tt.contact.subtitle)}</p>
           </header>
           <div className="contact-grid">
             <div className={`contact-info ${reveal("contact-info")}`} data-reveal="contact-info">
-              <p>{tt.contact.desc}</p>
-              <p className="contact-label" style={{ marginTop: 24 }}>{tt.contact.socialsLabel}</p>
+              <p>{tx("contact.desc", tt.contact.desc)}</p>
+              <p className="contact-label" style={{ marginTop: 24 }}>{tx("contact.socialsLabel", tt.contact.socialsLabel)}</p>
               <div className="socials-grid">
                 {SOCIALS.map((s) => (
                   <a
@@ -823,6 +852,10 @@ export default function Home() {
               <div className="field">
                 <label htmlFor="message">{tt.contact.form.message}</label>
                 <textarea id="message" name="message" rows={5} placeholder={tt.contact.form.messagePh} required maxLength={5000}></textarea>
+              </div>
+              <div className="field">
+                <label htmlFor="captcha">{lang === "fa" ? `سوال امنیتی: ${captcha.q} = ?` : `Security check: ${captcha.q} = ?`}</label>
+                <input type="number" id="captcha" name="captcha" placeholder="?" required />
               </div>
               <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
                 {submitting ? tt.contact.form.sending : tt.contact.form.submit}
@@ -901,6 +934,17 @@ export default function Home() {
               {!adminMsgs ? (
                 <form className="admin-login" onSubmit={adminUnlock}>
                   <div className="field">
+                    <label htmlFor="admin-user">{lang === "fa" ? "نام کاربری" : "Username"}</label>
+                    <input
+                      id="admin-user"
+                      type="text"
+                      value={adminUser}
+                      onChange={(e) => setAdminUser(e.target.value)}
+                      placeholder={lang === "fa" ? "نام کاربری" : "username"}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="field">
                     <label htmlFor="admin-pwd">{tt.admin.passwordLabel}</label>
                     <input
                       id="admin-pwd"
@@ -908,7 +952,6 @@ export default function Home() {
                       value={adminPwd}
                       onChange={(e) => setAdminPwd(e.target.value)}
                       placeholder={tt.admin.passwordPh}
-                      autoFocus
                     />
                   </div>
                   <button type="submit" className="btn btn-primary btn-block">{tt.admin.unlock}</button>
@@ -917,7 +960,7 @@ export default function Home() {
                     {tt.admin.subtitle}
                   </p>
                   <p style={{ marginTop: 8, fontSize: "0.68rem", color: "var(--text-faint)" }}>
-                    shortcut: Ctrl+Shift+A · default password: admin123 (change in content.ts)
+                    default: admin / admin123 (change in content.ts)
                   </p>
                 </form>
               ) : (
