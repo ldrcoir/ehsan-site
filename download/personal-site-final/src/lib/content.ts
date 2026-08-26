@@ -14,13 +14,16 @@ export const LANGS: Lang[] = ["en", "de", "fa"];
 // ----------------------------------------------------------------------------
 export const PERSONAL = {
   // Display name / handle shown in the navbar, hero, footer
-  // This is your username/brand name (e.g. "max_mustermann" or "your_name")
-  handle: "your_name",
+  // CHANGE THESE to your own name and handle
+  handle: "salar",
   fullName: {
-    en: "Your Name",
-    de: "Ihr Name",
-    fa: "اسم شما",
+    en: "Salar",
+    de: "Salar",
+    fa: "سalar",
   },
+  // Admin credentials — CHANGE THESE
+  adminUsername: "admin",
+  adminPassword: "admin123",
   // Short tagline shown under the hero name
   tagline: {
     en: "RF/Microwave Researcher · AI/ML Programmer · Writer & Translator",
