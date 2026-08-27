@@ -83,8 +83,9 @@ export default function RealOscilloscope({
   };
 
   // Sample the full (modulated) signal at absolute time `t` (seconds).
-  // The generator and scope use the same formula so the scope reflects
-  // exactly what the generator is producing.
+  // Used for NORM/SINGLE trigger search and for measurement aggregation.
+  // The draw loop uses a local `sampleAt` function that adds a phaseShift
+  // for stable display when modulation is on.
   const signalAtTimeRef = useRef<(t: number) => number>((t: number) => 0);
   signalAtTimeRef.current = (t: number) => {
     const carrierPhase = 2 * Math.PI * frequency * t;
@@ -96,6 +97,26 @@ export default function RealOscilloscope({
     if (modulation === "FM") {
       // True FM: instantaneous phase = 2π·fc·t + β·sin(2π·fm·t)
       // β = modDepth * 5 → modulation index 0.5..5, gives clearly visible deviation
+      const beta = modDepth * 5;
+      const fmPhase = carrierPhase + beta * Math.sin(2 * Math.PI * modFreq * t);
+      return waveValue(fmPhase, waveform, amplitude);
+    }
+    return waveValue(carrierPhase, waveform, amplitude);
+  };
+
+  // Stable sampler: returns the modulated signal at absolute time `t`,
+  // with a carrier phase compensation so the displayed waveform always
+  // starts at carrier phase 0 — eliminates frame-to-frame jitter when
+  // modulation is on (FM/AM) and freq/modFreq aren't commensurate.
+  // This is the SAME signal, just visualized from a normalized trigger point.
+  const makeStableSampler = (phaseShift: number) => (t: number) => {
+    const carrierPhase = 2 * Math.PI * frequency * t + phaseShift;
+    if (modulation === "AM") {
+      const modSignal = Math.sin(2 * Math.PI * modFreq * t);
+      const amFactor = 1 + modDepth * modSignal;
+      return waveValue(carrierPhase, waveform, amplitude) * amFactor / (1 + modDepth);
+    }
+    if (modulation === "FM") {
       const beta = modDepth * 5;
       const fmPhase = carrierPhase + beta * Math.sin(2 * Math.PI * modFreq * t);
       return waveValue(fmPhase, waveform, amplitude);
@@ -212,7 +233,6 @@ export default function RealOscilloscope({
       if (channelOn && outputOn) {
         const timeWindow = timeDiv * GRID_DIVS_X;
         const samples = Math.min(Math.floor(w), 800);
-        const signalAt = signalAtTimeRef.current;
 
         // Update measurements every 0.5s
         if (measurementTimer > 0.5 && sampleCount > 0) {
@@ -226,6 +246,7 @@ export default function RealOscilloscope({
         }
 
         if (coupling === "GND") {
+          // GND coupling: show flat line at the offset level
           ctx.beginPath();
           ctx.moveTo(0, offsetY);
           ctx.lineTo(w, offsetY);
@@ -233,30 +254,47 @@ export default function RealOscilloscope({
           ctx.lineWidth = 1.5;
           ctx.stroke();
         } else {
-          // === TRIGGERED SWEEP — stable display ===
+          // Use a phase-compensated sampler so the displayed waveform
+          // doesn't jitter when modulation (FM/AM) is on. The compensation
+          // shifts the carrier phase so the display always starts at
+          // carrier phase 0 — equivalent to viewing the SAME signal from
+          // a normalized trigger point. This eliminates frame-to-frame
+          // drift caused by freq/modFreq not being commensurate.
+          let phaseShift = 0;
           let triggerTime = accumulatedTime - timeWindow;
           const period = 1 / Math.max(frequency, 0.001);
 
-          // For stable display: align to phase = 0 (lock to carrier period).
-          // With FM, this makes the carrier cycles appear stable and the FM
-          // deviation shows up as a wobble within the cycles.
-          const phaseAtNow = 2 * Math.PI * frequency * accumulatedTime;
-          const cyclesElapsed = Math.floor(phaseAtNow / (2 * Math.PI));
-
           if (triggerMode === "AUTO") {
-            // Auto: lock to nearest cycle boundary for stable display
-            const alignedTime = (cyclesElapsed * period) - timeWindow * 0.1;
-            triggerTime = alignedTime;
+            if (modulation !== "NONE") {
+              // Lock trigger to MODULATION period — display always starts at
+              // modPhase = 0 (where the modulation envelope crosses zero).
+              // This is what real scopes do when triggering on the mod source.
+              const modPeriod = 1 / Math.max(modFreq, 0.001);
+              const modCyclesElapsed = Math.floor(accumulatedTime / modPeriod);
+              triggerTime = modCyclesElapsed * modPeriod - timeWindow * 0.1;
+              // Compensate carrier phase so the carrier also starts at phase 0
+              // — otherwise carrier cycles would "scroll" within the mod envelope
+              // because freq/modFreq may not be an integer ratio.
+              phaseShift = -2 * Math.PI * frequency * triggerTime;
+            } else {
+              // No modulation: lock to carrier period — display always
+              // starts at carrier phase 0 (no shift needed because
+              // triggerTime = k·period ⟹ 2π·freq·triggerTime = 2π·k = 0 mod 2π).
+              const cyclesElapsed = Math.floor(accumulatedTime * frequency);
+              triggerTime = cyclesElapsed * period - timeWindow * 0.1;
+              phaseShift = 0;
+            }
           } else {
             // NORM/SINGLE: find trigger crossing on the *modulated* signal
             const searchStart = accumulatedTime - timeWindow * 2;
             let found = false;
+            const rawSignal = signalAtTimeRef.current;
             for (let i = 0; i < samples; i++) {
               const frac = i / samples;
               const t1 = searchStart + frac * timeWindow * 2;
               const t2 = t1 + (timeWindow * 2) / samples;
-              const v1 = signalAt(t1);
-              const v2 = signalAt(t2);
+              const v1 = rawSignal(t1);
+              const v2 = rawSignal(t2);
               if (triggerEdge === "RISE" && v1 < triggerLevel && v2 >= triggerLevel) {
                 triggerTime = t1;
                 found = true;
@@ -276,7 +314,12 @@ export default function RealOscilloscope({
               drawLabels();
               return;
             }
+            // Even in NORM/SINGLE, apply carrier phase normalization for stability
+            phaseShift = -2 * Math.PI * frequency * triggerTime;
           }
+
+          // Build the phase-compensated sampler for this frame
+          const signalAt = makeStableSampler(phaseShift);
 
           // Draw waveform from triggerTime
           ctx.shadowColor = `rgba(${hexToRgb(greenColor)}, 0.5)`;
