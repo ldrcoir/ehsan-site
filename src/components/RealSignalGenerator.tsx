@@ -113,10 +113,12 @@ export default function RealSignalGenerator({
       lastTimeRef.current = now;
       t += dt;
 
-      // Accumulate phases — stable, no jitter
+      // No phase accumulation — the preview is a deterministic snapshot of
+      // the waveform shape (like a real signal generator's mini display).
+      // This eliminates the scrolling/jitter that made the old preview
+      // look fake. The waveform always shows the same stable shape, and
+      // modulation changes are immediately visible.
       const visualFreq = Math.min(actualFreq, 50);
-      phaseRef.current += 2 * Math.PI * visualFreq * dt;
-      modPhaseRef.current += 2 * Math.PI * modFreq * dt;
 
       const styles = getComputedStyle(document.documentElement);
       const bgColor = styles.getPropertyValue("--bg").trim() || "#000";
@@ -144,7 +146,9 @@ export default function RealSignalGenerator({
       ctx.beginPath(); ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2); ctx.stroke();
 
       if (outputOn) {
-        // Draw waveform — stable display with 2 cycles
+        // Draw waveform — deterministic display showing 2 carrier cycles.
+        // The modulation is applied using the SAME formula the oscilloscope
+        // uses, so the preview matches what appears on the scope.
         ctx.shadowColor = `rgba(${hexToRgb(greenColor)}, 0.6)`;
         ctx.shadowBlur = 6;
         ctx.strokeStyle = greenBright;
@@ -152,25 +156,29 @@ export default function RealSignalGenerator({
         ctx.beginPath();
 
         const carrierCycles = 2;
+        // Time window: enough to show `carrierCycles` cycles of the carrier
+        const timeWindow = carrierCycles / Math.max(visualFreq, 0.1);
+
         for (let i = 0; i <= w; i++) {
           const frac = i / w;
-          // Carrier phase: stable — aligned to cycles
-          const carrierPhase = frac * Math.PI * 2 * carrierCycles + phaseRef.current;
+          // Absolute time within the display window
+          const time = frac * timeWindow;
+          // Carrier phase (deterministic — starts at 0 every frame)
+          const carrierPhase = 2 * Math.PI * visualFreq * time;
 
           let v: number;
 
           if (modulation === "AM") {
-            // AM: amplitude varies slowly with modulation signal
-            const modPhase = frac * Math.PI * 2 * carrierCycles * (modFreq / Math.max(visualFreq, 0.1)) + modPhaseRef.current;
-            const modSignal = Math.sin(modPhase);
+            // AM: amplitude varies with the modulation signal
+            const modSignal = Math.sin(2 * Math.PI * modFreq * time);
             const amFactor = 1 + modDepth * modSignal;
             v = waveValue(carrierPhase, waveform, ampV) * amFactor / (1 + modDepth);
           } else if (modulation === "FM") {
-            // FM: phase shift varies with modulation signal
-            const modPhase = frac * Math.PI * 2 * carrierCycles * (modFreq / Math.max(visualFreq, 0.1)) + modPhaseRef.current;
-            const modSignal = Math.sin(modPhase);
-            const fmPhaseShift = modDepth * 2 * modSignal;
-            v = waveValue(carrierPhase + fmPhaseShift, waveform, ampV);
+            // FM: true frequency modulation with modulation index β
+            // Instantaneous phase = 2π·fc·t + β·sin(2π·fm·t)
+            const beta = modDepth * 5;
+            const fmPhase = carrierPhase + beta * Math.sin(2 * Math.PI * modFreq * time);
+            v = waveValue(fmPhase, waveform, ampV);
           } else {
             v = waveValue(carrierPhase, waveform, ampV);
           }
