@@ -6,6 +6,7 @@ type Waveform = "sine" | "square" | "triangle" | "sawtooth";
 type Coupling = "AC" | "DC" | "GND";
 type TriggerMode = "AUTO" | "NORM" | "SINGLE";
 type TriggerEdge = "RISE" | "FALL";
+type Modulation = "NONE" | "AM" | "FM";
 
 const TIME_DIV_OPTIONS = [
   { label: "100us", value: 0.0001 },
@@ -34,8 +35,24 @@ const VOLT_DIV_OPTIONS = [
   { label: "5V", value: 5 },
 ];
 
-export default function RealOscilloscope({ waveform, frequency, amplitude }: {
-  waveform: Waveform; frequency: number; amplitude: number;
+export default function RealOscilloscope({
+  waveform,
+  frequency,
+  amplitude,
+  modulation = "NONE",
+  modFreq = 10,
+  modDepth = 0.5,
+  outputOn = true,
+}: {
+  waveform: Waveform;
+  frequency: number;
+  amplitude: number;
+  // Modulation props — passed through from the signal generator via SignalLab
+  // so the scope displays the *modulated* signal, not just the raw carrier.
+  modulation?: Modulation;
+  modFreq?: number;
+  modDepth?: number;
+  outputOn?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef(0);
@@ -52,7 +69,8 @@ export default function RealOscilloscope({ waveform, frequency, amplitude }: {
   const [channelOn, setChannelOn] = useState(true);
   const [measurements, setMeasurements] = useState({ vpp: 0, vrms: 0, vavg: 0, freq: 0, period: 0 });
 
-  // Convert waveform to voltage value at a given phase
+  // Convert waveform (carrier shape) to voltage value at a given phase.
+  // This is the *carrier* — modulation is applied on top of it by signalAtTime().
   const waveValue = (phase: number, wf: Waveform, amp: number): number => {
     const t = ((phase % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
     const peakV = amp * 5;
@@ -62,6 +80,27 @@ export default function RealOscilloscope({ waveform, frequency, amplitude }: {
       case "triangle": return (t < Math.PI ? -1 + (2 * t / Math.PI) : 3 - (2 * t / Math.PI)) * peakV;
       case "sawtooth": return ((t / Math.PI) - 1) * peakV;
     }
+  };
+
+  // Sample the full (modulated) signal at absolute time `t` (seconds).
+  // The generator and scope use the same formula so the scope reflects
+  // exactly what the generator is producing.
+  const signalAtTimeRef = useRef<(t: number) => number>((t: number) => 0);
+  signalAtTimeRef.current = (t: number) => {
+    const carrierPhase = 2 * Math.PI * frequency * t;
+    if (modulation === "AM") {
+      const modSignal = Math.sin(2 * Math.PI * modFreq * t);
+      const amFactor = 1 + modDepth * modSignal;
+      return waveValue(carrierPhase, waveform, amplitude) * amFactor / (1 + modDepth);
+    }
+    if (modulation === "FM") {
+      // True FM: instantaneous phase = 2π·fc·t + β·sin(2π·fm·t)
+      // β = modDepth * 5 → modulation index 0.5..5, gives clearly visible deviation
+      const beta = modDepth * 5;
+      const fmPhase = carrierPhase + beta * Math.sin(2 * Math.PI * modFreq * t);
+      return waveValue(fmPhase, waveform, amplitude);
+    }
+    return waveValue(carrierPhase, waveform, amplitude);
   };
 
   useEffect(() => {
@@ -170,16 +209,17 @@ export default function RealOscilloscope({ waveform, frequency, amplitude }: {
       ctx.fill();
 
       // === WAVEFORM — STABLE TRIGGERED DISPLAY ===
-      if (channelOn) {
+      if (channelOn && outputOn) {
         const timeWindow = timeDiv * GRID_DIVS_X;
         const samples = Math.min(Math.floor(w), 800);
+        const signalAt = signalAtTimeRef.current;
 
         // Update measurements every 0.5s
         if (measurementTimer > 0.5 && sampleCount > 0) {
           const vpp = vppMax - vppMin;
           const vavg = sumV / sampleCount;
           const vrms = Math.sqrt(sumV2 / sampleCount);
-          setMeasurements({ vpp, vrms, vavg, freq: frequency, period: 1 / frequency });
+          setMeasurements({ vpp, vrms, vavg, freq: frequency, period: 1 / Math.max(frequency, 0.001) });
           vppMax = -Infinity; vppMin = Infinity;
           sumV = 0; sumV2 = 0; sampleCount = 0;
           measurementTimer = 0;
@@ -194,30 +234,29 @@ export default function RealOscilloscope({ waveform, frequency, amplitude }: {
           ctx.stroke();
         } else {
           // === TRIGGERED SWEEP — stable display ===
-          // Find trigger point: scan from current time backward to find a rising/falling edge
-          // that crosses triggerLevel. This locks the display so it doesn't scroll.
           let triggerTime = accumulatedTime - timeWindow;
           const period = 1 / Math.max(frequency, 0.001);
-          
-          // For stable display: align to phase = 0 (or trigger crossing)
-          // Calculate the start time that aligns the waveform
+
+          // For stable display: align to phase = 0 (lock to carrier period).
+          // With FM, this makes the carrier cycles appear stable and the FM
+          // deviation shows up as a wobble within the cycles.
           const phaseAtNow = 2 * Math.PI * frequency * accumulatedTime;
           const cyclesElapsed = Math.floor(phaseAtNow / (2 * Math.PI));
-          
+
           if (triggerMode === "AUTO") {
             // Auto: lock to nearest cycle boundary for stable display
             const alignedTime = (cyclesElapsed * period) - timeWindow * 0.1;
             triggerTime = alignedTime;
           } else {
-            // NORM/SINGLE: find trigger crossing
+            // NORM/SINGLE: find trigger crossing on the *modulated* signal
             const searchStart = accumulatedTime - timeWindow * 2;
             let found = false;
             for (let i = 0; i < samples; i++) {
               const frac = i / samples;
               const t1 = searchStart + frac * timeWindow * 2;
               const t2 = t1 + (timeWindow * 2) / samples;
-              const v1 = waveValue(2 * Math.PI * frequency * t1, waveform, amplitude);
-              const v2 = waveValue(2 * Math.PI * frequency * t2, waveform, amplitude);
+              const v1 = signalAt(t1);
+              const v2 = signalAt(t2);
               if (triggerEdge === "RISE" && v1 < triggerLevel && v2 >= triggerLevel) {
                 triggerTime = t1;
                 found = true;
@@ -231,11 +270,9 @@ export default function RealOscilloscope({ waveform, frequency, amplitude }: {
             }
             if (!found && triggerMode === "NORM") {
               // No trigger found — don't draw
-              // Still draw labels
               ctx.fillStyle = textDim;
               ctx.font = "9px monospace";
               ctx.fillText("NO TRIGGER", w / 2 - 40, h / 2);
-              // Draw labels and return
               drawLabels();
               return;
             }
@@ -260,7 +297,7 @@ export default function RealOscilloscope({ waveform, frequency, amplitude }: {
               let vMin = Infinity, vMax = -Infinity;
               for (let j = 0; j < subSamples; j++) {
                 const subTime = time + (j / subSamples) * (timeWindow / samples);
-                const v = waveValue(2 * Math.PI * frequency * subTime, waveform, amplitude);
+                const v = signalAt(subTime);
                 if (v > vMax) vMax = v;
                 if (v < vMin) vMin = v;
                 if (v > vppMax) vppMax = v;
@@ -276,11 +313,11 @@ export default function RealOscilloscope({ waveform, frequency, amplitude }: {
               }
             }
           } else {
-            // Normal mode — stable waveform
+            // Normal mode — stable waveform (modulation applied)
             for (let i = 0; i <= samples; i++) {
               const frac = i / samples;
               const time = triggerTime + frac * timeWindow;
-              const v = waveValue(2 * Math.PI * frequency * time, waveform, amplitude);
+              const v = signalAt(time);
               const y = cy - ((v + offset) / voltDiv) * divH();
               if (v > vppMax) vppMax = v;
               if (v < vppMin) vppMin = v;
@@ -292,6 +329,20 @@ export default function RealOscilloscope({ waveform, frequency, amplitude }: {
           ctx.stroke();
           ctx.shadowBlur = 0;
         }
+      } else if (channelOn && !outputOn) {
+        // Generator output off — flat line (no signal coming in)
+        ctx.strokeStyle = `rgba(${hexToRgb(textFaint)}, 0.6)`;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(0, cy - (offset / voltDiv) * divH());
+        ctx.lineTo(w, cy - (offset / voltDiv) * divH());
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = textFaint;
+        ctx.font = "9px monospace";
+        ctx.fillText("GEN OUTPUT OFF", w / 2 - 50, cy - 12);
       }
 
       drawLabels();
@@ -305,6 +356,12 @@ export default function RealOscilloscope({ waveform, frequency, amplitude }: {
         const voltLabel = VOLT_DIV_OPTIONS.find(o => o.value === voltDiv)?.label || "";
         ctx.fillText(`VOLT: ${voltLabel}/div`, 8, 42);
         ctx.fillText(`OFFSET: ${offset.toFixed(2)}V`, 8, 56);
+        // Show modulation status on the scope so the user can see it's being applied
+        if (modulation !== "NONE") {
+          ctx.fillStyle = amberColor;
+          const modLabel = `${modulation} · fm=${modFreq.toFixed(1)}Hz · depth=${Math.round(modDepth * 100)}%`;
+          ctx.fillText(modLabel, 8, 70);
+        }
         ctx.fillStyle = amberColor;
         ctx.fillText(`TRIG: ${triggerMode} - ${triggerEdge}`, w - 130, 14);
         ctx.fillText(`LVL: ${triggerLevel.toFixed(2)}V`, w - 130, 28);
@@ -334,7 +391,7 @@ export default function RealOscilloscope({ waveform, frequency, amplitude }: {
       cancelAnimationFrame(rafRef.current);
       ro.disconnect();
     };
-  }, [waveform, frequency, amplitude, timeDiv, voltDiv, offset, coupling, triggerMode, triggerEdge, triggerLevel, channelOn]);
+  }, [waveform, frequency, amplitude, timeDiv, voltDiv, offset, coupling, triggerMode, triggerEdge, triggerLevel, channelOn, modulation, modFreq, modDepth, outputOn]);
 
   return (
     <div className="signal-device">

@@ -31,16 +31,34 @@ export default function RealSignalGenerator({
   waveform,
   frequency,
   amplitude,
+  modulation,
+  modFreq,
+  modDepth,
+  outputOn,
   onWaveformChange,
   onFrequencyChange,
   onAmplitudeChange,
+  onModulationChange,
+  onModFreqChange,
+  onModDepthChange,
+  onOutputOnChange,
 }: {
   waveform: Waveform;
   frequency: number;
   amplitude: number;
+  // Modulation is now controlled from the parent (SignalLab) so the
+  // oscilloscope sees the same modulated signal.
+  modulation: Modulation;
+  modFreq: number;
+  modDepth: number;
+  outputOn: boolean;
   onWaveformChange: (w: Waveform) => void;
   onFrequencyChange: (f: number) => void;
   onAmplitudeChange: (a: number) => void;
+  onModulationChange: (m: Modulation) => void;
+  onModFreqChange: (f: number) => void;
+  onModDepthChange: (d: number) => void;
+  onOutputOnChange: (on: boolean) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef(0);
@@ -52,10 +70,6 @@ export default function RealSignalGenerator({
   const [ampV, setAmpV] = useState(2.0); // peak voltage in V
   const [offset, setOffset] = useState(0); // DC offset
   const [impedance, setImpedance] = useState<OutputImpedance>("50Ω");
-  const [modulation, setModulation] = useState<Modulation>("NONE");
-  const [modFreq, setModFreq] = useState(10); // Hz
-  const [modDepth, setModDepth] = useState(0.5); // 0-1
-  const [outputOn, setOutputOn] = useState(true);
 
   // The actual frequency value based on range
   const actualFreq = frequency * FREQ_RANGES[freqRange].mult;
@@ -359,7 +373,7 @@ export default function RealSignalGenerator({
               <button
                 key={m}
                 className={`signal-waveform-btn ${modulation === m ? "active" : ""}`}
-                onClick={() => setModulation(m)}
+                onClick={() => onModulationChange(m)}
               >
                 {m}
               </button>
@@ -382,7 +396,7 @@ export default function RealSignalGenerator({
               max="100"
               step="0.5"
               value={modFreq}
-              onChange={(e) => setModFreq(parseFloat(e.target.value))}
+              onChange={(e) => onModFreqChange(parseFloat(e.target.value))}
             />
           </div>
           <div className="osc-control-group">
@@ -397,7 +411,7 @@ export default function RealSignalGenerator({
               max="1"
               step="0.05"
               value={modDepth}
-              onChange={(e) => setModDepth(parseFloat(e.target.value))}
+              onChange={(e) => onModDepthChange(parseFloat(e.target.value))}
             />
           </div>
           </>
@@ -410,7 +424,7 @@ export default function RealSignalGenerator({
           </div>
           <button
             className={`signal-waveform-btn ${outputOn ? "active" : ""}`}
-            onClick={() => setOutputOn(!outputOn)}
+            onClick={() => onOutputOnChange(!outputOn)}
             style={{ width: "100%", background: outputOn ? "var(--green)" : "var(--red)", color: "#000" }}
           >
             {outputOn ? "● OUTPUT ON" : "○ OUTPUT OFF"}
