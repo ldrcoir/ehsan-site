@@ -65,6 +65,30 @@ export async function POST(req: Request) {
     const email = String(body.email || "").trim().slice(0, 200);
     const message = String(body.message || "").trim().slice(0, 5000);
 
+    // === reCAPTCHA VERIFICATION ===
+    const recaptchaToken = body.recaptchaToken;
+    if (recaptchaToken) {
+      try {
+        const verifyRes = await fetch("https://www.google.com/recaptcha/api/siteverify", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: `secret=6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe&response=${recaptchaToken}`,
+        });
+        const verifyData = await verifyRes.json();
+        if (!verifyData.success) {
+          await logSecurityEvent("captcha_failed", ip, "reCAPTCHA verification failed");
+          return NextResponse.json(
+            { ok: false, error: "captcha_failed" },
+            { status: 400 }
+          );
+        }
+      } catch {
+        // If reCAPTCHA verification fails (network error), allow the message
+        // but log it
+        await logSecurityEvent("captcha_failed", ip, "reCAPTCHA network error - allowing");
+      }
+    }
+
     const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!name || !email || !message) {
