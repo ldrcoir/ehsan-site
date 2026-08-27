@@ -354,10 +354,10 @@ export default function Home() {
       return;
     }
 
-    // Verify captcha
-    const captchaInput = (fd.get("captcha") as string)?.trim();
-    if (!captchaInput || parseInt(captchaInput) !== captcha.a) {
-      setFormStatus({ text: lang === "fa" ? "پاسخ امنیتی اشتباه است." : "Security answer is wrong.", kind: "error" });
+    // Verify reCAPTCHA
+    const recaptchaResponse = (window as any).grecaptcha?.getResponse();
+    if (!recaptchaResponse) {
+      setFormStatus({ text: lang === "fa" ? "لطفاً تأیید ربات را انجام دهید." : "Please complete the robot check.", kind: "error" });
       setSubmitting(false);
       return;
     }
@@ -366,7 +366,7 @@ export default function Home() {
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, message, captchaAnswer: captchaInput, captchaExpected: captcha.a }),
+        body: JSON.stringify({ name, email, message, recaptchaToken: recaptchaResponse }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.ok) {
@@ -854,8 +854,12 @@ export default function Home() {
                 <textarea id="message" name="message" rows={5} placeholder={tt.contact.form.messagePh} required maxLength={5000}></textarea>
               </div>
               <div className="field">
-                <label htmlFor="captcha">{lang === "fa" ? `سوال امنیتی: ${captcha.q} = ?` : `Security check: ${captcha.q} = ?`}</label>
-                <input type="number" id="captcha" name="captcha" placeholder="?" required />
+                <label>{lang === "fa" ? "تأیید ربات" : "Robot check"}</label>
+                <div
+                  className="g-recaptcha"
+                  data-sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
+                  data-theme="dark"
+                ></div>
               </div>
               <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
                 {submitting ? tt.contact.form.sending : tt.contact.form.submit}

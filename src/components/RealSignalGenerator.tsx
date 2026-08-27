@@ -367,8 +367,9 @@ export default function RealSignalGenerator({
           </div>
         </div>
 
-        {/* Mod freq (only if modulation on) */}
+        {/* Mod freq + depth (only if modulation on) */}
         {modulation !== "NONE" && (
+          <>
           <div className="osc-control-group">
             <div className="osc-control-label">
               <span>MOD FREQ</span>
@@ -384,6 +385,22 @@ export default function RealSignalGenerator({
               onChange={(e) => setModFreq(parseFloat(e.target.value))}
             />
           </div>
+          <div className="osc-control-group">
+            <div className="osc-control-label">
+              <span>MOD DEPTH</span>
+              <span className="value">{Math.round(modDepth * 100)}%</span>
+            </div>
+            <input
+              type="range"
+              className="signal-control-input"
+              min="0.1"
+              max="1"
+              step="0.05"
+              value={modDepth}
+              onChange={(e) => setModDepth(parseFloat(e.target.value))}
+            />
+          </div>
+          </>
         )}
 
         {/* Output on/off */}
