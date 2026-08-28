@@ -291,6 +291,10 @@ export default function RealOscilloscope({
             const subSamples = 16;
             for (let i = 0; i <= samples; i++) {
               const frac = i / samples;
+              // Scale x to fill the FULL canvas width — prevents the
+              // right portion of the screen from being blank when the
+              // canvas is wider than `samples` pixels.
+              const x = frac * w;
               const time = frac * timeWindow;
               let vMin = Infinity, vMax = -Infinity;
               for (let j = 0; j < subSamples; j++) {
@@ -301,21 +305,23 @@ export default function RealOscilloscope({
               }
               const yMax = cy - ((vMax + offset) / voltDiv) * divH();
               const yMin = cy - ((vMin + offset) / voltDiv) * divH();
-              if (i === 0) ctx.moveTo(i, (yMax + yMin) / 2);
+              if (i === 0) ctx.moveTo(x, (yMax + yMin) / 2);
               else {
-                ctx.lineTo(i, yMax);
-                ctx.lineTo(i, yMin);
+                ctx.lineTo(x, yMax);
+                ctx.lineTo(x, yMin);
               }
             }
           } else {
             // Normal mode — stable waveform (modulation applied)
             for (let i = 0; i <= samples; i++) {
               const frac = i / samples;
+              // Scale x to fill the FULL canvas width — same as above.
+              const x = frac * w;
               const time = frac * timeWindow;
               const v = signalAt(time);
               const y = cy - ((v + offset) / voltDiv) * divH();
-              if (i === 0) ctx.moveTo(i, y);
-              else ctx.lineTo(i, y);
+              if (i === 0) ctx.moveTo(x, y);
+              else ctx.lineTo(x, y);
             }
           }
           ctx.stroke();
