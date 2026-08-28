@@ -6,8 +6,8 @@
 
 ---
 
-## 📌 نسخه فعلی: V18.0
-## 📅 تاریخ: 2026-08-26
+## 📌 نسخه فعلی: V18.4
+## 📅 تاریخ: 2026-08-28
 ## 🔗 پیش‌نمایش زنده: https://preview-chat-f7fdfef6-aa0f-4780-ac8e-5fa3dafbfbf0.space-z.ai/
 
 ---
@@ -73,9 +73,9 @@
 │   │           ├── bale/webhook/route.ts ← وب‌هوک Bale
 │   │           └── telegram/webhook/route.ts ← وب‌هوک Telegram
 │   ├── components/                 ← ۲۱ کامپوننت
-│   │   ├── RealOscilloscope.tsx         ← اسیلوسکوپ واقعی
-│   │   ├── RealSignalGenerator.tsx       ← ژنراتور سیگنال با AM/FM
-│   │   ├── SignalLab.tsx                 ← اتصال بی‌سیم ژنراتور به اسیلوسکوپ
+│   │   ├── RealOscilloscope.tsx         ← اسیلوسکوپ واقعی (V18.4: deterministic rendering)
+│   │   ├── RealSignalGenerator.tsx       ← ژنراتور سیگنال با AM/FM (V18.1: controlled props)
+│   │   ├── SignalLab.tsx                 ← اتصال بی‌سیم ژنراتور به اسیلوسکوپ (V18.1: state lift)
 │   │   ├── LabEquipmentRack.tsx          ← رک تجهیزات آزمایشگاه
 │   │   ├── LabDeviceVisualizer.tsx       ← نمایشگر زنده دستگاه‌ها (Smith chart, Spectrum, etc.)
 │   │   ├── InteractiveTerminal.tsx        ← ترمینال تعاملی
@@ -110,6 +110,7 @@
 │   ├── seed_texts.py                    ← ۳۶ متن قابل ویرایش
 │   ├── auto-backup.sh                   ← بک‌آپ خودکار هر شب
 │   ├── list_messages.py                 ← مشاهده پیام‌ها
+│   ├── keep-alive.sh                    ← (V18.3) نگه‌دارنده سرور dev در sandbox
 │   ├── generate_coding_tutorial_fa.py    ← تولید فایل Word آموزش
 │   ├── generate_tutorial.py              ← تولید فایل Word آموزش (EN)
 │   ├── generate_tutorial_fa.py           ← تولید فایل Word آموزش فارسی
@@ -175,6 +176,16 @@
 
 ## 🔄 تاریخچه تغییرات
 
+### V18.4 (2026-08-28) — اصلاحات Signal Lab
+- **رفع مشکل مدولاسیون FM/AM**: state مدولاسیون از `RealSignalGenerator` به `SignalLab` منتقل شد (lift up) و به اسیلوسکوپ پاس داده شد. قبلاً تغییر AM/FM روی ژنراتور فقط روی پیش‌نمایش کوچک خودش اثر داشت و اسیلوسکوپ carrier خام رو نشون می‌داد.
+- **حذف لرزش پیش‌نمایش ژنراتور**: phase accumulation (`phaseRef`, `modPhaseRef`) حذف شد. پیش‌نمایش حالا به‌صورت قطعی از `t=0` تا `t=timeWindow` render می‌شه — بدون لرزش و scroll.
+- **حذف لرزش اسیلوسکوپ**: منطق پیچیده trigger-chasing با phase compensation حذف شد. اسیلوسکوپ حالا موج رو از `t=0` تا `t=timeWindow` با فرمول مستقیم render می‌کنه — کاملاً سابت، مثل trigger واقعی.
+- **اصلاح فرمول FM**: `beta = modDepth × 5` به‌جای `modDepth × 2` — وابستگی فرکانس حالا واضح‌تر و هماهنگ با اسیلوسکوپ.
+- **رفع «یک‌سوم راست scope خالی»**: حلقه‌ی rendering به‌جای `i` (که حداکثر ۸۰۰ بود)، `x = frac × w` رو استفاده می‌کنه که کل عرض canvas رو پوشش می‌ده.
+- **رفع خطای hydration صفحه اصلی**: `suppressHydrationWarning` به `<body>` در `layout.tsx` اضافه شد (در کنار `<html>` که قبلاً داشت). این خطای ناشی از set شدن `lang`/`dir`/`data-theme` روی `<html>` و `<body>` در `useEffect` بود.
+- **تغییر `voltDiv` پیش‌فرض**: از `1V` به `2V` — قبلاً ۵V peak با 1V/div از صفحه بیرون می‌زد.
+- **اسکریپت `keep-alive.sh`**: نگه‌دارنده سرور dev در sandbox که هر ۱۰ ثانیه چک می‌کنه و اگر `next-server` از کار افتاده بود دوباره راه‌اندازی می‌کنه.
+
 ### V18.0 (2026-08-26) — نسخه نهایی
 - ربات = شما (نه دستیار): "من [نام شما] هستم"
 - محدودسازی ربات: رمز/کد/داده حساس نمی‌ده
@@ -208,6 +219,33 @@
 
 ---
 
+## 🔧 جزئیات فنی تغییرات V18.4
+
+### مشکل ۱: دکمه‌های AM/FM کار نمی‌کردن
+**علت**: state مدولاسیون (`modulation`, `modFreq`, `modDepth`, `outputOn`) به‌صورت `useState` محلی داخل `RealSignalGenerator` بود. هیچ راهی برای انتقال به `RealOscilloscope` وجود نداشت.
+**حل**:
+- در `SignalLab.tsx`: state ها به parent منتقل شدن
+- در `RealSignalGenerator.tsx`: از `useState` به controlled props تبدیل شدن (`onModulationChange`, `onModFreqChange`, `onModDepthChange`, `onOutputOnChange`)
+- در `RealOscilloscope.tsx`: props جدید (`modulation`, `modFreq`, `modDepth`, `outputOn`) قبول می‌شن و در فرمول sampling اعمال می‌شن
+
+### مشکل ۲: لرزش پیش‌نمایش ژنراتور
+**علت**: `phaseRef.current += 2π × visualFreq × dt` باعث می‌شد phase در هر فریم جلو بره و موج بچرخه.
+**حل**: phase accumulation حذف شد. پیش‌نمایش حالا از `t=0` تا `t=timeWindow` (۲ دوره carrier) به‌صورت قطعی render می‌شه.
+
+### مشکل ۳: لرزش اسیلوسکوپ
+**علت**: منطق trigger-chasing با floating-point jitter باعث می‌شد trigger point در هر فریم کمی جابجا بشه و موج بلرزه.
+**حل**: rendering به‌صورت قطعی از `t=0` تا `t=timeWindow` با فرمول مستقیم `signalAt(t)`. این مثل trigger کامل در اسیلوسکوپ واقعیه — موج کاملاً سابت می‌مونه.
+
+### مشکل ۴: یک‌سوم راست اسیلوسکوپ خالی
+**علت**: حلقه از `i = 0` تا `i = samples = min(w, 800)` می‌رفت و `i` رو به‌عنوان x coordinate استفاده می‌کرد. اگه canvas عرضش بیشتر از ۸۰۰px باشه، فقط ۸۰۰px سمت چپ پر می‌شد.
+**حل**: `x = frac × w` محاسبه می‌شه که همیشه کل عرض canvas رو پوشش می‌ده.
+
+### مشکل ۵: خطای hydration صفحه اصلی
+**علت**: `useEffect` در `page.tsx` attribute های `lang`, `dir`, `data-theme` رو روی `<html>` و `<body>` set می‌کنه که باعث mismatch بین SSR و client می‌شه.
+**حل**: `suppressHydrationWarning` به `<body>` در `layout.tsx` اضافه شد.
+
+---
+
 ## 🚀 راهنمای اجرای سریع
 
 ```bash
@@ -233,6 +271,25 @@ docker-compose restart
 # دامنه جدید رو به AUTHORIZED_DOMAINS در canvas-protect.ts و page.tsx اضافه کن
 docker-compose up -d --build
 ```
+
+---
+
+## 🖥 راهنمای اجرای dev در sandbox فعلی
+
+سرور dev روی پورت 3000 با supervisor نگه‌داری می‌شه:
+
+```bash
+# شروع supervisor (هر ۱۰ ثانیه چک می‌کنه سرور زنده‌ست)
+setsid sh -c '/home/z/my-project/scripts/keep-alive.sh > /home/z/my-project/scripts/keepalive.log 2>&1' < /dev/null & disown
+
+# لاگ سرور
+tail -f /home/z/my-project/dev.log
+
+# URL پیش‌نمایش
+https://preview-chat-f7fdfef6-aa0f-4780-ac8e-5fa3dafbfbf0.space-z.ai/
+```
+
+اگه ۴۰۴ دیدی، احتمالاً سرور idle از کار افتاده — supervisor خودش restart می‌کنه ولی ممکنه ۱۰ ثانیه طول بکشه. صبر کن و refresh کن.
 
 ---
 
@@ -265,3 +322,17 @@ docker-compose up -d --build
 cd /home/z/my-project
 zip -r full-backup.zip src/ prisma/ scripts/ public/ db/ download/ VERSION.txt package.json Dockerfile docker-compose.yml
 ```
+
+---
+
+## 📋 فایل‌های تغییر یافته در V18.4 (2026-08-28)
+
+| فایل | مسیر | تغییر |
+|---|---|---|
+| `SignalLab.tsx` | `src/components/SignalLab.tsx` | lift up state مدولاسیون |
+| `RealSignalGenerator.tsx` | `src/components/RealSignalGenerator.tsx` | controlled props + حذف phase accumulation |
+| `RealOscilloscope.tsx` | `src/components/RealOscilloscope.tsx` | modulation props + deterministic rendering + x scaling |
+| `layout.tsx` | `src/app/layout.tsx` | `suppressHydrationWarning` روی `<body>` |
+| `keep-alive.sh` | `scripts/keep-alive.sh` | جدید — supervisor سرور dev |
+| `PROJECT_LOG.md` | `PROJECT_LOG.md` | این آپدیت |
+
