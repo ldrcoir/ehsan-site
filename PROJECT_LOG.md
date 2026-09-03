@@ -6,8 +6,8 @@
 
 ---
 
-## 📌 نسخه فعلی: V18.4
-## 📅 تاریخ: 2026-08-28
+## 📌 نسخه فعلی: V19.0
+## 📅 تاریخ: 2026-09-03
 ## 🔗 پیش‌نمایش زنده: https://preview-chat-f7fdfef6-aa0f-4780-ac8e-5fa3dafbfbf0.space-z.ai/
 
 ---
@@ -175,6 +175,20 @@
 ---
 
 ## 🔄 تاریخچه تغییرات
+
+### V19.0 (2026-09-03) — سیستم دسترسی مبتنی بر زمان + رفع hydration
+- **سیستم کاربران با دسترسی زمانی**: ادمین می‌تونه کاربر بسازه که فقط در ساعت/روزهای مشخص دسترسی داشته باشه.
+  - مدل `AccessUser` در Prisma (username, passwordHash, allowedHourStart/End, allowedDays, expiresAt, active)
+  - مدل `AccessLog` برای حسابرسی (login_success, login_failed, access_denied_*)
+  - APIهای `/api/user/login`, `/api/user/verify`, `/api/user/logout`
+  - APIهای `/api/admin/users` (GET/POST), `/api/admin/users/[id]` (PUT/DELETE), `/api/admin/users/logs`
+  - صفحه `/user-login` و `/user-dashboard`
+  - کامپوننت `AccessUserManager` در پنل ادمین (تب "Users")
+  - session token با HMAC امضا، cookie httpOnly
+  - bcryptjs برای هش رمز عبور
+  - لاگ کامل ورود/خروج/دسترسی‌های رد شده
+- **رفع خطای hydration**: reCAPTCHA script از `<head>` حذف شد. حالا فقط بعد از mount در client load می‌شه و div `.g-recaptcha` فقط بعد از mount رندر می‌شه. این خطای ناشی از تزریق iframe توسط grecaptcha بود.
+- **افزودن کامنت‌های توصیفی**: به فایل‌های کلیدی (`access-auth.ts`, `RealOscilloscope.tsx`, `RealSignalGenerator.tsx`, `SignalLab.tsx`) کامنت‌های فارسی خط‌به‌خط اضافه شد.
 
 ### V18.4 (2026-08-28) — اصلاحات Signal Lab
 - **رفع مشکل مدولاسیون FM/AM**: state مدولاسیون از `RealSignalGenerator` به `SignalLab` منتقل شد (lift up) و به اسیلوسکوپ پاس داده شد. قبلاً تغییر AM/FM روی ژنراتور فقط روی پیش‌نمایش کوچک خودش اثر داشت و اسیلوسکوپ carrier خام رو نشون می‌داد.

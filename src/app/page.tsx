@@ -14,6 +14,7 @@ import ArchiveGrid from "@/components/ArchiveGrid";
 import ThemeBuilder from "@/components/ThemeBuilder";
 import TextEditor from "@/components/TextEditor";
 import NavMenuManager from "@/components/NavMenuManager";
+import AccessUserManager from "@/components/AccessUserManager";
 import {
   UI, PERSONAL, SOCIALS,
   type Lang, DEFAULT_LANG, LANGS,
@@ -70,7 +71,7 @@ export default function Home() {
   const [adminChats, setAdminChats] = useState<ChatSessionRow[] | null>(null);
   const [adminStats, setAdminStats] = useState<{ contactMessages: number; chatMessages: number; chatSessions: number } | null>(null);
   const [adminErr, setAdminErr] = useState("");
-  const [adminTab, setAdminTab] = useState<"messages" | "chats" | "content" | "text" | "nav" | "themes" | "settings">("messages");
+  const [adminTab, setAdminTab] = useState<"messages" | "chats" | "content" | "text" | "nav" | "themes" | "settings" | "users">("messages");
   const [adminSettings, setAdminSettings] = useState<Record<string, string> | null>(null);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
@@ -83,6 +84,24 @@ export default function Home() {
   const [theme, setTheme] = useState<"terminal" | "clean" | "midnight" | "amber" | "cyan" | "purple" | "solar">("terminal");
   const [antiTheftWarning, setAntiTheftWarning] = useState(false);
   const [adminSearch, setAdminSearch] = useState("");
+  // reCAPTCHA only renders after client mount — the grecaptcha script injects
+  // an iframe + div into the .g-recaptcha container at runtime, which would
+  // cause a hydration mismatch (server HTML has no iframe, client does).
+  // By gating render on `mounted`, the server and the first client render
+  // both produce an empty container, then the script loads and fills it.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+    // Load reCAPTCHA script only on client, after mount
+    if (!document.getElementById("recaptcha-api-script")) {
+      const s = document.createElement("script");
+      s.id = "recaptcha-api-script";
+      s.src = "https://www.google.com/recaptcha/api.js";
+      s.async = true;
+      s.defer = true;
+      document.head.appendChild(s);
+    }
+  }, []);
 
   const tt = UI[lang];
   // Helper: get text from DB first, fallback to content.ts
@@ -855,11 +874,17 @@ export default function Home() {
               </div>
               <div className="field">
                 <label>{lang === "fa" ? "تأیید ربات" : "Robot check"}</label>
-                <div
-                  className="g-recaptcha"
-                  data-sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
-                  data-theme="dark"
-                ></div>
+                {/* reCAPTCHA container — only rendered after client mount to
+                    avoid hydration mismatch (grecaptcha injects iframe at runtime) */}
+                {mounted ? (
+                  <div
+                    className="g-recaptcha"
+                    data-sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
+                    data-theme="dark"
+                  ></div>
+                ) : (
+                  <div style={{ width: 304, height: 78, background: "rgba(0,255,65,0.05)", border: "1px dashed rgba(0,255,65,0.3)", borderRadius: 4 }} />
+                )}
               </div>
               <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
                 {submitting ? tt.contact.form.sending : tt.contact.form.submit}
@@ -1020,6 +1045,12 @@ export default function Home() {
                     >
                       settings
                     </button>
+                    <button
+                      className={`admin-tab ${adminTab === "users" ? "active" : ""}`}
+                      onClick={() => setAdminTab("users")}
+                    >
+                      {lang === "fa" ? "کاربران" : "users"}
+                    </button>
                   </div>
 
                   {/* CONTENT TAB */}
@@ -1040,6 +1071,11 @@ export default function Home() {
                   {/* THEMES TAB — Theme Builder */}
                   {adminTab === "themes" && (
                     <ThemeBuilder password={adminPwd} lang={lang} />
+                  )}
+
+                  {/* USERS TAB — AccessUser management (با ساعت دسترسی) */}
+                  {adminTab === "users" && (
+                    <AccessUserManager />
                   )}
 
                   {/* CONTACT MESSAGES TAB with reply */}
