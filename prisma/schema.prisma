@@ -358,3 +358,73 @@ model NavItem {
 
   @@index([visible, order])
 }
+
+// ============================================================================
+// AccessUser — کاربرانی که ادمین می‌سازه با ساعت/روز دسترسی مشخص
+// ============================================================================
+// این مدل برای سیستم دسترسی مبتنی بر زمان هست. ادمین می‌تونه کاربر بسازه که:
+// - فقط در ساعت‌های مشخصی از روز دسترسی داشته باشه (مثلاً ۹ تا ۱۷)
+// - فقط در روزهای مشخصی از هفته دسترسی داشته باشه (مثلاً دوشنبه تا جمعه)
+// - در تاریخ مشخصی منقضی بشه (expiresAt)
+// - فعال/غیرفعال بشه (active)
+//
+// نحوه استفاده:
+// 1. ادمین از پنل → تب "Users" کاربر جدید می‌سازه
+// 2. username + password + ساعت شروع + ساعت پایان + روزهای مجاز رو وارد می‌کنه
+// 3. کاربر از /user-login لاگین می‌کنه
+// 4. در هر درخواست، middleware چک می‌کنه:
+//    - session معتبر باشه
+//    - زمان فعلی در بازه‌ی مجاز باشه
+//    - کاربر فعال باشه و منقضی نشده باشه
+// ============================================================================
+model AccessUser {
+  id              String   @id @default(cuid())
+  username        String   @unique           // نام کاربری یکتا
+  passwordHash    String                     // هش رمز عبور (bcrypt)
+  displayName     String   @default("")      // نام نمایشی
+  role            String   @default("user")  // user | admin
+  // ساعت شروع دسترسی (0-23). اگه null یعنی بدون محدودیت ساعت.
+  allowedHourStart Int?
+  // ساعت پایان دسترسی (0-23). اگه null یعنی بدون محدودیت ساعت.
+  allowedHourEnd   Int?
+  // روزهای مجاز به‌صورت لیست جدا شده با کاما: 0=یکشنبه، 1=دوشنبه، ... 6=شنبه
+  // مثال: "1,2,3,4,5" یعنی دوشنبه تا جمعه. اگه null یعنی همه روزها.
+  allowedDays     String?
+  // تاریخ انقضا (UTC). اگه null یعنی بدون انقضا.
+  expiresAt       DateTime?
+  // آیا کاربر فعال هست؟ (ادمین می‌تونه غیرفعال کنه بدون حذف)
+  active          Boolean  @default(true)
+  // تعداد دفعات ورود موفق
+  loginCount      Int      @default(0)
+  // آخرین ورود موفق
+  lastLoginAt     DateTime?
+  // علت غیرفعال‌سازی (برای لاگ)
+  deactivatedReason String @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // رابطه با لاگ دسترسی‌ها
+  accessLogs      AccessLog[]
+
+  @@index([username])
+  @@index([active])
+}
+
+// ============================================================================
+// AccessLog — لاگ ورود/خروج کاربران برای حسابرسی امنیتی
+// ============================================================================
+model AccessLog {
+  id          String   @id @default(cuid())
+  userId      String
+  user        AccessUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action      String   // login_success | login_failed | access_denied_off_hours | access_denied_inactive | access_denied_expired | logout
+  ip          String?
+  userAgent   String?
+  // اطلاعات اضافی (مثلاً چرا دسترسی رد شد)
+  details     String   @default("")
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([action])
+}
