@@ -60,11 +60,7 @@ const COLOR_FIELDS: { key: keyof ThemeColors; label: string; desc: string }[] = 
 export default function ThemeBuilder({ password, lang }: { password: string; lang: string }) {
   const [themes, setThemes] = useState<ThemeColors[]>([]);
   const [editing, setEditing] = useState<ThemeColors | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => { loadThemes(); }, []);
-
-  const loadThemes = async () => {
+  const [loading, setLoading] = useState(true);  const loadThemes = async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/themes?password=${password}`);
@@ -73,6 +69,13 @@ export default function ThemeBuilder({ password, lang }: { password: string; lan
     } catch {}
     setLoading(false);
   };
+
+
+
+   
+
+
+  useEffect(() => { loadThemes(); }, []);
 
   const saveTheme = async (t: ThemeColors) => {
     const isNew = !t.id;

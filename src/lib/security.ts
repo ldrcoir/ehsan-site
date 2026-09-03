@@ -62,8 +62,8 @@ export function generateCaptcha(): { question: string; answer: number } {
   const b = Math.floor(Math.random() * 9) + 1;
   const ops = ["+", "-", "×"];
   const op = ops[Math.floor(Math.random() * ops.length)];
-  let answer: number;
-  let question: string;
+  let answer: number = 0;
+  let question: string = "";
   switch (op) {
     case "+": answer = a + b; question = `${a} + ${b}`; break;
     case "-": answer = a >= b ? a - b : b - a; question = a >= b ? `${a} - ${b}` : `${b} - ${a}`; break;

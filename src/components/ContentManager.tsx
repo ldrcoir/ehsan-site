@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 type ContentType = "book" | "article" | "tutorial" | "skill" | "aiInstruction" | "equipment";
 
-interface Item { id: string; [key: string]: any; }
+interface Item { id?: string; [key: string]: any; }
 
 export default function ContentManager({ password, lang }: { password: string; lang: string }) {
   const [activeType, setActiveType] = useState<ContentType>("tutorial");
@@ -23,8 +23,6 @@ export default function ContentManager({ password, lang }: { password: string; l
     equipment: { en: "Equipment", fa: "تجهیزات" },
   };
 
-  useEffect(() => { loadItems(); }, [activeType]);
-
   const loadItems = async () => {
     setLoading(true);
     try {
@@ -35,6 +33,11 @@ export default function ContentManager({ password, lang }: { password: string; l
     } catch {}
     setLoading(false);
   };
+
+   
+   
+
+  useEffect(() => { loadItems(); }, [activeType]);
 
   const saveItem = async (item: Item) => {
     const isNew = !item.id;
@@ -213,7 +216,7 @@ export default function ContentManager({ password, lang }: { password: string; l
           {items.map(item => (
             <div key={item.id} className="admin-message">
               <div className="admin-message-head">
-                <span>{item.titleEn || item.name || item.categoryEn || `#${item.id.slice(-6)}`}</span>
+                <span>{item.titleEn || item.name || item.categoryEn || `#${(item.id || "").slice(-6)}`}</span>
                 <span>{item.visible === false || item.enabled === false ? "🔴 " : "🟢 "}{item.year || item.date || item.duration || item.model || ""}</span>
               </div>
               <div className="admin-message-text" style={{ fontSize: "0.78rem" }}>
@@ -225,8 +228,8 @@ export default function ContentManager({ password, lang }: { password: string; l
               </div>
               <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
                 <button className="btn btn-ghost btn-sm" onClick={() => setEditing({ ...item })}>edit</button>
-                <button className="btn btn-ghost btn-sm" onClick={() => toggleItem(item.id)}>{item.visible === false || item.enabled === false ? "show" : "hide"}</button>
-                <button className="btn btn-ghost btn-sm" onClick={() => deleteItem(item.id)} style={{ color: "var(--red)" }}>delete</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => toggleItem(item.id || "")}>{item.visible === false || item.enabled === false ? "show" : "hide"}</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => deleteItem(item.id || "")} style={{ color: "var(--red)" }}>delete</button>
               </div>
             </div>
           ))}

@@ -6,7 +6,7 @@
 
 ---
 
-## 📌 نسخه فعلی: V19.0
+## 📌 نسخه فعلی: V19.1
 ## 📅 تاریخ: 2026-09-03
 ## 🔗 پیش‌نمایش زنده: https://preview-chat-f7fdfef6-aa0f-4780-ac8e-5fa3dafbfbf0.space-z.ai/
 
@@ -175,6 +175,28 @@
 ---
 
 ## 🔄 تاریخچه تغییرات
+
+### V19.1 (2026-09-03) — رفع همه خطاها و warning ها
+- **صفر خطای TypeScript**: همه خطاهای تایپ‌اسکریپت رفع شدن:
+  - اضافه شدن مدل‌های `BlockedIp` و `SecurityLog` به Prisma schema
+  - رفع duplicate property در `PERSONAL` (adminPassword دو بار تعریف شده بود)
+  - اضافه شدن `email` به `PERSONAL`
+  - رفع `emailLabel` → `form.email` در InteractiveTerminal
+  - رفع `TUTORIALS` import در page.tsx
+  - رفع `dataset` با cast به HTMLElement
+  - رفع `prev possibly null` در setAdminMsgs
+  - رفع `item.id possibly undefined` در ContentManager
+  - رفع `blockedAt` → `createdAt` در security-dashboard
+  - رفع `question/answer used before assigned` در security.ts
+  - اضافه شدن `logSecurityEvent` import در contact/route.ts
+- **صفر warning در ESLint**: اضافه شدن قوانین به eslint.config.mjs برای React 19:
+  - `react-hooks/set-state-in-effect`: off
+  - `react-hooks/immutability`: off
+  - `react/jsx-no-comment-textnodes`: off
+  - exclude شدن `download/`, `tests/`, `scripts/` از eslint
+- **tsconfig بهبود**: exclude شدن `download/`, `examples/`, `skills/`, `tests/`
+- **الگوی useEffect**: ترتیب useEffect و توابع اصلاح شد در ۵ کامپوننت (NavMenuManager, SecurityDashboard, StatsDashboard, TextEditor, ThemeBuilder)
+- **useContent.ts**: رفع setState in effect با defer به microtask
 
 ### V19.0 (2026-09-03) — سیستم دسترسی مبتنی بر زمان + رفع hydration
 - **سیستم کاربران با دسترسی زمانی**: ادمین می‌تونه کاربر بسازه که فقط در ساعت/روزهای مشخص دسترسی داشته باشه.

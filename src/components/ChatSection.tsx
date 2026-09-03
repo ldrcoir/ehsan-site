@@ -41,7 +41,7 @@ export default function ChatSection({ lang }: { lang: Lang }) {
     if (messages.length === 0) {
       setMessages([{ role: "assistant", content: greetings[lang], ts: Date.now() }]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [lang]);
 
   // Autoscroll

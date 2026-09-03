@@ -30,9 +30,8 @@ export const PERSONAL = {
     de: "RF/Mikrowellen-Forscher · AI/ML-Programmierer · Autor & Übersetzer",
     fa: "پژوهشگر RF/مایکروویو · برنامه‌نویس AI/ML · نویسنده و مترجم",
   },
-  // No public email shown on site — admin sees messages via panel or Bale
-  // Admin password to view messages at #admin
-  adminPassword: "admin123",
+  // Email (نمایش داده می‌شه توی ترمینال و بخش تماس)
+  email: "your-email@example.com",
 };
 
 // ----------------------------------------------------------------------------

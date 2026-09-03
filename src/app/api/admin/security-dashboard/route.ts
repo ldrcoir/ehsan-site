@@ -18,7 +18,7 @@ export async function GET(req: Request) {
     const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
     const [blockedIps, recentLogs, suspiciousCount, failedLoginCount, blockedCount, todayEvents] = await Promise.all([
-      db.blockedIp.findMany({ orderBy: { blockedAt: "desc" }, take: 50 }),
+      db.blockedIp.findMany({ orderBy: { createdAt: "desc" }, take: 50 }),
       db.securityLog.findMany({ orderBy: { createdAt: "desc" }, take: 50 }),
       db.securityLog.count({ where: { type: "suspicious_message" } }),
       db.securityLog.count({ where: { type: "failed_login" } }),
