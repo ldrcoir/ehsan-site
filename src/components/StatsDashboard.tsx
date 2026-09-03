@@ -5,11 +5,7 @@ import { useEffect, useState } from "react";
 export default function StatsDashboard({ password, lang }: { password: string; lang: string }) {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const fa = lang === "fa";
-
-  useEffect(() => { load(); }, []);
-
-  const load = async () => {
+  const fa = lang === "fa";  const load = async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/stats?password=${password}`);
@@ -18,6 +14,13 @@ export default function StatsDashboard({ password, lang }: { password: string; l
     } catch {}
     setLoading(false);
   };
+
+
+
+   
+
+
+  useEffect(() => { load(); }, []);
 
   if (loading) return <p style={{ color: "var(--text-dim)", textAlign: "center", padding: 20 }}>loading...</p>;
   if (!stats) return <p style={{ color: "var(--text-dim)", textAlign: "center", padding: 20 }}>No data.</p>;

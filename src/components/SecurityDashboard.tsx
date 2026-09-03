@@ -5,11 +5,7 @@ import { useEffect, useState } from "react";
 export default function SecurityDashboard({ password, lang }: { password: string; lang: string }) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const fa = lang === "fa";
-
-  useEffect(() => { load(); }, []);
-
-  const load = async () => {
+  const fa = lang === "fa";  const load = async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/security-dashboard?password=${password}`);
@@ -18,6 +14,13 @@ export default function SecurityDashboard({ password, lang }: { password: string
     } catch {}
     setLoading(false);
   };
+
+
+
+   
+
+
+  useEffect(() => { load(); }, []);
 
   const unblock = async (ip: string) => {
     await fetch("/api/admin/security-dashboard", {

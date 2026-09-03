@@ -161,7 +161,7 @@ children.push(new Paragraph({
   spacing: { after: 2400 },
 }));
 children.push(new Paragraph({
-  children: [new TextRun({ text: "نسخه V19.0 — ۱۴۰۵/۰۶/۱۳", font: FONT_FA, size: 22, color: COLOR_DIM })],
+  children: [new TextRun({ text: "نسخه V19.1 — ۱۴۰۵/۰۶/۱۳", font: FONT_FA, size: 22, color: COLOR_DIM })],
   alignment: AlignmentType.CENTER,
   bidirectional: true,
 }));
@@ -763,7 +763,7 @@ children.push(new Paragraph({ children: [new PageBreak()] }));
 children.push(heading("فصل ۷: سیستم احراز هویت با دسترسی زمانی", 1));
 
 children.push(faPara(
-  "این یکی از مهم‌ترین فصوله. توی نسخه‌ی V19.0 یه سیستم کامل ساختم که ادمین می‌تونه کاربر بسازه که فقط در ساعت/روزهای مشخص دسترسی داشته باشه."
+  "این یکی از مهم‌ترین فصوله. توی نسخه‌ی V19.1 یه سیستم کامل ساختم که ادمین می‌تونه کاربر بسازه که فقط در ساعت/روزهای مشخص دسترسی داشته باشه."
 ));
 
 children.push(heading("۷.۱ مدل AccessUser", 2));
@@ -1378,7 +1378,7 @@ const doc = new Document({
       default: new Header({
         children: [new Paragraph({
           children: [new TextRun({
-            text: "آموزش کامل ساخت سایت شخصی — V19.0",
+            text: "آموزش کامل ساخت سایت شخصی — V19.1",
             font: FONT_FA, size: 16, color: COLOR_DIM,
           })],
           alignment: AlignmentType.CENTER,
@@ -1405,7 +1405,7 @@ const doc = new Document({
 // ----------------------------------------------------------------------------
 // ذخیره فایل
 // ----------------------------------------------------------------------------
-const outputPath = "/home/z/my-project/download/FULL_TUTORIAL_FA_V19.docx";
+const outputPath = "/home/z/my-project/download/FULL_TUTORIAL_FA_V19.1.docx";
 
 Packer.toBuffer(doc).then(buffer => {
   fs.writeFileSync(outputPath, buffer);

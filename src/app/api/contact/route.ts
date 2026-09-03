@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { logSecurityEvent } from "@/lib/security";
 
 // Simple in-memory rate limiter: max 3 messages per IP per 10 minutes
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;

@@ -11,11 +11,7 @@ export default function TextEditor({ password, lang }: { password: string; lang:
   const [texts, setTexts] = useState<Record<string, { en: string; fa: string; de: string }>>({});
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
-  const [savedKey, setSavedKey] = useState<string | null>(null);
-
-  useEffect(() => { loadTexts(); }, []);
-
-  const loadTexts = async () => {
+  const [savedKey, setSavedKey] = useState<string | null>(null);  const loadTexts = async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/text?password=${password}`);
@@ -24,6 +20,13 @@ export default function TextEditor({ password, lang }: { password: string; lang:
     } catch {}
     setLoading(false);
   };
+
+
+
+   
+
+
+  useEffect(() => { loadTexts(); }, []);
 
   const saveText = async (key: string, val: { en: string; fa: string; de: string }) => {
     const res = await fetch("/api/admin/text", {

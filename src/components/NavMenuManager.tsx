@@ -10,11 +10,7 @@ export default function NavMenuManager({ password, lang }: { password: string; l
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<any | null>(null);
-  const fa = lang === "fa";
-
-  useEffect(() => { loadItems(); }, []);
-
-  const loadItems = async () => {
+  const fa = lang === "fa";  const loadItems = async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/nav?password=${password}`);
@@ -23,6 +19,13 @@ export default function NavMenuManager({ password, lang }: { password: string; l
     } catch {}
     setLoading(false);
   };
+
+
+
+   
+
+
+  useEffect(() => { loadItems(); }, []);
 
   const save = async (item: any) => {
     const isNew = !item.id;

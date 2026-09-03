@@ -67,7 +67,7 @@ export default function InteractiveTerminal({ lang }: { lang: Lang }) {
       }
       case "contact":
         return out(
-          `${tt.contact.emailLabel}: ${PERSONAL.email}\n` +
+          `${tt.contact.form.email}: ${PERSONAL.email}\n` +
             SOCIALS.map((s) => `  ${s.label}: ${s.url}${s.handle}`).join("\n")
         );
       case "social":

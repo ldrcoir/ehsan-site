@@ -16,7 +16,7 @@ set -e
 
 cd /home/z/my-project
 
-OUTPUT="download/personal-site-v19.zip"
+OUTPUT="download/personal-site-v19.1.zip"
 TMP_DIR="/tmp/personal-site-v19"
 
 echo "🧹 Cleaning up..."
@@ -54,13 +54,13 @@ cp db/custom.db "$TMP_DIR/db/" 2>/dev/null || echo "  (no existing db, will be c
 
 # README
 cat > "$TMP_DIR/README.md" << 'EOF'
-# Personal Site V19.0
+# Personal Site V19.1
 
 ## Quick Start
 
 ```bash
 # 1. Extract
-unzip personal-site-v19.zip
+unzip personal-site-v19.1.zip
 cd personal-site-v19
 
 # 2. Run with Docker
@@ -112,7 +112,7 @@ docker-compose restart
 
 ## Version
 
-V19.0 — 2026-09-03
+V19.1 — 2026-09-03
 EOF
 
 # ساخت zip

@@ -16,7 +16,7 @@ import TextEditor from "@/components/TextEditor";
 import NavMenuManager from "@/components/NavMenuManager";
 import AccessUserManager from "@/components/AccessUserManager";
 import {
-  UI, PERSONAL, SOCIALS,
+  UI, PERSONAL, SOCIALS, TUTORIALS,
   type Lang, DEFAULT_LANG, LANGS,
 } from "@/lib/content";
 import { useContent, getText as getDbText } from "@/lib/useContent";
@@ -294,7 +294,7 @@ export default function Home() {
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
-            const id = entry.target.dataset.reveal!;
+            const id = (entry.target as HTMLElement).dataset.reveal!;
             setRevealed((prev) => new Set(prev).add(id));
             io.unobserve(entry.target);
           }
@@ -1162,7 +1162,7 @@ export default function Home() {
                                     method: "POST", headers: { "Content-Type": "application/json" },
                                     body: JSON.stringify({ password: adminPwd, target: "message", id: m.id }),
                                   });
-                                  setAdminMsgs(prev => prev.filter(x => x.id !== m.id));
+                                  setAdminMsgs(prev => prev ? prev.filter(x => x.id !== m.id) : prev);
                                 }}
                               >
                                 delete

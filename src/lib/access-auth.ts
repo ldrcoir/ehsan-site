@@ -13,6 +13,7 @@
 // ============================================================================
 
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { db } from "./db";
 
 const SESSION_SECRET = process.env.SESSION_SECRET || "change-this-in-production-please";
@@ -177,7 +178,5 @@ export function getSessionFromRequest(request: Request): { userId: string; expir
 // hmac — ساخت HMAC امضا با SHA-256
 // ----------------------------------------------------------------------------
 function hmac(message: string): string {
-  // استفاده از Node.js crypto module
-  const crypto = require("crypto");
   return crypto.createHmac("sha256", SESSION_SECRET).update(message).digest("hex");
 }

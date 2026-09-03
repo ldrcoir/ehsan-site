@@ -29,14 +29,20 @@ export function useContent() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     const cached = localStorage.getItem("site_content_cache");
     const cachedTime = localStorage.getItem("site_content_cache_time");
     if (cached && cachedTime) {
       const age = Date.now() - parseInt(cachedTime, 10);
       if (age < 5 * 60 * 1000) {
         try {
-          setContent(JSON.parse(cached));
-          setLoading(false);
+          // defer setState to next microtask to avoid synchronous setState in effect
+          Promise.resolve().then(() => {
+            if (!cancelled) {
+              setContent(JSON.parse(cached));
+              setLoading(false);
+            }
+          });
           return;
         } catch {}
       }
@@ -46,6 +52,7 @@ export function useContent() {
       fetch("/api/content").then(r => r.json()).catch(() => ({ ok: false })),
       fetch("/api/admin/text").then(r => r.json()).catch(() => ({ ok: false, texts: {} })),
     ]).then(([contentData, textData]) => {
+      if (cancelled) return;
       const result = {
         books: contentData.ok ? contentData.books || [] : [],
         articles: contentData.ok ? contentData.articles || [] : [],
@@ -59,7 +66,9 @@ export function useContent() {
       setContent(result);
       localStorage.setItem("site_content_cache", JSON.stringify(result));
       localStorage.setItem("site_content_cache_time", String(Date.now()));
-    }).catch(() => {}).finally(() => setLoading(false));
+    }).catch(() => {}).finally(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
   }, []);
 
   return { content, loading };

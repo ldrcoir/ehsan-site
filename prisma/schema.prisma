@@ -428,3 +428,31 @@ model AccessLog {
   @@index([createdAt])
   @@index([action])
 }
+
+// ============================================================================
+// BlockedIp — IP های مسدود شده (خودکار یا دستی توسط ادمین)
+// ============================================================================
+model BlockedIp {
+  id        String    @id @default(cuid())
+  ip        String    @unique
+  reason    String    @default("")
+  attempts  Int       @default(0)
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+// ============================================================================
+// SecurityLog — لاگ رویدادهای امنیتی (suspicous message, blocked IP, etc.)
+// ============================================================================
+model SecurityLog {
+  id        String   @id @default(cuid())
+  type      String   // suspicious_message | blocked_ip | login_failed | rate_limit_hit | etc.
+  ip        String?
+  detail    String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([type])
+  @@index([ip])
+  @@index([createdAt])
+}
