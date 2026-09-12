@@ -139,7 +139,7 @@ code('[\n  {\n    "titleEn": "آموزش پایتون ۱",\n    "embedUrl": "htt
 # CH4
 doc.add_heading("فصل ۴: TypeScript با مثال", level=1)
 rtl("TypeScript = جاوااسکریپت + نوع‌دهی.")
-code("let name: string = " + chr(34) + "Salar" + chr(34) + ";       // رشته\nlet age: number = 30;              // عدد\nlet active: boolean = true;     // درست/غلط\nlet items: string[] = [" + chr(34) + "a" + chr(34) + ", " + chr(34) + "b" + chr(34) + "]; // آرایه")
+code("let name: string = " + chr(34) + "YourName" + chr(34) + ";       // رشته\nlet age: number = 30;              // عدد\nlet active: boolean = true;     // درست/غلط\nlet items: string[] = [" + chr(34) + "a" + chr(34) + ", " + chr(34) + "b" + chr(34) + "]; // آرایه")
 rtl("تابع با نوع:")
 code("function greet(name: string): string {\n  return " + chr(34) + "سلام " + chr(34) + " + name;\n}\nlet msg = greet(" + chr(34) + "سعید" + chr(34) + ");  // سلام سعید")
 rtl("interface:")
@@ -204,7 +204,7 @@ rtl("۳ لایه محافظت:")
 bullet("قفل دامنه: فقط روی دامنه‌های مجاز کار می‌کنه")
 bullet("واترمارک نامرئی روی Canvas: شناسه توی پیکسل‌ها مخفی")
 bullet("راست‌کلیک و DevTools غیرفعال")
-code("// قفل دامنه:\nif (!authorizedDomains.includes(hostname)) {\n  document.body.innerHTML = 'UNAUTHORIZED COPY';\n}\n\n// واترمارک: LSB steganography\n// شناسه: PS-RF-V11-2026-0820")
+code("// قفل دامنه:\nif (!authorizedDomains.includes(hostname)) {\n  document.body.innerHTML = 'UNAUTHORIZED COPY';\n}\n\n// واترمارک: LSB steganography\n// شناسه: EHSANMORAD-V19-2026")
 
 # CH13
 doc.add_heading("فصل ۱۳: دستورات Docker", level=1)

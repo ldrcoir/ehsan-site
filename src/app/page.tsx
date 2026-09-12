@@ -127,34 +127,43 @@ export default function Home() {
   // Anti-theft: disable right-click + detect devtools + domain lock
   useEffect(() => {
     // === DOMAIN LOCK ===
-    // If someone copies this site to another domain, show a warning
+    // اگه دامنه‌ی جدید خواستی اضافه کنی، این لیست رو ویرایش کن
     const authorizedDomains = [
-      "preview-chat-f7fdfef6-aa0f-4780-ac8e-5fa3dafbfbf0.space-z.ai",
       "localhost",
       "127.0.0.1",
+      "31.70.76.10",          // VPS IP
+      "ehsanmorad.ir",        // دامنه ۱
+      "www.ehsanmorad.ir",
+      "ehsan-morad.ir",       // دامنه ۲
+      "www.ehsan-morad.ir",
+      "ehsanmorad.id.ir",     // دامنه ۳
+      "www.ehsanmorad.id.ir",
     ];
     const currentHost = window.location.hostname;
     const isAuthorized = authorizedDomains.some(d =>
       currentHost === d || currentHost.endsWith("." + d)
     );
     if (!isAuthorized) {
-      // Site is running on an unauthorized domain — show protection notice
+      // دامنه‌ی فعلی مجاز نیست — پیام راه‌اندازی نشون بده
       document.body.innerHTML = `
-        <div style="position:fixed;inset:0;background:#000;color:#ff0040;
+        <div style="position:fixed;inset:0;background:#000;color:#00ff41;
           display:flex;align-items:center;justify-content:center;
           font-family:monospace;text-align:center;padding:40px;z-index:99999;">
           <div>
-            <h1 style="font-size:2rem;margin-bottom:20px;">⚠ UNAUTHORIZED COPY</h1>
-            <p style="color:#ccc;font-size:0.9rem;">This website is protected.</p>
+            <h1 style="font-size:1.8rem;margin-bottom:20px;color:#ffb000;">⚠ Domain Setup Required</h1>
+            <p style="color:#ccc;font-size:0.9rem;margin-bottom:16px;">
+              This domain is not yet authorized.
+            </p>
             <p style="color:#888;font-size:0.8rem;margin-top:20px;">
-              Deployment ID: PS-RF-V11-2026-0820<br/>
-              This site is domain-locked and cannot be copied.<br/>
-              If you are the owner, add your domain to the authorized list.
+              To fix this, add your domain to the authorized list:<br/><br/>
+              <code style="color:#00ff41;">src/app/page.tsx</code> → <code style="color:#39ff14;">authorizedDomains</code><br/>
+              <code style="color:#00ff41;">src/lib/canvas-protect.ts</code> → <code style="color:#39ff14;">AUTHORIZED_DOMAINS</code><br/><br/>
+              Then rebuild: <code style="color:#39ff14;">docker-compose up -d --build</code>
             </p>
           </div>
         </div>
       `;
-      return; // Don't set up other protections — the page is already blocked
+      return;
     }
 
     const onContextMenu = (e: MouseEvent) => {
@@ -568,7 +577,7 @@ export default function Home() {
       <MatrixRain />
       {/* Anti-clone watermark (invisible, identifies your deployment) */}
       <div className="anti-clone-watermark" aria-hidden="true">
-        portfolio-deployment-preview-rf-terminal-v4
+        personal-site-deployment
       </div>
 
       {/* Anti-theft warning (shown when devtools detected) */}

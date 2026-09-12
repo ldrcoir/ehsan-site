@@ -10,17 +10,21 @@
  */
 
 // === CONFIGURATION ===
-// Add your domain here. The components will only work on this domain.
-// On other domains, the canvas shows a "PROTECTED" watermark instead of the waveform.
+// دامنه‌های مجاز. اگه دامنه‌ی جدید خواستی اضافه کنی، این لیست رو ویرایش کن.
 const AUTHORIZED_DOMAINS = [
-  "preview-chat-f7fdfef6-aa0f-4780-ac8e-5fa3dafbfbf0.space-z.ai",
   "localhost",
   "127.0.0.1",
-  "21.0.8.193", // dev server IP
+  "31.70.76.10",          // VPS IP
+  "ehsanmorad.ir",        // دامنه ۱
+  "www.ehsanmorad.ir",
+  "ehsan-morad.ir",       // دامنه ۲
+  "www.ehsan-morad.ir",
+  "ehsanmorad.id.ir",     // دامنه ۳
+  "www.ehsanmorad.id.ir",
 ];
 
-// Unique deployment fingerprint — change this to your own
-const DEPLOYMENT_ID = "PS-RF-V11-2026-0820";
+// شناسه‌ی یکتای استقرار — می‌تونی به هر چی تغییر بدی
+const DEPLOYMENT_ID = "EHSANMORAD-V19-2026";
 
 /**
  * Check if running on an authorized domain.
@@ -45,12 +49,12 @@ export function watermarkCanvas(ctx: CanvasRenderingContext2D, w: number, h: num
     // Not authorized — show protection notice on canvas
     ctx.fillStyle = "rgba(255, 0, 0, 0.8)";
     ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = "#fff";
+    ctx.fillStyle = "#00ff41";
     ctx.font = "bold 14px monospace";
     ctx.textAlign = "center";
-    ctx.fillText("⚠ PROTECTED CONTENT", w / 2, h / 2 - 10);
-    ctx.fillText("This component is domain-locked", w / 2, h / 2 + 10);
-    ctx.fillText("Contact the site owner", w / 2, h / 2 + 30);
+    ctx.fillText("⚠ Setup Required", w / 2, h / 2 - 10);
+    ctx.fillText("Add your domain to AUTHORIZED_DOMAINS", w / 2, h / 2 + 10);
+    ctx.fillText("in src/lib/canvas-protect.ts", w / 2, h / 2 + 30);
     ctx.textAlign = "left";
     return;
   }

@@ -20,7 +20,7 @@ const vazirmatn = Vazirmatn({
 });
 
 export const metadata: Metadata = {
-  title: "Your Name — Personal Site",
+  title: "Personal Site",
   description: "Personal portfolio website.",
   keywords: ["portfolio", "developer", "personal site"],
   authors: [{ name: "Your Name" }],

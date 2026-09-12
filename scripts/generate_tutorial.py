@@ -157,7 +157,7 @@ doc.add_heading("1. Introduction & Architecture", level=1)
 
 doc.add_paragraph(
     "This tutorial explains how to customize every aspect of your personal portfolio website. "
-    "The site is built with Next.js 16, TypeScript, Prisma (SQLite), and the z-ai-web-dev-sdk for AI chat. "
+    "The site is built with Next.js 16, TypeScript, Prisma (SQLite), and the your-ai-provider for AI chat. "
     "It features a unique RF/electronic engineering theme with multiple visual modes, "
     "an interactive terminal, a signal generator + oscilloscope lab, and a full admin panel."
 )
@@ -458,7 +458,7 @@ doc.add_heading("13. AI Chat Concierge", level=1)
 
 doc.add_paragraph(
     "The chat section has an AI bot with callsign 'QRV-7' that talks to visitors. "
-    "It uses the z-ai-web-dev-sdk LLM with a custom system prompt."
+    "It uses the your-ai-provider LLM with a custom system prompt."
 )
 
 doc.add_heading("Bot personality:", level=3)

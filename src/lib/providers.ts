@@ -2,11 +2,11 @@ import { db } from "@/lib/db";
 
 /**
  * AI Provider management.
- * Supports multiple providers (OpenAI, Anthropic, Z.ai, Ollama, etc.)
+ * Supports multiple providers (OpenAI, Anthropic, Groq, OpenRouter, Ollama)
  * with fallback chain.
  */
 
-export type ProviderType = "zai" | "openai" | "anthropic" | "ollama" | "groq" | "openrouter" | "custom";
+export type ProviderType = "openai" | "anthropic" | "ollama" | "groq" | "openrouter" | "custom";
 
 interface ProviderConfig {
   id: string;
@@ -47,19 +47,11 @@ export async function callLLMWithFallback(
   const providers = await getEnabledProviders();
 
   if (providers.length === 0) {
-    // Fallback to default z-ai-web-dev-sdk
-    try {
-      const ZAI = (await import("z-ai-web-dev-sdk")).default;
-      const zai = await ZAI.create();
-      const completion = await zai.chat.completions.create({
-        messages: messages as any,
-        thinking: { type: "disabled" },
-      });
-      const text = completion.choices[0]?.message?.content || "";
-      return { text, providerId: "default-zai" };
-    } catch (err) {
-      throw new Error(`No providers configured and default ZAI failed: ${err}`);
-    }
+    // No providers configured — return a friendly message
+    return {
+      text: "Hi! I'm a demo AI assistant. To enable real AI responses, the site admin needs to configure an AI provider (OpenAI, Anthropic, Groq, OpenRouter, or Ollama) from the admin panel → Settings → AI Providers.",
+      providerId: "demo",
+    };
   }
 
   let lastError: Error | null = null;
@@ -85,8 +77,6 @@ async function callProvider(
   messages: { role: string; content: string }[]
 ): Promise<string> {
   switch (provider.type) {
-    case "zai":
-      return callZai(provider, messages);
     case "openai":
       return callOpenAI(provider, messages);
     case "anthropic":
@@ -100,17 +90,6 @@ async function callProvider(
     default:
       throw new Error(`Unknown provider type: ${provider.type}`);
   }
-}
-
-/** Z.ai via z-ai-web-dev-sdk */
-async function callZai(_provider: ProviderConfig, messages: any[]): Promise<string> {
-  const ZAI = (await import("z-ai-web-dev-sdk")).default;
-  const zai = await ZAI.create();
-  const completion = await zai.chat.completions.create({
-    messages,
-    thinking: { type: "disabled" },
-  });
-  return completion.choices[0]?.message?.content || "";
 }
 
 /** OpenAI-compatible API (also works for Azure, Together, etc.) */
@@ -223,15 +202,6 @@ export async function seedDefaultProviders() {
   if (count > 0) return;
 
   const defaults = [
-    {
-      name: "zai",
-      label: "Z.ai (built-in)",
-      model: "glm-4.6",
-      apiKey: null,
-      baseUrl: null,
-      enabled: true,
-      priority: 0,
-    },
     {
       name: "openai",
       label: "OpenAI",
