@@ -87,7 +87,7 @@ open http://localhost:3000
 - Next.js 16 + TypeScript + Prisma + SQLite
 - Matrix terminal theme (green on black)
 - Signal Lab with oscilloscope + signal generator (AM/FM)
-- AI chat with multiple providers (Z.ai, OpenAI, Anthropic, Groq, OpenRouter, Ollama)
+- AI chat with multiple providers (OpenAI, Anthropic, Groq, OpenRouter, Ollama)
 - Admin panel with 9 tabs
 - User management with time-based access (V19)
 - 7 themes + theme builder

@@ -127,7 +127,7 @@ bullet("۸ تب: messages / chats / content / texts / menu / themes / stats / se
 rtl("۳۶ متن قابل ویرایش، ۷ آیتم منو، تم‌ساز رنگی، داشبورد آمار")
 
 doc.add_heading("فصل ۴: TypeScript با مثال", level=1)
-code("let name: string = 'Salar';\nlet age: number = 30;\nlet active: boolean = true;\nlet items: string[] = ['a', 'b'];\n\nfunction greet(name: string): string {\n  return 'سلام ' + name;\n}")
+code("let name: string = 'YourName';\nlet age: number = 30;\nlet active: boolean = true;\nlet items: string[] = ['a', 'b'];\n\nfunction greet(name: string): string {\n  return 'سلام ' + name;\n}")
 rtl("interface برای تعریف ساختار:")
 code("interface Book {\n  id: string;\n  title: string;\n  visible: boolean;\n}")
 
@@ -166,7 +166,7 @@ code("const authorizedDomains = [\n  'localhost',\n  '127.0.0.1',\n  'your-domai
 
 doc.add_heading("۱۲-۲. واترمارک نامرئی روی Canvas", level=2)
 rtl("هر بار رندر، شناسه deployment توی پیکسل‌ها مخفی می‌شه (LSB steganography):")
-code("// تغییر بیت‌های کم‌ارزش پیکسل\n// شناسه: PS-RF-V11-2026-0820\ndata[i*4] = (data[i*4] & 0xFE) | (encoded[i] & 1);\n// با چشم دیده نمی‌شه\n// با تحلیل پیکسل‌ها قابل تشخیصه")
+code("// تغییر بیت‌های کم‌ارزش پیکسل\n// شناسه: EHSANMORAD-V19-2026\ndata[i*4] = (data[i*4] & 0xFE) | (encoded[i] & 1);\n// با چشم دیده نمی‌شه\n// با تحلیل پیکسل‌ها قابل تشخیصه")
 
 doc.add_heading("۱۲-۳. غیرفعال‌سازی راست‌کلیک و DevTools", level=2)
 code("// راست‌کلیک غیرفعال\ndocument.addEventListener('contextmenu', e => e.preventDefault());\n\n// F12، Ctrl+Shift+I مسدود\ndocument.addEventListener('keydown', e => {\n  if (e.key === 'F12') e.preventDefault();\n  if (e.ctrlKey && e.shiftKey && e.key === 'I') e.preventDefault();\n});\n\n// تشخیص DevTools\nif (window.outerWidth - window.innerWidth > 160) {\n  showWarning(); // DevTools بازه\n}")

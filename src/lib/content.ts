@@ -15,22 +15,22 @@ export const LANGS: Lang[] = ["en", "de", "fa"];
 export const PERSONAL = {
   // Display name / handle shown in the navbar, hero, footer
   // CHANGE THESE to your own name and handle
-  handle: "salar",
+  handle: "your-handle",
   fullName: {
-    en: "Salar",
-    de: "Salar",
-    fa: "سalar",
+    en: "Your Name",
+    de: "Your Name",
+    fa: "نام شما",
   },
   // Admin credentials — CHANGE THESE
   adminUsername: "admin",
   adminPassword: "admin123",
   // Short tagline shown under the hero name
   tagline: {
-    en: "RF/Microwave Researcher · AI/ML Programmer · Writer & Translator",
-    de: "RF/Mikrowellen-Forscher · AI/ML-Programmierer · Autor & Übersetzer",
-    fa: "پژوهشگر RF/مایکروویو · برنامه‌نویس AI/ML · نویسنده و مترجم",
+    en: "Your Tagline Here",
+    de: "Your Tagline Here",
+    fa: "شعار شما اینجا",
   },
-  // Email (نمایش داده می‌شه توی ترمینال و بخش تماس)
+  // Email (shown in terminal and contact section) — CHANGE THIS
   email: "your-email@example.com",
 };
 
