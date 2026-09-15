@@ -1,7 +1,8 @@
 # ============================================================================
-# Dockerfile — Personal Site (اصلاح شده برای ایران — با mirror)
+# Dockerfile — Personal Site (فقط با bun + mirrorهای ایرانی/چینی)
 # ============================================================================
-# نکته: از registry mirror استفاده می‌کنیم چون registry.npmjs.org تحریمه
+# مشکل: registry.npmjs.org روی ایران تحریمه
+# حل: چند mirror امتحان می‌کنیم تا یکی کار کنه
 # ============================================================================
 
 FROM node:22-slim
@@ -25,14 +26,29 @@ COPY package.json bun.lock* ./
 # کپی prisma schema
 COPY prisma ./prisma/
 
-# تنظیم mirror برای ایران (registry.npmjs.org تحریمه)
-ENV npm_config_registry=https://registry.npmmirror.com
-ENV BUN_CONFIG_REGISTRY=https://registry.npmmirror.com
+# ============================================================================
+# نصب وابستگی‌ها با bun — چند mirror امتحان می‌کنیم
+# ============================================================================
+# ترتیب mirrorها:
+#   ۱. registry.npmmirror.com (mirror چین — معمولاً کار می‌کنه)
+#   ۲. registry.npm.taobao.org (mirror قدیمی چین)
+#   ۳. registry.yarnpkg.com (mirror یونایت)
+#   ۴. registry.npmjs.org (رسمی — آخرین تلاش)
+# ============================================================================
 
-# نصب وابستگی‌ها با mirror
-RUN bun install --registry https://registry.npmmirror.com 2>&1 || \
-    (echo "bun install failed, trying npm..." && \
-     npm install --registry https://registry.npmmirror.com)
+RUN echo "تلاش ۱: registry.npmmirror.com" && \
+    BUN_CONFIG_REGISTRY=https://registry.npmmirror.com \
+    bun install --no-audit --no-fund 2>&1 || \
+    (echo "تلاش ۲: registry.npm.taobao.org" && \
+     BUN_CONFIG_REGISTRY=https://registry.npm.taobao.org \
+     bun install --no-audit --no-fund 2>&1) || \
+    (echo "تلاش ۳: registry.yarnpkg.com" && \
+     BUN_CONFIG_REGISTRY=https://registry.yarnpkg.com \
+     bun install --no-audit --no-fund 2>&1) || \
+    (echo "تلاش ۴: registry.npmjs.org با timeout طولانی" && \
+     BUN_CONFIG_REGISTRY=https://registry.npmjs.org \
+     bun install --no-audit --no-fund --timeout 300000 2>&1) || \
+    (echo "❌ همه mirrorها شکست خوردن" && exit 1)
 
 # تولید Prisma Client
 RUN bunx prisma generate 2>&1 || npx prisma generate
@@ -48,8 +64,5 @@ COPY docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 
 EXPOSE 3000
-
-# حذف HEALTHCHECK چون curl ممکنه نصب نباشه در بعضی environment ها
-# می‌تونی با docker-compose logs -f وضعیت رو چک کنی
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
