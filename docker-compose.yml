@@ -1,15 +1,18 @@
 # ============================================================================
-# docker-compose.yml — Personal Site (اصلاح شده)
+# docker-compose.yml — Personal Site + Caddy (با دامنه، نه پورت)
 # ============================================================================
-# نکته: این فایل باید توی همون پوشه‌ای باشه که Dockerfile هست
+# سایت روی پورت ۳۰۰۰ داخل container اجرا می‌شه
+# Caddy روی پورت ۸۰/۴۴۳ دامنه‌ها رو به سایت وصل می‌کنه
+# کاربر فقط https://ehsanmorad.ir رو می‌بینه — بدون پورت
 # ============================================================================
 
 services:
   personal-site:
     build: .
     container_name: personal-site
+    # پورت ۳۰۰۰ فقط روی localhost (نه بیرون)
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
       - ./db:/app/db
     environment:
@@ -18,9 +21,21 @@ services:
       - PORT=3000
       - HOSTNAME=0.0.0.0
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3000/ || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - personal-site
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
