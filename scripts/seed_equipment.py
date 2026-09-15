@@ -2,7 +2,7 @@
 import sqlite3
 from pathlib import Path
 
-DB = Path("/home/z/my-project/db/custom.db")
+DB = Path(__file__).parent.parent / "db" / "custom.db"
 conn = sqlite3.connect(DB)
 cur = conn.cursor()
 
