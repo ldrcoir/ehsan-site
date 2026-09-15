@@ -14,7 +14,7 @@ import sqlite3
 import os
 import sys
 
-DB_PATH = os.environ.get("DB_PATH", "/home/z/my-project/db/custom.db")
+DB_PATH = str(Path(__file__).parent.parent / "db" / "custom.db")
 
 def hash_password_bcrypt(password: str) -> str:
     """هش کردن رمز با bcrypt — استفاده از CLI چون Python bcrypt نصب نیست"""
