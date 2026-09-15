@@ -1,8 +1,5 @@
 # ============================================================================
-# Dockerfile — Personal Site (فقط با bun + mirrorهای ایرانی/چینی)
-# ============================================================================
-# مشکل: registry.npmjs.org روی ایران تحریمه
-# حل: چند mirror امتحان می‌کنیم تا یکی کار کنه
+# Dockerfile — Personal Site (فقط npm، بدون bun — پایدار برای ایران)
 # ============================================================================
 
 FROM node:22-slim
@@ -15,9 +12,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# نصب Bun
-RUN npm install -g bun
-
 WORKDIR /app
 
 # کپی package.json و bun.lock
@@ -27,31 +21,25 @@ COPY package.json bun.lock* ./
 COPY prisma ./prisma/
 
 # ============================================================================
-# نصب وابستگی‌ها با bun — چند mirror امتحان می‌کنیم
+# نصب وابستگی‌ها با npm — چند mirror امتحان می‌کنیم
 # ============================================================================
-# ترتیب mirrorها:
-#   ۱. registry.npmmirror.com (mirror چین — معمولاً کار می‌کنه)
-#   ۲. registry.npm.taobao.org (mirror قدیمی چین)
-#   ۳. registry.yarnpkg.com (mirror یونایت)
-#   ۴. registry.npmjs.org (رسمی — آخرین تلاش)
+# npm به‌طور پیش‌فرض با Node.js نصبه — همیشه کار می‌کنه
+# برای ایران از mirror چین استفاده می‌کنیم
 # ============================================================================
 
-RUN echo "تلاش ۱: registry.npmmirror.com" && \
-    BUN_CONFIG_REGISTRY=https://registry.npmmirror.com \
-    bun install --no-audit --no-fund 2>&1 || \
-    (echo "تلاش ۲: registry.npm.taobao.org" && \
-     BUN_CONFIG_REGISTRY=https://registry.npm.taobao.org \
-     bun install --no-audit --no-fund 2>&1) || \
-    (echo "تلاش ۳: registry.yarnpkg.com" && \
-     BUN_CONFIG_REGISTRY=https://registry.yarnpkg.com \
-     bun install --no-audit --no-fund 2>&1) || \
-    (echo "تلاش ۴: registry.npmjs.org با timeout طولانی" && \
-     BUN_CONFIG_REGISTRY=https://registry.npmjs.org \
-     bun install --no-audit --no-fund --timeout 300000 2>&1) || \
+# تلاش ۱: mirror چین (معمولاً کار می‌کنه)
+RUN npm config set registry https://registry.npmmirror.com && \
+    npm install --no-audit --no-fund --timeout=300000 2>&1 || \
+    (echo "تلاش ۲: mirror taobao" && \
+     npm config set registry https://registry.npm.taobao.org && \
+     npm install --no-audit --no-fund --timeout=300000 2>&1) || \
+    (echo "تلاش ۳: mirror رسمی با timeout طولانی" && \
+     npm config set registry https://registry.npmjs.org && \
+     npm install --no-audit --no-fund --timeout=600000 2>&1) || \
     (echo "❌ همه mirrorها شکست خوردن" && exit 1)
 
 # تولید Prisma Client
-RUN bunx prisma generate 2>&1 || npx prisma generate
+RUN npx prisma generate 2>&1
 
 # کپی کل کد
 COPY . .
