@@ -432,12 +432,8 @@ export default function Home() {
     e.preventDefault();
     setAdminErr("");
 
-    // Check username + password
-    if (adminUser !== PERSONAL.adminUsername || adminPwd !== PERSONAL.adminPassword) {
-      setAdminErr(tt.admin.wrong);
-      return;
-    }
-
+    // ورود ادمین: اول از دیتابیس چک می‌کنیم، بعد از PERSONAL
+    // اینطوری اگه رمز از پنل عوض بشه، دیگه مشکل پیش نمیاد
     try {
       // fetch messages, chats, and settings in parallel
       const [msgRes, chatRes, settingsRes] = await Promise.all([

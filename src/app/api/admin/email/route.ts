@@ -1,3 +1,4 @@
+import { checkAdminPassword } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { PERSONAL } from "@/lib/content";
@@ -20,7 +21,7 @@ export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
     const password = url.searchParams.get("password") || "";
-    if (password !== PERSONAL.adminPassword) {
+    const authCheck = await checkAdminPassword(password); if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
     const setting = await db.siteSetting.findUnique({ where: { key: "forwardEmail" } });
@@ -36,7 +37,7 @@ export async function POST(req: Request) {
     if (!body) return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
 
     const password = String(body.password || "");
-    if (password !== PERSONAL.adminPassword) {
+    const authCheck = await checkAdminPassword(password); if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 

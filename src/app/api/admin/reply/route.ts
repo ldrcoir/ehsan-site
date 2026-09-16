@@ -1,3 +1,4 @@
+import { checkAdminPassword } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { PERSONAL } from "@/lib/content";
@@ -17,7 +18,7 @@ export async function POST(req: Request) {
     }
 
     const password = String(body.password || "");
-    if (password !== PERSONAL.adminPassword) {
+    const authCheck = await checkAdminPassword(password); if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 

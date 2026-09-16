@@ -1,3 +1,4 @@
+import { checkAdminPassword } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { PERSONAL, UI, type Lang } from "@/lib/content";
@@ -220,7 +221,7 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const password = url.searchParams.get("password") || "";
 
-    if (password !== PERSONAL.adminPassword) {
+    const authCheck = await checkAdminPassword(password); if (!authCheck.ok) {
       return NextResponse.json(
         { ok: false, error: "unauthorized" },
         { status: 401 }
