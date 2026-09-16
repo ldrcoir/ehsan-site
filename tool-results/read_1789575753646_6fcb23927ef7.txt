@@ -1,0 +1,1569 @@
+     1→     1→"use client";
+     2→     2→
+     3→     3→import { useEffect, useState, type FormEvent } from "react";
+     4→     4→import "./personal.css";
+     5→     5→import MatrixRain from "@/components/MatrixRain";
+     6→     6→import InteractiveTerminal from "@/components/InteractiveTerminal";
+     7→     7→import Oscilloscope from "@/components/Oscilloscope";
+     8→     8→import SignalLab from "@/components/SignalLab";
+     9→     9→import SignalBars from "@/components/SignalBars";
+    10→    10→import ChatSection from "@/components/ChatSection";
+    11→    11→import ContentManager from "@/components/ContentManager";
+    12→    12→import LabEquipmentRack from "@/components/LabEquipmentRack";
+    13→    13→import ArchiveGrid from "@/components/ArchiveGrid";
+    14→    14→import ThemeBuilder from "@/components/ThemeBuilder";
+    15→    15→import TextEditor from "@/components/TextEditor";
+    16→    16→import NavMenuManager from "@/components/NavMenuManager";
+    17→    17→import AccessUserManager from "@/components/AccessUserManager";
+    18→    18→import {
+    19→    19→  UI, PERSONAL, SOCIALS, TUTORIALS,
+    20→    20→  type Lang, DEFAULT_LANG, LANGS,
+    21→    21→} from "@/lib/content";
+    22→    22→import { useContent, getText as getDbText } from "@/lib/useContent";
+    23→    23→
+    24→    24→type FormStatus = { text: string; kind: "success" | "error" | "" };
+    25→    25→
+    26→    26→const langLabel: Record<Lang, string> = { en: "EN", de: "DE", fa: "FA" };
+    27→    27→type MessageRow = {
+    28→    28→  id: string; name: string; email: string; message: string;
+    29→    29→  ip: string | null; createdAt: string;
+    30→    30→};
+    31→    31→type ChatSessionRow = {
+    32→    32→  id: string; visitorId: string; ip: string | null; createdAt: string; updatedAt: string;
+    33→    33→  messages: { id: string; role: string; content: string; createdAt: string }[];
+    34→    34→};
+    35→    35→
+    36→    36→// Tutorial types
+    37→    37→type TutorialItem = {
+    38→    38→  id: string;
+    39→    39→  titleEn?: string;
+    40→    40→  titleFa?: string;
+    41→    41→  titleDe?: string;
+    42→    42→  duration?: string;
+    43→    43→  levelEn?: string;
+    44→    44→  levelFa?: string;
+    45→    45→  levelDe?: string;
+    46→    46→  descEn?: string;
+    47→    47→  descFa?: string;
+    48→    48→  descDe?: string;
+    49→    49→  embedUrl: string;
+    50→    50→  platform?: string;
+    51→    51→};
+    52→    52→
+    53→    53→export default function Home() {
+    54→    54→  const [lang, setLang] = useState<Lang>(DEFAULT_LANG);
+    55→    55→  const { content: siteContent, loading: contentLoading } = useContent(lang);
+    56→    56→  const [scrolled, setScrolled] = useState(false);
+    57→    57→  const [menuOpen, setMenuOpen] = useState(false);
+    58→    58→  const [toTop, setToTop] = useState(false);
+    59→    59→  const [year, setYear] = useState<number | null>(null);
+    60→    60→  const [revealed, setRevealed] = useState<Set<string>>(new Set());
+    61→    61→  const [submitting, setSubmitting] = useState(false);
+    62→    62→  const [formStatus, setFormStatus] = useState<FormStatus>({ text: "", kind: "" });
+    63→    63→  const [utcTime, setUtcTime] = useState("");
+    64→    64→  const [localTime, setLocalTime] = useState(""); // for Shamsi/FA
+    65→    65→  const [activeTutorial, setActiveTutorial] = useState<typeof TUTORIALS[number] | null>(null);
+    66→    66→  const [adminOpen, setAdminOpen] = useState(false);
+    67→    67→  const [adminPwd, setAdminPwd] = useState("");
+    68→    68→  const [adminUser, setAdminUser] = useState("");
+    69→    69→  const [captcha, setCaptcha] = useState({ q: "1 + 1", a: 2 });
+    70→    70→  const [adminMsgs, setAdminMsgs] = useState<MessageRow[] | null>(null);
+    71→    71→  const [adminChats, setAdminChats] = useState<ChatSessionRow[] | null>(null);
+    72→    72→  const [adminStats, setAdminStats] = useState<{ contactMessages: number; chatMessages: number; chatSessions: number } | null>(null);
+    73→    73→  const [adminErr, setAdminErr] = useState("");
+    74→    74→  const [adminTab, setAdminTab] = useState<"messages" | "chats" | "content" | "text" | "nav" | "themes" | "settings" | "users">("messages");
+    75→    75→  const [adminSettings, setAdminSettings] = useState<Record<string, string> | null>(null);
+    76→    76→  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+    77→    77→  const [replyText, setReplyText] = useState("");
+    78→    78→  const [replyStatus, setReplyStatus] = useState<{ id: string; text: string; ok: boolean } | null>(null);
+    79→    79→  const [chatReplyingTo, setChatReplyingTo] = useState<string | null>(null);
+    80→    80→  const [chatReplyText, setChatReplyText] = useState("");
+    81→    81→  const [chatReplyStatus, setChatReplyStatus] = useState<{ id: string; text: string; ok: boolean } | null>(null);
+    82→    82→
+    83→    83→  // theme + anti-theft
+    84→    84→  const [theme, setTheme] = useState<"terminal" | "clean" | "midnight" | "amber" | "cyan" | "purple" | "solar">("terminal");
+    85→    85→  const [antiTheftWarning, setAntiTheftWarning] = useState(false);
+    86→    86→  const [adminSearch, setAdminSearch] = useState("");
+    87→    87→  // reCAPTCHA only renders after client mount — the grecaptcha script injects
+    88→    88→  // an iframe + div into the .g-recaptcha container at runtime, which would
+    89→    89→  // cause a hydration mismatch (server HTML has no iframe, client does).
+    90→    90→  // By gating render on `mounted`, the server and the first client render
+    91→    91→  // both produce an empty container, then the script loads and fills it.
+    92→    92→  const [mounted, setMounted] = useState(false);
+    93→    93→  useEffect(() => {
+    94→    94→    setMounted(true);
+    95→    95→    // Load reCAPTCHA script only on client, after mount
+    96→    96→    if (!document.getElementById("recaptcha-api-script")) {
+    97→    97→      const s = document.createElement("script");
+    98→    98→      s.id = "recaptcha-api-script";
+    99→    99→      s.src = "https://www.google.com/recaptcha/api.js";
+   100→   100→      s.async = true;
+   101→   101→      s.defer = true;
+   102→   102→      document.head.appendChild(s);
+   103→   103→    }
+   104→   104→  }, []);
+   105→   105→
+   106→   106→  const tt = UI[lang];
+   107→   107→  // Helper: get text from DB first, fallback to content.ts
+   108→   108→  const tx = (key: string, fallback: string) => getDbText(siteContent.texts, key, fallback);
+   109→   109→
+   110→   110→  // sync html lang/dir
+   111→   111→  useEffect(() => {
+   112→   112→    document.documentElement.lang = lang;
+   113→   113→    document.documentElement.dir = tt.dir;
+   114→   114→  }, [lang, tt.dir]);
+   115→   115→
+   116→   116→  // Load theme from localStorage + apply to <html>
+   117→   117→  useEffect(() => {
+   118→   118→    const saved = localStorage.getItem("portfolio_theme") as "terminal" | "clean" | "midnight" | "amber" | "cyan" | "purple" | "solar" | null;
+   119→   119→    if (saved) setTheme(saved);
+   120→   120→  }, []);
+   121→   121→
+   122→   122→  useEffect(() => {
+   123→   123→    document.documentElement.setAttribute("data-theme", theme);
+   124→   124→    localStorage.setItem("portfolio_theme", theme);
+   125→   125→  }, [theme]);
+   126→   126→
+   127→   127→  // Anti-theft: disable right-click + detect devtools + domain lock
+   128→   128→  useEffect(() => {
+   129→   129→    // === DOMAIN LOCK ===
+   130→   130→    // اگه دامنه‌ی جدید خواستی اضافه کنی، این لیست رو ویرایش کن
+   131→   131→    const authorizedDomains = [
+   132→   132→      "localhost",
+   133→   133→      "127.0.0.1",
+   134→   134→      "31.70.76.10",          // VPS IP
+   135→   135→      "ehsanmorad.ir",        // دامنه ۱
+   136→   136→      "www.ehsanmorad.ir",
+   137→   137→      "ehsan-morad.ir",       // دامنه ۲
+   138→   138→      "www.ehsan-morad.ir",
+   139→   139→      "ehsanmorad.id.ir",     // دامنه ۳
+   140→   140→      "www.ehsanmorad.id.ir",
+   141→   141→    ];
+   142→   142→    const currentHost = window.location.hostname;
+   143→   143→    const isAuthorized = authorizedDomains.some(d =>
+   144→   144→      currentHost === d || currentHost.endsWith("." + d)
+   145→   145→    );
+   146→   146→    if (!isAuthorized) {
+   147→   147→      // دامنه‌ی فعلی مجاز نیست — پیام راه‌اندازی نشون بده
+   148→   148→      document.body.innerHTML = `
+   149→   149→        <div style="position:fixed;inset:0;background:#000;color:#00ff41;
+   150→   150→          display:flex;align-items:center;justify-content:center;
+   151→   151→          font-family:monospace;text-align:center;padding:40px;z-index:99999;">
+   152→   152→          <div>
+   153→   153→            <h1 style="font-size:1.8rem;margin-bottom:20px;color:#ffb000;">⚠ Domain Setup Required</h1>
+   154→   154→            <p style="color:#ccc;font-size:0.9rem;margin-bottom:16px;">
+   155→   155→              This domain is not yet authorized.
+   156→   156→            </p>
+   157→   157→            <p style="color:#888;font-size:0.8rem;margin-top:20px;">
+   158→   158→              To fix this, add your domain to the authorized list:<br/><br/>
+   159→   159→              <code style="color:#00ff41;">src/app/page.tsx</code> → <code style="color:#39ff14;">authorizedDomains</code><br/>
+   160→   160→              <code style="color:#00ff41;">src/lib/canvas-protect.ts</code> → <code style="color:#39ff14;">AUTHORIZED_DOMAINS</code><br/><br/>
+   161→   161→              Then rebuild: <code style="color:#39ff14;">docker-compose up -d --build</code>
+   162→   162→            </p>
+   163→   163→          </div>
+   164→   164→        </div>
+   165→   165→      `;
+   166→   166→      return;
+   167→   167→    }
+   168→   168→
+   169→   169→    const onContextMenu = (e: MouseEvent) => {
+   170→   170→      e.preventDefault();
+   171→   171→    };
+   172→   172→    const onKeydown = (e: KeyboardEvent) => {
+   173→   173→      // Disable F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U, Ctrl+S
+   174→   174→      if (
+   175→   175→        e.key === "F12" ||
+   176→   176→        (e.ctrlKey && e.shiftKey && (e.key === "I" || e.key === "i" || e.key === "J" || e.key === "j")) ||
+   177→   177→        (e.ctrlKey && (e.key === "u" || e.key === "U" || e.key === "s" || e.key === "S"))
+   178→   178→      ) {
+   179→   179→        e.preventDefault();
+   180→   180→        return false;
+   181→   181→      }
+   182→   182→    };
+   183→   183→    // DevTools detection (simple threshold-based)
+   184→   184→    const threshold = 160;
+   185→   185→    const checkDevtools = () => {
+   186→   186→      const widthDiff = window.outerWidth - window.innerWidth > threshold;
+   187→   187→      const heightDiff = window.outerHeight - window.innerHeight > threshold;
+   188→   188→      if (widthDiff || heightDiff) {
+   189→   189→        setAntiTheftWarning(true);
+   190→   190→      } else {
+   191→   191→        setAntiTheftWarning(false);
+   192→   192→      }
+   193→   193→    };
+   194→   194→    const devtoolsInterval = setInterval(checkDevtools, 1000);
+   195→   195→
+   196→   196→    document.addEventListener("contextmenu", onContextMenu);
+   197→   197→    document.addEventListener("keydown", onKeydown);
+   198→   198→
+   199→   199→    return () => {
+   200→   200→      document.removeEventListener("contextmenu", onContextMenu);
+   201→   201→      document.removeEventListener("keydown", onKeydown);
+   202→   202→      clearInterval(devtoolsInterval);
+   203→   203→    };
+   204→   204→  }, []);
+   205→   205→
+   206→   206→  // hash change → open admin
+   207→   207→  useEffect(() => {
+   208→   208→    const onHash = () => {
+   209→   209→      if (window.location.hash === "#admin") {
+   210→   210→        setAdminOpen(true);
+   211→   211→      } else {
+   212→   212→        setAdminOpen(false);
+   213→   213→      }
+   214→   214→    };
+   215→   215→    onHash();
+   216→   216→    window.addEventListener("hashchange", onHash);
+   217→   217→    return () => window.removeEventListener("hashchange", onHash);
+   218→   218→  }, []);
+   219→   219→
+   220→   220→  // keyboard shortcut: Ctrl+Shift+A → admin
+   221→   221→  useEffect(() => {
+   222→   222→    const onKey = (e: KeyboardEvent) => {
+   223→   223→      if (e.ctrlKey && e.shiftKey && (e.key === "A" || e.key === "a")) {
+   224→   224→        e.preventDefault();
+   225→   225→        setAdminOpen(true);
+   226→   226→        if (window.location.hash !== "#admin") {
+   227→   227→          window.location.hash = "admin";
+   228→   228→        }
+   229→   229→      }
+   230→   230→    };
+   231→   231→    window.addEventListener("keydown", onKey);
+   232→   232→    return () => window.removeEventListener("keydown", onKey);
+   233→   233→  }, []);
+   234→   234→
+   235→   235→  // scroll listener
+   236→   236→  useEffect(() => {
+   237→   237→    const onScroll = () => {
+   238→   238→      setScrolled(window.scrollY > 20);
+   239→   239→      setToTop(window.scrollY > 600);
+   240→   240→    };
+   241→   241→    window.addEventListener("scroll", onScroll, { passive: true });
+   242→   242→    onScroll();
+   243→   243→    setYear(new Date().getFullYear());
+   244→   244→    return () => window.removeEventListener("scroll", onScroll);
+   245→   245→  }, []);
+   246→   246→
+   247→   247→  // live clock — UTC + local (Shamsi for FA)
+   248→   248→  // Only runs on client to avoid hydration mismatch
+   249→   249→  useEffect(() => {
+   250→   250→    const tick = () => {
+   251→   251→      const d = new Date();
+   252→   252→      // UTC time in ISO format
+   253→   253→      const iso = d.toISOString().replace("T", " ").slice(0, 19);
+   254→   254→      setUtcTime(iso + " UTC");
+   255→   255→
+   256→   256→      // Local time — Shamsi calendar for Persian, Gregorian for others
+   257→   257→      try {
+   258→   258→        if (lang === "fa") {
+   259→   259→          // Persian (Jalali) calendar with Persian digits
+   260→   260→          const shamsi = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
+   261→   261→            year: "numeric",
+   262→   262→            month: "2-digit",
+   263→   263→            day: "2-digit",
+   264→   264→            hour: "2-digit",
+   265→   265→            minute: "2-digit",
+   266→   266→            hour12: false,
+   267→   267→          }).format(d);
+   268→   268→          setLocalTime(shamsi);
+   269→   269→        } else if (lang === "de") {
+   270→   270→          const de = new Intl.DateTimeFormat("de-DE", {
+   271→   271→            day: "2-digit",
+   272→   272→            month: "2-digit",
+   273→   273→            year: "numeric",
+   274→   274→            hour: "2-digit",
+   275→   275→            minute: "2-digit",
+   276→   276→            hour12: false,
+   277→   277→          }).format(d);
+   278→   278→          setLocalTime(de);
+   279→   279→        } else {
+   280→   280→          const en = new Intl.DateTimeFormat("en-GB", {
+   281→   281→            day: "2-digit",
+   282→   282→            month: "2-digit",
+   283→   283→            year: "numeric",
+   284→   284→            hour: "2-digit",
+   285→   285→            minute: "2-digit",
+   286→   286→            hour12: false,
+   287→   287→          }).format(d);
+   288→   288→          setLocalTime(en);
+   289→   289→        }
+   290→   290→      } catch {
+   291→   291→        setLocalTime(iso);
+   292→   292→      }
+   293→   293→    };
+   294→   294→    tick();
+   295→   295→    const id = setInterval(tick, 1000);
+   296→   296→    return () => clearInterval(id);
+   297→   297→  }, [lang]);
+   298→   298→
+   299→   299→  // reveal on scroll
+   300→   300→  useEffect(() => {
+   301→   301→    const els = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"));
+   302→   302→    const io = new IntersectionObserver(
+   303→   303→      (entries) => {
+   304→   304→        entries.forEach((entry) => {
+   305→   305→          if (entry.isIntersecting) {
+   306→   306→            const id = (entry.target as HTMLElement).dataset.reveal!;
+   307→   307→            setRevealed((prev) => new Set(prev).add(id));
+   308→   308→            io.unobserve(entry.target);
+   309→   309→          }
+   310→   310→        });
+   311→   311→      },
+   312→   312→      { threshold: 0.12, rootMargin: "0px 0px -50px 0px" }
+   313→   313→    );
+   314→   314→    els.forEach((el) => io.observe(el));
+   315→   315→    return () => io.disconnect();
+   316→   316→  }, []);
+   317→   317→
+   318→   318→  // lock body when menu/modal open
+   319→   319→  useEffect(() => {
+   320→   320→    const locked = menuOpen || activeTutorial || adminOpen;
+   321→   321→    document.body.style.overflow = locked ? "hidden" : "";
+   322→   322→    return () => { document.body.style.overflow = ""; };
+   323→   323→  }, [menuOpen, activeTutorial, adminOpen]);
+   324→   324→
+   325→   325→  const closeMenu = () => setMenuOpen(false);
+   326→   326→
+   327→   327→  const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+   328→   328→    if (href.startsWith("#") && href.length > 1 && href !== "#admin") {
+   329→   329→      const target = document.querySelector(href);
+   330→   330→      if (target) {
+   331→   331→        e.preventDefault();
+   332→   332→        const top = target.getBoundingClientRect().top + window.scrollY - 80;
+   333→   333→        window.scrollTo({ top, behavior: "smooth" });
+   334→   334→      }
+   335→   335→    }
+   336→   336→    closeMenu();
+   337→   337→  };
+   338→   338→
+   339→   339→  // close modal on esc
+   340→   340→  useEffect(() => {
+   341→   341→    const onKey = (e: KeyboardEvent) => {
+   342→   342→      if (e.key === "Escape") {
+   343→   343→        if (activeTutorial) setActiveTutorial(null);
+   344→   344→        if (adminOpen) {
+   345→   345→          setAdminOpen(false);
+   346→   346→          if (window.location.hash === "#admin") {
+   347→   347→            history.replaceState(null, "", window.location.pathname);
+   348→   348→          }
+   349→   349→        }
+   350→   350→      }
+   351→   351→    };
+   352→   352→    window.addEventListener("keydown", onKey);
+   353→   353→    return () => window.removeEventListener("keydown", onKey);
+   354→   354→  }, [activeTutorial, adminOpen]);
+   355→   355→
+   356→   356→  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+   357→   357→    e.preventDefault();
+   358→   358→    if (submitting) return;
+   359→   359→    setSubmitting(true);
+   360→   360→    setFormStatus({ text: "", kind: "" });
+   361→   361→
+   362→   362→    const fd = new FormData(e.currentTarget);
+   363→   363→    const name = (fd.get("name") as string)?.trim();
+   364→   364→    const email = (fd.get("email") as string)?.trim();
+   365→   365→    const message = (fd.get("message") as string)?.trim();
+   366→   366→    const errs = tt.contact.form.errors;
+   367→   367→    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+   368→   368→
+   369→   369→    if (!name || !email || !message) {
+   370→   370→      setFormStatus({ text: errs.missing, kind: "error" });
+   371→   371→      setSubmitting(false);
+   372→   372→      return;
+   373→   373→    }
+   374→   374→    if (!emailRe.test(email)) {
+   375→   375→      setFormStatus({ text: errs.email, kind: "error" });
+   376→   376→      setSubmitting(false);
+   377→   377→      return;
+   378→   378→    }
+   379→   379→    if (message.length < 10) {
+   380→   380→      setFormStatus({ text: errs.short, kind: "error" });
+   381→   381→      setSubmitting(false);
+   382→   382→      return;
+   383→   383→    }
+   384→   384→
+   385→   385→    // Verify reCAPTCHA
+   386→   386→    const recaptchaResponse = (window as any).grecaptcha?.getResponse();
+   387→   387→    if (!recaptchaResponse) {
+   388→   388→      setFormStatus({ text: lang === "fa" ? "لطفاً تأیید ربات را انجام دهید." : "Please complete the robot check.", kind: "error" });
+   389→   389→      setSubmitting(false);
+   390→   390→      return;
+   391→   391→    }
+   392→   392→
+   393→   393→    try {
+   394→   394→      const res = await fetch("/api/contact", {
+   395→   395→        method: "POST",
+   396→   396→        headers: { "Content-Type": "application/json" },
+   397→   397→        body: JSON.stringify({ name, email, message, recaptchaToken: recaptchaResponse }),
+   398→   398→      });
+   399→   399→      const data = await res.json().catch(() => ({}));
+   400→   400→      if (res.ok && data.ok) {
+   401→   401→        setFormStatus({ text: tx("contact.success", tt.contact.form.success), kind: "success" });
+   402→   402→        (e.target as HTMLFormElement).reset();
+   403→   403→        // Generate new captcha
+   404→   404→        const a = Math.floor(Math.random() * 9) + 1;
+   405→   405→        const b = Math.floor(Math.random() * 9) + 1;
+   406→   406→        const ops = ["+", "-", "*"];
+   407→   407→        const op = ops[Math.floor(Math.random() * ops.length)];
+   408→   408→        let ans: number, q: string;
+   409→   409→        if (op === "+") { ans = a + b; q = `${a} + ${b}`; }
+   410→   410→        else if (op === "-") { ans = a >= b ? a - b : b - a; q = a >= b ? `${a} - ${b}` : `${b} - ${a}`; }
+   411→   411→        else { ans = a * b; q = `${a} * ${b}`; }
+   412→   412→        setCaptcha({ q, a: ans });
+   413→   413→      } else {
+   414→   414→        const err = data.error || "server_error";
+   415→   415→        const msg =
+   416→   416→          err === "rate_limit" ? errs.rate
+   417→   417→          : err === "spam_detected" ? errs.spam
+   418→   418→          : err === "missing_fields" ? errs.missing
+   419→   419→          : err === "invalid_email" ? errs.email
+   420→   420→          : err === "message_too_short" ? errs.short
+   421→   421→          : errs.server;
+   422→   422→        setFormStatus({ text: msg, kind: "error" });
+   423→   423→      }
+   424→   424→    } catch {
+   425→   425→      setFormStatus({ text: errs.server, kind: "error" });
+   426→   426→    } finally {
+   427→   427→      setSubmitting(false);
+   428→   428→    }
+   429→   429→  };
+   430→   430→
+   431→   431→  const adminUnlock = async (e: FormEvent) => {
+   432→   432→    e.preventDefault();
+   433→   433→    setAdminErr("");
+   434→   434→
+   435→   435→    // ورود ادمین: اول از دیتابیس چک می‌کنیم، بعد از PERSONAL
+   436→   436→    // اینطوری اگه رمز از پنل عوض بشه، دیگه مشکل پیش نمیاد
+   437→   437→    try {
+   438→   438→      // fetch messages, chats, and settings in parallel
+   439→   439→      const [msgRes, chatRes, settingsRes] = await Promise.all([
+   440→   440→        fetch(`/api/messages?password=${encodeURIComponent(adminPwd)}`),
+   441→   441→        fetch(`/api/chat?password=${encodeURIComponent(adminPwd)}`),
+   442→   442→        fetch(`/api/admin/settings?password=${encodeURIComponent(adminPwd)}`),
+   443→   443→      ]);
+   444→   444→      const msgData = await msgRes.json();
+   445→   445→      const chatData = await chatRes.json();
+   446→   446→      const settingsData = await settingsRes.json();
+   447→   447→      if (msgRes.ok && msgData.ok) {
+   448→   448→        setAdminMsgs(msgData.messages);
+   449→   449→        setAdminStats(msgData.stats);
+   450→   450→      } else {
+   451→   451→        setAdminErr(tt.admin.wrong);
+   452→   452→        return;
+   453→   453→      }
+   454→   454→      if (chatRes.ok && chatData.ok) {
+   455→   455→        setAdminChats(chatData.sessions);
+   456→   456→      } else {
+   457→   457→        setAdminChats([]);
+   458→   458→      }
+   459→   459→      if (settingsRes.ok && settingsData.ok) {
+   460→   460→        setAdminSettings(settingsData.settings);
+   461→   461→      }
+   462→   462→    } catch {
+   463→   463→      setAdminErr(tt.admin.wrong);
+   464→   464→    }
+   465→   465→  };
+   466→   466→
+   467→   467→  // Reply to a contact message
+   468→   468→  const submitReply = async (messageId: string) => {
+   469→   469→    if (!replyText.trim()) return;
+   470→   470→    setReplyStatus({ id: messageId, text: "...", ok: true });
+   471→   471→    try {
+   472→   472→      const res = await fetch("/api/admin/reply", {
+   473→   473→        method: "POST",
+   474→   474→        headers: { "Content-Type": "application/json" },
+   475→   475→        body: JSON.stringify({ password: adminPwd, messageId, reply: replyText }),
+   476→   476→      });
+   477→   477→      const data = await res.json();
+   478→   478→      if (res.ok && data.ok) {
+   479→   479→        setReplyStatus({ id: messageId, text: "✓ reply saved", ok: true });
+   480→   480→        setReplyText("");
+   481→   481→        setReplyingTo(null);
+   482→   482→      } else {
+   483→   483→        setReplyStatus({ id: messageId, text: "✗ error", ok: false });
+   484→   484→      }
+   485→   485→    } catch {
+   486→   486→      setReplyStatus({ id: messageId, text: "✗ error", ok: false });
+   487→   487→    }
+   488→   488→  };
+   489→   489→
+   490→   490→  // Reply to an AI chat session
+   491→   491→  const submitChatReply = async (sessionId: string) => {
+   492→   492→    if (!chatReplyText.trim()) return;
+   493→   493→    setChatReplyStatus({ id: sessionId, text: "...", ok: true });
+   494→   494→    try {
+   495→   495→      const res = await fetch("/api/admin/chat-reply", {
+   496→   496→        method: "POST",
+   497→   497→        headers: { "Content-Type": "application/json" },
+   498→   498→        body: JSON.stringify({ password: adminPwd, sessionId, reply: chatReplyText }),
+   499→   499→      });
+   500→   500→      const data = await res.json();
+   501→   501→      if (res.ok && data.ok) {
+   502→   502→        setChatReplyStatus({ id: sessionId, text: "✓ reply injected", ok: true });
+   503→   503→        setChatReplyText("");
+   504→   504→        setChatReplyingTo(null);
+   505→   505→        // Update local state to show the new message
+   506→   506→        setAdminChats((prev) =>
+   507→   507→          prev?.map((s) =>
+   508→   508→            s.id === sessionId
+   509→   509→              ? {
+   510→   510→                  ...s,
+   511→   511→                  messages: [
+   512→   512→                    ...s.messages,
+   513→   513→                    {
+   514→   514→                      id: data.messageId,
+   515→   515→                      role: "assistant",
+   516→   516→                      content: chatReplyText,
+   517→   517→                      createdAt: data.savedAt,
+   518→   518→                    },
+   519→   519→                  ],
+   520→   520→                }
+   521→   521→              : s
+   522→   522→          ) || null
+   523→   523→        );
+   524→   524→      } else {
+   525→   525→        setChatReplyStatus({ id: sessionId, text: "✗ error", ok: false });
+   526→   526→      }
+   527→   527→    } catch {
+   528→   528→      setChatReplyStatus({ id: sessionId, text: "✗ error", ok: false });
+   529→   529→    }
+   530→   530→  };
+   531→   531→
+   532→   532→  // Save site settings
+   533→   533→  const saveSettings = async (newSettings: Record<string, string>) => {
+   534→   534→    try {
+   535→   535→      const res = await fetch("/api/admin/settings", {
+   536→   536→        method: "POST",
+   537→   537→        headers: { "Content-Type": "application/json" },
+   538→   538→        body: JSON.stringify({ password: adminPwd, settings: newSettings }),
+   539→   539→      });
+   540→   540→      const data = await res.json();
+   541→   541→      if (res.ok && data.ok) {
+   542→   542→        setAdminSettings((prev) => ({ ...prev, ...newSettings }));
+   543→   543→        return true;
+   544→   544→      }
+   545→   545→    } catch {}
+   546→   546→    return false;
+   547→   547→  };
+   548→   548→
+   549→   549→  const closeAdmin = () => {
+   550→   550→    setAdminOpen(false);
+   551→   551→    setAdminMsgs(null);
+   552→   552→    setAdminChats(null);
+   553→   553→    setAdminStats(null);
+   554→   554→    setAdminPwd("");
+   555→   555→    setAdminErr("");
+   556→   556→    if (window.location.hash === "#admin") {
+   557→   557→      history.replaceState(null, "", window.location.pathname);
+   558→   558→    }
+   559→   559→  };
+   560→   560→
+   561→   561→  const reveal = (id: string) => (revealed.has(id) ? "reveal visible" : "reveal");
+   562→   562→
+   563→   563→  // Wave divider SVG
+   564→   564→  const WaveDivider = () => (
+   565→   565→    <svg className="wave-divider" viewBox="0 0 800 40" preserveAspectRatio="none" aria-hidden="true">
+   566→   566→      <path d="M0,20 Q100,5 200,20 T400,20 T600,20 T800,20" />
+   567→   567→      <path d="M0,20 Q100,35 200,20 T400,20 T600,20 T800,20" opacity="0.5" />
+   568→   568→    </svg>
+   569→   569→  );
+   570→   570→
+   571→   571→  return (
+   572→   572→    <div className="app">
+   573→   573→      <MatrixRain />
+   574→   574→      {/* Anti-clone watermark (invisible, identifies your deployment) */}
+   575→   575→      <div className="anti-clone-watermark" aria-hidden="true">
+   576→   576→        personal-site-deployment
+   577→   577→      </div>
+   578→   578→
+   579→   579→      {/* Anti-theft warning (shown when devtools detected) */}
+   580→   580→      {antiTheftWarning && (
+   581→   581→        <div className="anti-theft-warning show">
+   582→   582→          <div className="anti-theft-warning-content">
+   583→   583→            <h2>⚠ DevTools Detected</h2>
+   584→   584→            <p>This site is protected against template theft.</p>
+   585→   585→            <p>Please close the developer tools to continue browsing.</p>
+   586→   586→            <p style={{ fontSize: "0.75rem", color: "#666" }}>
+   587→   587→              If you're the owner, you can disable this in page.tsx → anti-theft useEffect.
+   588→   588→            </p>
+   589→   589→          </div>
+   590→   590→        </div>
+   591→   591→      )}
+   592→   592→
+   593→   593→      {/* STATUS BAR with RF elements */}
+   594→   594→      <div className="statusbar">
+   595→   595→        <div className="statusbar-left">
+   596→   596→          <span className="statusbar-item">
+   597→   597→            <span className="dot"></span>
+   598→   598→            <span className="value">online</span>
+   599→   599→          </span>
+   600→   600→          <span className="statusbar-item">
+   601→   601→            <SignalBars />
+   602→   602→            <span className="value">-67dBm</span>
+   603→   603→          </span>
+   604→   604→          <span className="statusbar-item">
+   605→   605→            <span className="freq-display">2.4GHz</span>
+   606→   606→          </span>
+   607→   607→        </div>
+   608→   608→        <div className="statusbar-right">
+   609→   609→          <span className="statusbar-item">
+   610→   610→            <span className="label">{lang === "fa" ? "زمان:" : "time:"}</span>
+   611→   611→            <span className="value">{localTime || "—"}</span>
+   612→   612→          </span>
+   613→   613→          <span className="statusbar-item">
+   614→   614→            <span className="label">tty:</span>
+   615→   615→            <span className="value">/dev/pts/0</span>
+   616→   616→          </span>
+   617→   617→        </div>
+   618→   618→      </div>
+   619→   619→
+   620→   620→      {/* NAVBAR */}
+   621→   621→      <header className={`navbar ${scrolled ? "scrolled" : ""}`}>
+   622→   622→        <div className="container nav-inner">
+   623→   623→          <a href="#hero" className="brand" onClick={(e) => handleNavClick(e, "#hero")}>
+   624→   624→            <span className="brand-name">{PERSONAL.handle}</span>
+   625→   625→          </a>
+   626→   626→          <nav className={`nav-links ${menuOpen ? "open" : ""}`}>
+   627→   627→            {siteContent.navItems.length > 0 ? (
+   628→   628→              siteContent.navItems.map((item: any) => {
+   629→   629→                const labelField = `label${lang.charAt(0).toUpperCase() + lang.slice(1)}`;
+   630→   630→                const label = item[labelField] || item.labelEn || "";
+   631→   631→                return (
+   632→   632→                  <a
+   633→   633→                    key={item.id}
+   634→   634→                    href={item.href}
+   635→   635→                    target={item.target === "_blank" ? "_blank" : undefined}
+   636→   636→                    rel={item.target === "_blank" ? "noopener noreferrer" : undefined}
+   637→   637→                    onClick={item.href.startsWith("#") ? (e) => handleNavClick(e, item.href) : undefined}
+   638→   638→                  >
+   639→   639→                    {label}
+   640→   640→                  </a>
+   641→   641→                );
+   642→   642→              })
+   643→   643→            ) : (
+   644→   644→              <>
+   645→   645→                <a href="#about" onClick={(e) => handleNavClick(e, "#about")}>{tt.nav.about}</a>
+   646→   646→                <a href="#skills" onClick={(e) => handleNavClick(e, "#skills")}>{tt.nav.skills}</a>
+   647→   647→                <a href="#books" onClick={(e) => handleNavClick(e, "#books")}>{tt.nav.books}</a>
+   648→   648→                <a href="#articles" onClick={(e) => handleNavClick(e, "#articles")}>{tt.nav.articles}</a>
+   649→   649→                <a href="#tutorials" onClick={(e) => handleNavClick(e, "#tutorials")}>{tt.nav.tutorials}</a>
+   650→   650→                <a href="#chat" onClick={(e) => handleNavClick(e, "#chat")}>{tt.nav.chat || "chat"}</a>
+   651→   651→                <a href="#contact" onClick={(e) => handleNavClick(e, "#contact")}>{tt.nav.contact}</a>
+   652→   652→              </>
+   653→   653→            )}
+   654→   654→          </nav>
+   655→   655→          <div className="nav-right">
+   656→   656→            <div className="theme-switcher">
+   657→   657→              <button className={theme === "terminal" ? "active" : ""} onClick={() => setTheme("terminal")} title="Terminal (green/black)"><span className="theme-icon" style={{ background: "#00ff41" }}></span></button>
+   658→   658→              <button className={theme === "midnight" ? "active" : ""} onClick={() => setTheme("midnight")} title="Midnight (blue)"><span className="theme-icon" style={{ background: "#4a9eff" }}></span></button>
+   659→   659→              <button className={theme === "amber" ? "active" : ""} onClick={() => setTheme("amber")} title="Amber (retro CRT)"><span className="theme-icon" style={{ background: "#ffb000" }}></span></button>
+   660→   660→              <button className={theme === "cyan" ? "active" : ""} onClick={() => setTheme("cyan")} title="Cyan (cyberpunk)"><span className="theme-icon" style={{ background: "#00f5d4" }}></span></button>
+   661→   661→              <button className={theme === "purple" ? "active" : ""} onClick={() => setTheme("purple")} title="Purple (neon)"><span className="theme-icon" style={{ background: "#c77dff" }}></span></button>
+   662→   662→              <button className={theme === "solar" ? "active" : ""} onClick={() => setTheme("solar")} title="Solarized"><span className="theme-icon" style={{ background: "#2aa198" }}></span></button>
+   663→   663→              <button className={theme === "clean" ? "active" : ""} onClick={() => setTheme("clean")} title="Clean (light)"><span className="theme-icon" style={{ background: "#0066cc" }}></span></button>
+   664→   664→            </div>
+   665→   665→            <div className="lang-toggle">
+   666→   666→              {LANGS.map((l) => (
+   667→   667→                <button
+   668→   668→                  key={l}
+   669→   669→                  className={lang === l ? "active" : ""}
+   670→   670→                  onClick={() => setLang(l)}
+   671→   671→                  aria-label={`Switch to ${l}`}
+   672→   672→                >
+   673→   673→                  {langLabel[l]}
+   674→   674→                </button>
+   675→   675→              ))}
+   676→   676→            </div>
+   677→   677→            <button
+   678→   678→              className={`nav-toggle ${menuOpen ? "active" : ""}`}
+   679→   679→              aria-label="Toggle menu"
+   680→   680→              onClick={() => setMenuOpen((v) => !v)}
+   681→   681→            >
+   682→   682→              <span></span><span></span><span></span>
+   683→   683→            </button>
+   684→   684→          </div>
+   685→   685→        </div>
+   686→   686→      </header>
+   687→   687→
+   688→   688→      {/* HERO */}
+   689→   689→      <section className="hero" id="hero">
+   690→   690→        <div className="container hero-grid">
+   691→   691→          <div className={`hero-text ${reveal("hero-text")}`} data-reveal="hero-text">
+   692→   692→            <p className="hero-greeting">{tx("hero.greeting", tt.hero.greeting)}</p>
+   693→   693→            <h1 className="hero-title">{PERSONAL.fullName[lang]}</h1>
+   694→   694→            <p className="hero-subtitle">{PERSONAL.tagline[lang]}</p>
+   695→   695→            <div className="hero-cta">
+   696→   696→              <a href="#articles" className="btn btn-primary" onClick={(e) => handleNavClick(e, "#articles")}>{tx("hero.cta1", tt.hero.cta)}</a>
+   697→   697→              <a href="#contact" className="btn btn-ghost" onClick={(e) => handleNavClick(e, "#contact")}>{tx("hero.cta2", tt.hero.ctaContact)}</a>
+   698→   698→            </div>
+   699→   699→            <div className="hero-socials">
+   700→   700→              {SOCIALS.map((s) => (
+   701→   701→                <a
+   702→   702→                  key={s.id}
+   703→   703→                  href={`${s.url}${s.handle}`}
+   704→   704→                  target="_blank"
+   705→   705→                  rel="noopener noreferrer"
+   706→   706→                  className="social-chip"
+   707→   707→                >
+   708→   708→                  <span>{s.label}</span>
+   709→   709→                  <span className="chip-handle">/{s.handle}</span>
+   710→   710→                </a>
+   711→   711→              ))}
+   712→   712→            </div>
+   713→   713→          </div>
+   714→   714→          <div className={`hero-visual ${reveal("hero-visual")}`} data-reveal="hero-visual">
+   715→   715→            <InteractiveTerminal lang={lang} />
+   716→   716→          </div>
+   717→   717→        </div>
+   718→   718→        {/* Oscilloscope under hero — RF vibe */}
+   719→   719→        <div className="container">
+   720→   720→          <Oscilloscope height={70} />
+   721→   721→        </div>
+   722→   722→      </section>
+   723→   723→
+   724→   724→      {/* ABOUT — with Smith Chart decoration */}
+   725→   725→      <section className="section section-alt" id="about">
+   726→   726→        <div className="container">
+   727→   727→          <header className="section-head">
+   728→   728→            <p className="section-eyebrow">{tt.about.num} — {tt.about.label}</p>
+   729→   729→            <h2 className="section-title">{tx("about.title", tt.about.title)}</h2>
+   730→   730→          </header>
+   731→   731→          <div className="about-grid">
+   732→   732→            <div className={`about-text ${reveal("about-text")}`} data-reveal="about-text">
+   733→   733→              <p>{tx("about.p1", tt.about.p1)}</p>
+   734→   734→              <p>{tx("about.p2", tt.about.p2)}</p>
+   735→   735→              <ul className="about-stats">
+   736→   736→                {tt.about.stats.map((s, i) => (
+   737→   737→                  <li key={i}><strong>{s.v}</strong><span>{s.l}</span></li>
+   738→   738→                ))}
+   739→   739→              </ul>
+   740→   740→            </div>
+   741→   741→            <aside className={`about-card ${reveal("about-card")}`} data-reveal="about-card">
+   742→   742→              <h3>{tx("about.factsTitle", tt.about.factsTitle)}</h3>
+   743→   743→              <dl>
+   744→   744→                {tt.about.facts.map((f, i) => (
+   745→   745→                  <div key={i}>
+   746→   746→                    <dt>{f.k}</dt><dd>{f.v}</dd>
+   747→   747→                  </div>
+   748→   748→                ))}
+   749→   749→              </dl>
+   750→   750→            </aside>
+   751→   751→          </div>
+   752→   752→
+   753→   753→          {/* RF Equipment Rack — lab equipment from DB */}
+   754→   754→          <LabEquipmentRack equipment={siteContent.equipment} />
+   755→   755→          {/* Signal Lab — Generator + Oscilloscope (wirelessly connected) */}
+   756→   756→          <SignalLab />
+   757→   757→        </div>
+   758→   758→      </section>
+   759→   759→
+   760→   760→      <WaveDivider />
+   761→   761→
+   762→   762→      {/* SKILLS */}
+   763→   763→      <section className="section" id="skills">
+   764→   764→        <div className="container">
+   765→   765→          <header className="section-head">
+   766→   766→            <p className="section-eyebrow">{tt.skills.num} — {tt.skills.label}</p>
+   767→   767→            <h2 className="section-title">{tx("skills.title", tt.skills.title)}</h2>
+   768→   768→            <p className="section-subtitle">{tx("skills.subtitle", tt.skills.subtitle)}</p>
+   769→   769→          </header>
+   770→   770→          <div className="skills-grid">
+   771→   771→            {siteContent.skills.map((s: any, i: number) => {
+   772→   772→              const catField = `category${lang.charAt(0).toUpperCase() + lang.slice(1)}`;
+   773→   773→              const category = s[catField] || s.categoryEn || "";
+   774→   774→              const items = Array.isArray(s.items) ? s.items : (typeof s.items === "string" ? s.items.split(",").map((x:string)=>x.trim()).filter(Boolean) : []);
+   775→   775→              return (
+   776→   776→                <article key={s.id || i} className={`skill-card ${reveal(`skill-${i}`)}`} data-reveal={`skill-${i}`}>
+   777→   777→                  <h3>{category}</h3>
+   778→   778→                  <ul className="tags">{items.map((tag: string) => <li key={tag}>{tag}</li>)}</ul>
+   779→   779→                </article>
+   780→   780→              );
+   781→   781→            })}
+   782→   782→          </div>
+   783→   783→        </div>
+   784→   784→      </section>
+   785→   785→
+   786→   786→      {/* BOOKS */}
+   787→   787→      <section className="section section-alt" id="books">
+   788→   788→        <div className="container">
+   789→   789→          <header className="section-head">
+   790→   790→            <p className="section-eyebrow">{tt.books.num} — {tt.books.label}</p>
+   791→   791→            <h2 className="section-title">{tx("books.title", tt.books.title)}</h2>
+   792→   792→            <p className="section-subtitle">{tx("books.subtitle", tt.books.subtitle)}</p>
+   793→   793→          </header>
+   794→   794→          <ArchiveGrid
+   795→   795→            items={siteContent.books}
+   796→   796→            type="book"
+   797→   797→            lang={lang}
+   798→   798→          />
+   799→   799→        </div>
+   800→   800→      </section>
+   801→   801→
+   802→   802→      <WaveDivider />
+   803→   803→
+   804→   804→      {/* ARTICLES */}
+   805→   805→      <section className="section" id="articles">
+   806→   806→        <div className="container">
+   807→   807→          <header className="section-head">
+   808→   808→            <p className="section-eyebrow">{tt.articles.num} — {tt.articles.label}</p>
+   809→   809→            <h2 className="section-title">{tx("articles.title", tt.articles.title)}</h2>
+   810→   810→            <p className="section-subtitle">{tx("articles.subtitle", tt.articles.subtitle)}</p>
+   811→   811→          </header>
+   812→   812→          <ArchiveGrid
+   813→   813→            items={siteContent.articles}
+   814→   814→            type="article"
+   815→   815→            lang={lang}
+   816→   816→          />
+   817→   817→        </div>
+   818→   818→      </section>
+   819→   819→
+   820→   820→      {/* TUTORIALS — with ArchiveGrid (search, sort, pagination) */}
+   821→   821→      <section className="section section-alt" id="tutorials">
+   822→   822→        <div className="container">
+   823→   823→          <header className="section-head">
+   824→   824→            <p className="section-eyebrow">{tt.tutorials.num} — {tt.tutorials.label}</p>
+   825→   825→            <h2 className="section-title">{tx("tutorials.title", tt.tutorials.title)}</h2>
+   826→   826→            <p className="section-subtitle">{tx("tutorials.subtitle", tt.tutorials.subtitle)}</p>
+   827→   827→          </header>
+   828→   828→          <ArchiveGrid
+   829→   829→            items={siteContent.tutorials}
+   830→   830→            type="tutorial"
+   831→   831→            lang={lang}
+   832→   832→            onItemClick={(t) => setActiveTutorial(t as any)}
+   833→   833→          />
+   834→   834→        </div>
+   835→   835→      </section>
+   836→   836→
+   837→   837→      {/* CHAT — AI concierge */}
+   838→   838→      <ChatSection lang={lang} />
+   839→   839→
+   840→   840→      {/* CONTACT */}
+   841→   841→      <section className="section section-alt" id="contact">
+   842→   842→        <div className="container">
+   843→   843→          <header className="section-head">
+   844→   844→            <p className="section-eyebrow">{tt.contact.num} — {tt.contact.label}</p>
+   845→   845→            <h2 className="section-title">{tx("contact.title", tt.contact.title)}</h2>
+   846→   846→            <p className="section-subtitle">{tx("contact.subtitle", tt.contact.subtitle)}</p>
+   847→   847→          </header>
+   848→   848→          <div className="contact-grid">
+   849→   849→            <div className={`contact-info ${reveal("contact-info")}`} data-reveal="contact-info">
+   850→   850→              <p>{tx("contact.desc", tt.contact.desc)}</p>
+   851→   851→              <p className="contact-label" style={{ marginTop: 24 }}>{tx("contact.socialsLabel", tt.contact.socialsLabel)}</p>
+   852→   852→              <div className="socials-grid">
+   853→   853→                {SOCIALS.map((s) => (
+   854→   854→                  <a
+   855→   855→                    key={s.id}
+   856→   856→                    href={`${s.url}${s.handle}`}
+   857→   857→                    target="_blank"
+   858→   858→                    rel="noopener noreferrer"
+   859→   859→                    className="social-chip"
+   860→   860→                  >
+   861→   861→                    <span>{s.label}</span>
+   862→   862→                    <span className="chip-handle">/{s.handle}</span>
+   863→   863→                  </a>
+   864→   864→                ))}
+   865→   865→              </div>
+   866→   866→            </div>
+   867→   867→            <form className={`contact-form ${reveal("contact-form")}`} data-reveal="contact-form" onSubmit={handleSubmit} noValidate>
+   868→   868→              <div className="field">
+   869→   869→                <label htmlFor="name">{tt.contact.form.name}</label>
+   870→   870→                <input type="text" id="name" name="name" placeholder={tt.contact.form.namePh} required maxLength={100} />
+   871→   871→              </div>
+   872→   872→              <div className="field">
+   873→   873→                <label htmlFor="email">{tt.contact.form.email}</label>
+   874→   874→                <input type="email" id="email" name="email" placeholder={tt.contact.form.emailPh} required maxLength={200} />
+   875→   875→              </div>
+   876→   876→              <div className="field">
+   877→   877→                <label htmlFor="message">{tt.contact.form.message}</label>
+   878→   878→                <textarea id="message" name="message" rows={5} placeholder={tt.contact.form.messagePh} required maxLength={5000}></textarea>
+   879→   879→              </div>
+   880→   880→              <div className="field">
+   881→   881→                <label>{lang === "fa" ? "تأیید ربات" : "Robot check"}</label>
+   882→   882→                {/* reCAPTCHA container — only rendered after client mount to
+   883→   883→                    avoid hydration mismatch (grecaptcha injects iframe at runtime) */}
+   884→   884→                {mounted ? (
+   885→   885→                  <div
+   886→   886→                    className="g-recaptcha"
+   887→   887→                    data-sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
+   888→   888→                    data-theme="dark"
+   889→   889→                  ></div>
+   890→   890→                ) : (
+   891→   891→                  <div style={{ width: 304, height: 78, background: "rgba(0,255,65,0.05)", border: "1px dashed rgba(0,255,65,0.3)", borderRadius: 4 }} />
+   892→   892→                )}
+   893→   893→              </div>
+   894→   894→              <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
+   895→   895→                {submitting ? tt.contact.form.sending : tt.contact.form.submit}
+   896→   896→              </button>
+   897→   897→              <p className={`form-status ${formStatus.kind}`} role="status">{formStatus.text}</p>
+   898→   898→            </form>
+   899→   899→          </div>
+   900→   900→        </div>
+   901→   901→      </section>
+   902→   902→
+   903→   903→      {/* FOOTER */}
+   904→   904→      <footer className="footer">
+   905→   905→        <div className="container footer-inner">
+   906→   906→          <p>© {year ?? ""} {PERSONAL.fullName[lang]}. {tt.footer.built}</p>
+   907→   907→          <ul className="footer-links">
+   908→   908→            <li><a href="#about" onClick={(e) => handleNavClick(e, "#about")}>{tt.nav.about}</a></li>
+   909→   909→            <li><a href="#books" onClick={(e) => handleNavClick(e, "#books")}>{tt.nav.books}</a></li>
+   910→   910→            <li><a href="#tutorials" onClick={(e) => handleNavClick(e, "#tutorials")}>{tt.nav.tutorials}</a></li>
+   911→   911→            <li><a href="#chat" onClick={(e) => handleNavClick(e, "#chat")}>{tt.nav.chat || "chat"}</a></li>
+   912→   912→            <li><a href="#contact" onClick={(e) => handleNavClick(e, "#contact")}>{tt.nav.contact}</a></li>
+   913→   913→            <li>
+   914→   914→              <a
+   915→   915→                href="#admin"
+   916→   916→                className="footer-admin"
+   917→   917→                onClick={(e) => { e.preventDefault(); setAdminOpen(true); window.location.hash = "admin"; }}
+   918→   918→                title="Ctrl+Shift+A"
+   919→   919→              >
+   920→   920→                [{tt.footer.admin}]
+   921→   921→              </a>
+   922→   922→            </li>
+   923→   923→          </ul>
+   924→   924→        </div>
+   925→   925→      </footer>
+   926→   926→
+   927→   927→      <button
+   928→   928→        className={`to-top ${toTop ? "visible" : ""}`}
+   929→   929→        aria-label={tt.toTop}
+   930→   930→        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+   931→   931→      >
+   932→   932→        ↑
+   933→   933→      </button>
+   934→   934→
+   935→   935→      {/* TUTORIAL MODAL */}
+   936→   936→      {activeTutorial && (
+   937→   937→        <div className="tutorial-modal" onClick={() => setActiveTutorial(null)}>
+   938→   938→          <div className="tutorial-modal-inner" onClick={(e) => e.stopPropagation()}>
+   939→   939→            <div className="tutorial-modal-bar">
+   940→   940→              <span className="tutorial-modal-bar-title">
+   941→   941→                {activeTutorial.title[lang]} · {activeTutorial.duration} · {activeTutorial.level[lang]}
+   942→   942→              </span>
+   943→   943→              <button className="tutorial-modal-close" onClick={() => setActiveTutorial(null)}>
+   944→   944→                {tt.tutorials.close}
+   945→   945→              </button>
+   946→   946→            </div>
+   947→   947→            <div className="tutorial-modal-video">
+   948→   948→              <iframe
+   949→   949→                src={activeTutorial.embedUrl}
+   950→   950→                title={activeTutorial.title[lang]}
+   951→   951→                allowFullScreen
+   952→   952→                allow="autoplay; fullscreen; picture-in-picture"
+   953→   953→              />
+   954→   954→            </div>
+   955→   955→          </div>
+   956→   956→        </div>
+   957→   957→      )}
+   958→   958→
+   959→   959→      {/* ADMIN MODAL */}
+   960→   960→      {adminOpen && (
+   961→   961→        <div className="admin-modal" onClick={closeAdmin}>
+   962→   962→          <div className="admin-modal-inner" onClick={(e) => e.stopPropagation()}>
+   963→   963→            <div className="admin-modal-bar">
+   964→   964→              <span className="admin-modal-bar-title">{tt.admin.title}</span>
+   965→   965→              <button className="tutorial-modal-close" onClick={closeAdmin}>×</button>
+   966→   966→            </div>
+   967→   967→            <div className="admin-modal-body">
+   968→   968→              {!adminMsgs ? (
+   969→   969→                <form className="admin-login" onSubmit={adminUnlock}>
+   970→   970→                  <div className="field">
+   971→   971→                    <label htmlFor="admin-user">{lang === "fa" ? "نام کاربری" : "Username"}</label>
+   972→   972→                    <input
+   973→   973→                      id="admin-user"
+   974→   974→                      type="text"
+   975→   975→                      value={adminUser}
+   976→   976→                      onChange={(e) => setAdminUser(e.target.value)}
+   977→   977→                      placeholder={lang === "fa" ? "نام کاربری" : "username"}
+   978→   978→                      autoFocus
+   979→   979→                    />
+   980→   980→                  </div>
+   981→   981→                  <div className="field">
+   982→   982→                    <label htmlFor="admin-pwd">{tt.admin.passwordLabel}</label>
+   983→   983→                    <input
+   984→   984→                      id="admin-pwd"
+   985→   985→                      type="password"
+   986→   986→                      value={adminPwd}
+   987→   987→                      onChange={(e) => setAdminPwd(e.target.value)}
+   988→   988→                      placeholder={tt.admin.passwordPh}
+   989→   989→                    />
+   990→   990→                  </div>
+   991→   991→                  <button type="submit" className="btn btn-primary btn-block">{tt.admin.unlock}</button>
+   992→   992→                  {adminErr && <p className="form-status error" style={{ marginTop: 10 }}>{adminErr}</p>}
+   993→   993→                  <p style={{ marginTop: 16, fontSize: "0.72rem", color: "var(--text-faint)" }}>
+   994→   994→                    {tt.admin.subtitle}
+   995→   995→                  </p>
+   996→   996→                  <p style={{ marginTop: 8, fontSize: "0.68rem", color: "var(--text-faint)" }}>
+   997→   997→                    default: admin / admin123 (change in content.ts)
+   998→   998→                  </p>
+   999→   999→                </form>
+  1000→  1000→              ) : (
+  1001→  1001→                <>
+  1002→  1002→                  {adminStats && (
+  1003→  1003→                    <div className="admin-stats">
+  1004→  1004→                      <div className="admin-stat"><strong>{adminStats.contactMessages}</strong>contact msgs</div>
+  1005→  1005→                      <div className="admin-stat"><strong>{adminStats.chatSessions}</strong>chat sessions</div>
+  1006→  1006→                      <div className="admin-stat"><strong>{adminStats.chatMessages}</strong>chat msgs</div>
+  1007→  1007→                      <div className="admin-stat"><strong>{adminSettings?.visitorCount || 0}</strong>visitors</div>
+  1008→  1008→                    </div>
+  1009→  1009→                  )}
+  1010→  1010→                  <div className="admin-tabs">
+  1011→  1011→                    <button
+  1012→  1012→                      className={`admin-tab ${adminTab === "messages" ? "active" : ""}`}
+  1013→  1013→                      onClick={() => setAdminTab("messages")}
+  1014→  1014→                    >
+  1015→  1015→                      contact messages ({adminMsgs.length})
+  1016→  1016→                    </button>
+  1017→  1017→                    <button
+  1018→  1018→                      className={`admin-tab ${adminTab === "chats" ? "active" : ""}`}
+  1019→  1019→                      onClick={() => setAdminTab("chats")}
+  1020→  1020→                    >
+  1021→  1021→                      AI chat logs ({adminChats?.length || 0})
+  1022→  1022→                    </button>
+  1023→  1023→                    <button
+  1024→  1024→                      className={`admin-tab ${adminTab === "content" ? "active" : ""}`}
+  1025→  1025→                      onClick={() => setAdminTab("content")}
+  1026→  1026→                    >
+  1027→  1027→                      {lang === "fa" ? "محتوا" : "content"}
+  1028→  1028→                    </button>
+  1029→  1029→                    <button
+  1030→  1030→                      className={`admin-tab ${adminTab === "text" ? "active" : ""}`}
+  1031→  1031→                      onClick={() => setAdminTab("text")}
+  1032→  1032→                    >
+  1033→  1033→                      {lang === "fa" ? "متن‌ها" : "texts"}
+  1034→  1034→                    </button>
+  1035→  1035→                    <button
+  1036→  1036→                      className={`admin-tab ${adminTab === "nav" ? "active" : ""}`}
+  1037→  1037→                      onClick={() => setAdminTab("nav")}
+  1038→  1038→                    >
+  1039→  1039→                      {lang === "fa" ? "منو" : "menu"}
+  1040→  1040→                    </button>
+  1041→  1041→                    <button
+  1042→  1042→                      className={`admin-tab ${adminTab === "themes" ? "active" : ""}`}
+  1043→  1043→                      onClick={() => setAdminTab("themes")}
+  1044→  1044→                    >
+  1045→  1045→                      {lang === "fa" ? "تم‌ساز" : "themes"}
+  1046→  1046→                    </button>
+  1047→  1047→                    <button
+  1048→  1048→                      className={`admin-tab ${adminTab === "settings" ? "active" : ""}`}
+  1049→  1049→                      onClick={() => setAdminTab("settings")}
+  1050→  1050→                    >
+  1051→  1051→                      settings
+  1052→  1052→                    </button>
+  1053→  1053→                    <button
+  1054→  1054→                      className={`admin-tab ${adminTab === "users" ? "active" : ""}`}
+  1055→  1055→                      onClick={() => setAdminTab("users")}
+  1056→  1056→                    >
+  1057→  1057→                      {lang === "fa" ? "کاربران" : "users"}
+  1058→  1058→                    </button>
+  1059→  1059→                  </div>
+  1060→  1060→
+  1061→  1061→                  {/* CONTENT TAB */}
+  1062→  1062→                  {adminTab === "content" && (
+  1063→  1063→                    <ContentManager password={adminPwd} lang={lang} />
+  1064→  1064→                  )}
+  1065→  1065→
+  1066→  1066→                  {/* TEXT EDITOR TAB — edit ALL site text */}
+  1067→  1067→                  {adminTab === "text" && (
+  1068→  1068→                    <TextEditor password={adminPwd} lang={lang} />
+  1069→  1069→                  )}
+  1070→  1070→
+  1071→  1071→                  {/* NAV MENU TAB — manage navigation menu */}
+  1072→  1072→                  {adminTab === "nav" && (
+  1073→  1073→                    <NavMenuManager password={adminPwd} lang={lang} />
+  1074→  1074→                  )}
+  1075→  1075→
+  1076→  1076→                  {/* THEMES TAB — Theme Builder */}
+  1077→  1077→                  {adminTab === "themes" && (
+  1078→  1078→                    <ThemeBuilder password={adminPwd} lang={lang} />
+  1079→  1079→                  )}
+  1080→  1080→
+  1081→  1081→                  {/* USERS TAB — AccessUser management (با ساعت دسترسی) */}
+  1082→  1082→                  {adminTab === "users" && (
+  1083→  1083→                    <AccessUserManager />
+  1084→  1084→                  )}
+  1085→  1085→
+  1086→  1086→                  {/* CONTACT MESSAGES TAB with reply */}
+  1087→  1087→                  {adminTab === "messages" && (
+  1088→  1088→                    adminMsgs.length === 0 ? (
+  1089→  1089→                      <p style={{ color: "var(--text-dim)", textAlign: "center", padding: 20 }}>{tt.admin.empty}</p>
+  1090→  1090→                    ) : (
+  1091→  1091→                      <>
+  1092→  1092→                        <input
+  1093→  1093→                          type="text"
+  1094→  1094→                          className="admin-search"
+  1095→  1095→                          placeholder="search by name, email, or message..."
+  1096→  1096→                          value={adminSearch}
+  1097→  1097→                          onChange={(e) => setAdminSearch(e.target.value)}
+  1098→  1098→                        />
+  1099→  1099→                        <button
+  1100→  1100→                          className="btn btn-ghost btn-sm admin-export-btn"
+  1101→  1101→                          onClick={() => {
+  1102→  1102→                            const csv = adminMsgs
+  1103→  1103→                              .filter((m) => {
+  1104→  1104→                                const s = adminSearch.toLowerCase();
+  1105→  1105→                                return !s || m.name.toLowerCase().includes(s) || m.email.toLowerCase().includes(s) || m.message.toLowerCase().includes(s);
+  1106→  1106→                              })
+  1107→  1107→                              .map((m) => `"${m.name}","${m.email}","${m.message.replace(/"/g, '""')}","${new Date(m.createdAt).toISOString()}"`)
+  1108→  1108→                              .join("\n");
+  1109→  1109→                            const blob = new Blob(["Name,Email,Message,Date\n" + csv], { type: "text/csv" });
+  1110→  1110→                            const url = URL.createObjectURL(blob);
+  1111→  1111→                            const a = document.createElement("a");
+  1112→  1112→                            a.href = url;
+  1113→  1113→                            a.download = "messages.csv";
+  1114→  1114→                            a.click();
+  1115→  1115→                          }}
+  1116→  1116→                        >
+  1117→  1117→                          export CSV
+  1118→  1118→                        </button>
+  1119→  1119→                        <div className="admin-messages">
+  1120→  1120→                          {adminMsgs
+  1121→  1121→                            .filter((m) => {
+  1122→  1122→                              const s = adminSearch.toLowerCase();
+  1123→  1123→                              return !s || m.name.toLowerCase().includes(s) || m.email.toLowerCase().includes(s) || m.message.toLowerCase().includes(s);
+  1124→  1124→                            })
+  1125→  1125→                            .map((m) => (
+  1126→  1126→                          <div key={m.id} className="admin-message">
+  1127→  1127→                            <div className="admin-message-head">
+  1128→  1128→                              <span>
+  1129→  1129→                                {tt.admin.from}: <span className="admin-message-from">{m.name}</span> &lt;{m.email}&gt;
+  1130→  1130→                              </span>
+  1131→  1131→                              <span>{tt.admin.at}: {new Date(m.createdAt).toLocaleString()}</span>
+  1132→  1132→                            </div>
+  1133→  1133→                            <div className="admin-message-text">{m.message}</div>
+  1134→  1134→                            <div className="admin-reply-box">
+  1135→  1135→                              {replyingTo === m.id ? (
+  1136→  1136→                                <>
+  1137→  1137→                                  <label>reply to {m.name}:</label>
+  1138→  1138→                                  <textarea
+  1139→  1139→                                    value={replyText}
+  1140→  1140→                                    onChange={(e) => setReplyText(e.target.value)}
+  1141→  1141→                                    placeholder="type your reply..."
+  1142→  1142→                                    rows={3}
+  1143→  1143→                                  />
+  1144→  1144→                                  <div className="admin-reply-actions">
+  1145→  1145→                                    <button className="btn btn-primary btn-sm" onClick={() => submitReply(m.id)}>
+  1146→  1146→                                      save reply
+  1147→  1147→                                    </button>
+  1148→  1148→                                    <button className="btn btn-ghost btn-sm" onClick={() => { setReplyingTo(null); setReplyText(""); }}>
+  1149→  1149→                                      cancel
+  1150→  1150→                                    </button>
+  1151→  1151→                                    {replyStatus?.id === m.id && (
+  1152→  1152→                                      <span className={`admin-reply-status ${replyStatus.ok ? "" : "error"}`}>{replyStatus.text}</span>
+  1153→  1153→                                    )}
+  1154→  1154→                                  </div>
+  1155→  1155→                                </>
+  1156→  1156→                              ) : (
+  1157→  1157→                                <button className="btn btn-ghost btn-sm" onClick={() => { setReplyingTo(m.id); setReplyText(""); setReplyStatus(null); }}>
+  1158→  1158→                                  reply
+  1159→  1159→                                </button>
+  1160→  1160→                              )}
+  1161→  1161→                              <button
+  1162→  1162→                                className="btn btn-ghost btn-sm"
+  1163→  1163→                                style={{ color: "var(--red)", borderColor: "var(--red)" }}
+  1164→  1164→                                onClick={async () => {
+  1165→  1165→                                  if (!confirm("Delete this message?")) return;
+  1166→  1166→                                  await fetch("/api/admin/clear", {
+  1167→  1167→                                    method: "POST", headers: { "Content-Type": "application/json" },
+  1168→  1168→                                    body: JSON.stringify({ password: adminPwd, target: "message", id: m.id }),
+  1169→  1169→                                  });
+  1170→  1170→                                  setAdminMsgs(prev => prev ? prev.filter(x => x.id !== m.id) : prev);
+  1171→  1171→                                }}
+  1172→  1172→                              >
+  1173→  1173→                                delete
+  1174→  1174→                              </button>
+  1175→  1175→                            </div>
+  1176→  1176→                          </div>
+  1177→  1177→                        ))}
+  1178→  1178→                        </div>
+  1179→  1179→                      </>
+  1180→  1180→                    )
+  1181→  1181→                  )}
+  1182→  1182→
+  1183→  1183→                  {/* AI CHAT LOGS TAB with inject reply */}
+  1184→  1184→                  {adminTab === "chats" && (
+  1185→  1185→                    !adminChats || adminChats.length === 0 ? (
+  1186→  1186→                      <p style={{ color: "var(--text-dim)", textAlign: "center", padding: 20 }}>
+  1187→  1187→                        {lang === "fa" ? "هنوز چتی نیست." : lang === "de" ? "Noch keine Chats." : "No chats yet."}
+  1188→  1188→                      </p>
+  1189→  1189→                    ) : (
+  1190→  1190→                      <div className="admin-messages">
+  1191→  1191→                        {adminChats.map((s) => (
+  1192→  1192→                          <div key={s.id} className="admin-session">
+  1193→  1193→                            <div className="admin-session-head">
+  1194→  1194→                              <span>session: {s.visitorId} ({s.ip || "—"})</span>
+  1195→  1195→                              <span>{new Date(s.updatedAt).toLocaleString()}</span>
+  1196→  1196→                            </div>
+  1197→  1197→                            <div className="admin-session-msgs">
+  1198→  1198→                              {s.messages.map((m) => (
+  1199→  1199→                                <div
+  1200→  1200→                                  key={m.id}
+  1201→  1201→                                  className={`admin-session-msg ${m.role}`}
+  1202→  1202→                                  data-role={m.role === "user" ? ">" : "<"}
+  1203→  1203→                                >
+  1204→  1204→                                  {m.content}
+  1205→  1205→                                </div>
+  1206→  1206→                              ))}
+  1207→  1207→                            </div>
+  1208→  1208→                            <div className="admin-reply-box">
+  1209→  1209→                              {chatReplyingTo === s.id ? (
+  1210→  1210→                                <>
+  1211→  1211→                                  <label>inject reply as AI:</label>
+  1212→  1212→                                  <textarea
+  1213→  1213→                                    value={chatReplyText}
+  1214→  1214→                                    onChange={(e) => setChatReplyText(e.target.value)}
+  1215→  1215→                                    placeholder="type your reply (visitor will see it as AI response)..."
+  1216→  1216→                                    rows={3}
+  1217→  1217→                                  />
+  1218→  1218→                                  <div className="admin-reply-actions">
+  1219→  1219→                                    <button className="btn btn-primary btn-sm" onClick={() => submitChatReply(s.id)}>
+  1220→  1220→                                      inject reply
+  1221→  1221→                                    </button>
+  1222→  1222→                                    <button className="btn btn-ghost btn-sm" onClick={() => { setChatReplyingTo(null); setChatReplyText(""); }}>
+  1223→  1223→                                      cancel
+  1224→  1224→                                    </button>
+  1225→  1225→                                    {chatReplyStatus?.id === s.id && (
+  1226→  1226→                                      <span className={`admin-reply-status ${chatReplyStatus.ok ? "" : "error"}`}>{chatReplyStatus.text}</span>
+  1227→  1227→                                    )}
+  1228→  1228→                                  </div>
+  1229→  1229→                                </>
+  1230→  1230→                              ) : (
+  1231→  1231→                                <button className="btn btn-ghost btn-sm" onClick={() => { setChatReplyingTo(s.id); setChatReplyText(""); setChatReplyStatus(null); }}>
+  1232→  1232→                                  reply as AI
+  1233→  1233→                                </button>
+  1234→  1234→                              )}
+  1235→  1235→                              <button
+  1236→  1236→                                className="btn btn-ghost btn-sm"
+  1237→  1237→                                style={{ color: "var(--red)", borderColor: "var(--red)" }}
+  1238→  1238→                                onClick={async () => {
+  1239→  1239→                                  if (!confirm("Delete this chat session?")) return;
+  1240→  1240→                                  await fetch("/api/admin/clear", {
+  1241→  1241→                                    method: "POST", headers: { "Content-Type": "application/json" },
+  1242→  1242→                                    body: JSON.stringify({ password: adminPwd, target: "chat_session", id: s.id }),
+  1243→  1243→                                  });
+  1244→  1244→                                  setAdminChats(prev => (prev || []).filter(x => x.id !== s.id));
+  1245→  1245→                                }}
+  1246→  1246→                              >
+  1247→  1247→                                delete
+  1248→  1248→                              </button>
+  1249→  1249→                            </div>
+  1250→  1250→                          </div>
+  1251→  1251→                        ))}
+  1252→  1252→                      </div>
+  1253→  1253→                    )
+  1254→  1254→                  )}
+  1255→  1255→
+  1256→  1256→                  {/* SETTINGS TAB — kill switch, Bale config, content editing */}
+  1257→  1257→                  {adminTab === "settings" && adminSettings && (
+  1258→  1258→                    <div>
+  1259→  1259→                      {/* API Kill Switch */}
+  1260→  1260→                      <div className="admin-settings-section">
+  1261→  1261→                        <h4>AI Chat API</h4>
+  1262→  1262→                        <div className="admin-setting-row">
+  1263→  1263→                          <span className="admin-setting-label">
+  1264→  1264→                            {adminSettings.apiEnabled === "true"
+  1265→  1265→                              ? (lang === "fa" ? "چت هوش مصنوعی فعال است" : "AI chat is currently ENABLED")
+  1266→  1266→                              : (lang === "fa" ? "چت هوش مصنوعی غیرفعال است" : "AI chat is currently DISABLED")}
+  1267→  1267→                          </span>
+  1268→  1268→                          <div
+  1269→  1269→                            className={`admin-toggle ${adminSettings.apiEnabled === "true" ? "on" : ""}`}
+  1270→  1270→                            onClick={() => {
+  1271→  1271→                              const newVal = adminSettings.apiEnabled === "true" ? "false" : "true";
+  1272→  1272→                              saveSettings({ apiEnabled: newVal });
+  1273→  1273→                            }}
+  1274→  1274→                            role="button"
+  1275→  1275→                            tabIndex={0}
+  1276→  1276→                          />
+  1277→  1277→                        </div>
+  1278→  1278→                      </div>
+  1279→  1279→
+  1280→  1280→                      {/* Content Editing */}
+  1281→  1281→                      <div className="admin-settings-section">
+  1282→  1282→                        <h4>Display Name (overrides content.ts)</h4>
+  1283→  1283→                        <div className="admin-setting-row">
+  1284→  1284→                          <span className="admin-setting-label">EN name</span>
+  1285→  1285→                          <input
+  1286→  1286→                            className="admin-setting-input"
+  1287→  1287→                            value={adminSettings.adminDisplayName || ""}
+  1288→  1288→                            onChange={(e) => setAdminSettings({ ...adminSettings, adminDisplayName: e.target.value })}
+  1289→  1289→                            placeholder="Your Name"
+  1290→  1290→                          />
+  1291→  1291→                        </div>
+  1292→  1292→                        <div className="admin-setting-row">
+  1293→  1293→                          <span className="admin-setting-label">Tagline</span>
+  1294→  1294→                          <input
+  1295→  1295→                            className="admin-setting-input"
+  1296→  1296→                            value={adminSettings.adminTagline || ""}
+  1297→  1297→                            onChange={(e) => setAdminSettings({ ...adminSettings, adminTagline: e.target.value })}
+  1298→  1298→                            placeholder="RF/Microwave Researcher · ..."
+  1299→  1299→                          />
+  1300→  1300→                        </div>
+  1301→  1301→                        <div className="admin-setting-row">
+  1302→  1302→                          <span className="admin-setting-label">Status message</span>
+  1303→  1303→                          <input
+  1304→  1304→                            className="admin-setting-input"
+  1305→  1305→                            value={adminSettings.adminStatus || ""}
+  1306→  1306→                            onChange={(e) => setAdminSettings({ ...adminSettings, adminStatus: e.target.value })}
+  1307→  1307→                            placeholder="e.g. working on antenna array..."
+  1308→  1308→                          />
+  1309→  1309→                        </div>
+  1310→  1310→                        <button
+  1311→  1311→                          className="btn btn-primary btn-sm admin-save-btn"
+  1312→  1312→                          onClick={() => saveSettings({
+  1313→  1313→                            adminDisplayName: adminSettings.adminDisplayName || "",
+  1314→  1314→                            adminTagline: adminSettings.adminTagline || "",
+  1315→  1315→                            adminStatus: adminSettings.adminStatus || "",
+  1316→  1316→                          })}
+  1317→  1317→                        >
+  1318→  1318→                          save content
+  1319→  1319→                        </button>
+  1320→  1320→                      </div>
+  1321→  1321→
+  1322→  1322→                      {/* Bale Messenger Integration */}
+  1323→  1323→                      <div className="admin-settings-section">
+  1324→  1324→                        <h4>Bale Messenger Integration</h4>
+  1325→  1325→                        <div className="admin-setting-row">
+  1326→  1326→                          <span className="admin-setting-label">Enable Bale notifications</span>
+  1327→  1327→                          <div
+  1328→  1328→                            className={`admin-toggle ${adminSettings.baleEnabled === "true" ? "on" : ""}`}
+  1329→  1329→                            onClick={() => {
+  1330→  1330→                              const newVal = adminSettings.baleEnabled === "true" ? "false" : "true";
+  1331→  1331→                              saveSettings({ baleEnabled: newVal });
+  1332→  1332→                            }}
+  1333→  1333→                            role="button"
+  1334→  1334→                            tabIndex={0}
+  1335→  1335→                          />
+  1336→  1336→                        </div>
+  1337→  1337→                        <div className="admin-setting-row">
+  1338→  1338→                          <span className="admin-setting-label">Bale Bot Token</span>
+  1339→  1339→                          <input
+  1340→  1340→                            className="admin-setting-input"
+  1341→  1341→                            type="password"
+  1342→  1342→                            value={adminSettings.baleBotToken || ""}
+  1343→  1343→                            onChange={(e) => setAdminSettings({ ...adminSettings, baleBotToken: e.target.value })}
+  1344→  1344→                            placeholder="123456789:ABCdef..."
+  1345→  1345→                          />
+  1346→  1346→                        </div>
+  1347→  1347→                        <div className="admin-setting-row">
+  1348→  1348→                          <span className="admin-setting-label">Bale Chat ID</span>
+  1349→  1349→                          <input
+  1350→  1350→                            className="admin-setting-input"
+  1351→  1351→                            value={adminSettings.baleChatId || ""}
+  1352→  1352→                            onChange={(e) => setAdminSettings({ ...adminSettings, baleChatId: e.target.value })}
+  1353→  1353→                            placeholder="123456789"
+  1354→  1354→                          />
+  1355→  1355→                        </div>
+  1356→  1356→                        <button
+  1357→  1357→                          className="btn btn-primary btn-sm admin-save-btn"
+  1358→  1358→                          onClick={() => saveSettings({
+  1359→  1359→                            baleBotToken: adminSettings.baleBotToken || "",
+  1360→  1360→                            baleChatId: adminSettings.baleChatId || "",
+  1361→  1361→                          })}
+  1362→  1362→                        >
+  1363→  1363→                          save Bale config
+  1364→  1364→                        </button>
+  1365→  1365→                        <div className="admin-bale-status">
+  1366→  1366→                          <strong>Status:</strong> {adminSettings.baleEnabled === "true" && adminSettings.baleBotToken && adminSettings.baleChatId
+  1367→  1367→                            ? "✓ configured — notifications will be sent"
+  1368→  1368→                            : "⚠ not configured — see API_SETUP.md for instructions"}
+  1369→  1369→                          <br/><br/>
+  1370→  1370→                          <strong>Webhook URL:</strong> <code>https://your-domain.com/api/bale/webhook</code>
+  1371→  1371→                          <br/><br/>
+  1372→  1372→                          <strong>Commands admin can send to bot:</strong>
+  1373→  1373→                          <br/>/list · /reply {`{id}`} {`{text}`} · /chat {`{sessionId}`} {`{text}`}
+  1374→  1374→                          <br/>/disable · /enable · /stats · /help
+  1375→  1375→                        </div>
+  1376→  1376→                      </div>
+  1377→  1377→
+  1378→  1378→                      {/* Security — Change Password & Handle */}
+  1379→  1379→                      <div className="admin-settings-section">
+  1380→  1380→                        <h4>Security — Password & Handle</h4>
+  1381→  1381→                        <div className="admin-setting-row">
+  1382→  1382→                          <span className="admin-setting-label">New password (min 6 chars)</span>
+  1383→  1383→                          <input
+  1384→  1384→                            className="admin-setting-input"
+  1385→  1385→                            type="password"
+  1386→  1386→                            id="newPassword"
+  1387→  1387→                            placeholder="new password..."
+  1388→  1388→                          />
+  1389→  1389→                        </div>
+  1390→  1390→                        <button
+  1391→  1391→                          className="btn btn-primary btn-sm admin-save-btn"
+  1392→  1392→                          onClick={async () => {
+  1393→  1393→                            const el = document.getElementById("newPassword") as HTMLInputElement;
+  1394→  1394→                            const newPwd = el.value;
+  1395→  1395→                            if (!newPwd || newPwd.length < 6) {
+  1396→  1396→                              alert("Password must be at least 6 characters");
+  1397→  1397→                              return;
+  1398→  1398→                            }
+  1399→  1399→                            const res = await fetch("/api/admin/security", {
+  1400→  1400→                              method: "POST",
+  1401→  1401→                              headers: { "Content-Type": "application/json" },
+  1402→  1402→                              body: JSON.stringify({ password: adminPwd, action: "change_password", newPassword: newPwd }),
+  1403→  1403→                            });
+  1404→  1404→                            const data = await res.json();
+  1405→  1405→                            if (data.ok) {
+  1406→  1406→                              alert("✓ Password changed! Use new password next time: " + newPwd);
+  1407→  1407→                              setAdminPwd(newPwd);
+  1408→  1408→                              el.value = "";
+  1409→  1409→                            } else {
+  1410→  1410→                              alert("Error: " + (data.error || "unknown"));
+  1411→  1411→                            }
+  1412→  1412→                          }}
+  1413→  1413→                        >
+  1414→  1414→                          change password
+  1415→  1415→                        </button>
+  1416→  1416→                        <div className="admin-setting-row" style={{ marginTop: 12 }}>
+  1417→  1417→                          <span className="admin-setting-label">New handle (username)</span>
+  1418→  1418→                          <input
+  1419→  1419→                            className="admin-setting-input"
+  1420→  1420→                            type="text"
+  1421→  1421→                            id="newHandle"
+  1422→  1422→                            placeholder="new_handle"
+  1423→  1423→                          />
+  1424→  1424→                        </div>
+  1425→  1425→                        <button
+  1426→  1426→                          className="btn btn-primary btn-sm admin-save-btn"
+  1427→  1427→                          onClick={async () => {
+  1428→  1428→                            const el = document.getElementById("newHandle") as HTMLInputElement;
+  1429→  1429→                            const newH = el.value;
+  1430→  1430→                            if (!newH) return;
+  1431→  1431→                            const res = await fetch("/api/admin/security", {
+  1432→  1432→                              method: "POST",
+  1433→  1433→                              headers: { "Content-Type": "application/json" },
+  1434→  1434→                              body: JSON.stringify({ password: adminPwd, action: "change_handle", newHandle: newH }),
+  1435→  1435→                            });
+  1436→  1436→                            const data = await res.json();
+  1437→  1437→                            if (data.ok) {
+  1438→  1438→                              alert("✓ Handle changed to: " + newH + ". Reload to see changes.");
+  1439→  1439→                              el.value = "";
+  1440→  1440→                            } else {
+  1441→  1441→                              alert("Error: " + (data.error || "unknown"));
+  1442→  1442→                            }
+  1443→  1443→                          }}
+  1444→  1444→                        >
+  1445→  1445→                          change handle
+  1446→  1446→                        </button>
+  1447→  1447→                      </div>
+  1448→  1448→
+  1449→  1449→                      {/* AI Providers — API Key Management */}
+  1450→  1450→                      <div className="admin-settings-section">
+  1451→  1451→                        <h4>AI Providers — API Keys</h4>
+  1452→  1452→                        <p style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginBottom: 10 }}>
+  1453→  1453→                          Configure which AI providers to use. Lower priority = tried first.
+  1454→  1454→                          If one fails, the next is tried (fallback chain).
+  1455→  1455→                        </p>
+  1456→  1456→                        <div id="aiProvidersList" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+  1457→  1457→                          <p style={{ color: "var(--text-dim)", fontSize: "0.78rem" }}>Loading providers...</p>
+  1458→  1458→                        </div>
+  1459→  1459→                        <button
+  1460→  1460→                          className="btn btn-ghost btn-sm"
+  1461→  1461→                          style={{ marginTop: 10 }}
+  1462→  1462→                          onClick={async () => {
+  1463→  1463→                            const res = await fetch(`/api/admin/providers?password=${adminPwd}`);
+  1464→  1464→                            const data = await res.json();
+  1465→  1465→                            if (data.ok) {
+  1466→  1466→                              const container = document.getElementById("aiProvidersList");
+  1467→  1467→                              if (container) {
+  1468→  1468→                                container.innerHTML = data.providers.map((p: any) => `
+  1469→  1469→                                  <div style="border:1px solid var(--border);padding:10px;display:flex;flex-direction:column;gap:6px;">
+  1470→  1470→                                    <div style="display:flex;justify-content:space-between;align-items:center;">
+  1471→  1471→                                      <strong style="color:var(--green-bright);font-size:0.85rem;">${p.label}</strong>
+  1472→  1472→                                      <span style="font-size:0.7rem;color:${p.enabled ? 'var(--green)' : 'var(--text-dim)'};">${p.enabled ? '● enabled' : '○ disabled'}</span>
+  1473→  1473→                                    </div>
+  1474→  1474→                                    <div style="font-size:0.72rem;color:var(--text-dim);">Model: ${p.model} · Priority: ${p.priority}</div>
+  1475→  1475→                                    <input type="password" placeholder="API Key: ${p.apiKey || 'not set'}" style="background:var(--bg);border:1px solid var(--border);color:var(--green-bright);font-family:var(--font-mono);font-size:0.75rem;padding:4px;" id="key_${p.id}" />
+  1476→  1476→                                    <input type="text" placeholder="Model name" value="${p.model}" style="background:var(--bg);border:1px solid var(--border);color:var(--green-bright);font-family:var(--font-mono);font-size:0.75rem;padding:4px;" id="model_${p.id}" />
+  1477→  1477→                                    <div style="display:flex;gap:4px;">
+  1478→  1478→                                      <button onclick="window.__updateProvider('${p.id}', '${p.id}')" style="background:var(--green);color:#000;border:0;padding:4px 8px;font-size:0.7rem;cursor:pointer;font-family:var(--font-mono);">save</button>
+  1479→  1479→                                      <button onclick="window.__toggleProvider('${p.id}')" style="background:var(--bg-panel-2);border:1px solid var(--border);color:var(--green);padding:4px 8px;font-size:0.7rem;cursor:pointer;font-family:var(--font-mono);">${p.enabled ? 'disable' : 'enable'}</button>
+  1480→  1480→                                    </div>
+  1481→  1481→                                  </div>
+  1482→  1482→                                `).join("");
+  1483→  1483→                              }
+  1484→  1484→                            }
+  1485→  1485→                          }}
+  1486→  1486→                        >
+  1487→  1487→                          refresh providers
+  1488→  1488→                        </button>
+  1489→  1489→                      </div>
+  1490→  1490→
+  1491→  1491→                      {/* Simple Email Forwarding — just one field */}
+  1492→  1492→                      <div className="admin-settings-section">
+  1493→  1493→                        <h4>Email Forwarding</h4>
+  1494→  1494→                        <p style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginBottom: 10 }}>
+  1495→  1495→                          Enter your email. All contact form messages will be forwarded there automatically.
+  1496→  1496→                          No SMTP needed — uses a free service (formsubmit.co).
+  1497→  1497→                          First time: you'll get a confirmation email from formsubmit.co to activate.
+  1498→  1498→                        </p>
+  1499→  1499→                        <div className="admin-setting-row">
+  1500→  1500→                          <span className="admin-setting-label">Your email</span>
+  1501→  1501→                          <input className="admin-setting-input" type="email" id="forwardEmail" placeholder="your@gmail.com" />
+  1502→  1502→                        </div>
+  1503→  1503→                        <button
+  1504→  1504→                          className="btn btn-primary btn-sm admin-save-btn"
+  1505→  1505→                          onClick={async () => {
+  1506→  1506→                            const email = (document.getElementById("forwardEmail") as HTMLInputElement).value;
+  1507→  1507→                            const res = await fetch("/api/admin/email", {
+  1508→  1508→                              method: "POST",
+  1509→  1509→                              headers: { "Content-Type": "application/json" },
+  1510→  1510→                              body: JSON.stringify({ password: adminPwd, action: "set_email", email }),
+  1511→  1511→                            });
+  1512→  1512→                            const data = await res.json();
+  1513→  1513→                            if (data.ok) alert("✓ Email saved! First message will trigger a confirmation email from formsubmit.co.");
+  1514→  1514→                            else alert("Error: " + (data.error || "invalid email"));
+  1515→  1515→                          }}
+  1516→  1516→                        >
+  1517→  1517→                          save email
+  1518→  1518→                        </button>
+  1519→  1519→                      </div>
+  1520→  1520→
+  1521→  1521→                      {/* Danger Zone — Clear Data */}
+  1522→  1522→                      <div className="admin-settings-section">
+  1523→  1523→                        <h4 style={{ color: "var(--red)" }}>⚠ Danger Zone — Clear Data</h4>
+  1524→  1524→                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+  1525→  1525→                          <button
+  1526→  1526→                            className="btn btn-ghost btn-sm"
+  1527→  1527→                            style={{ borderColor: "var(--red)", color: "var(--red)" }}
+  1528→  1528→                            onClick={async () => {
+  1529→  1529→                              if (!confirm("Delete ALL chat sessions and messages? This cannot be undone.")) return;
+  1530→  1530→                              await fetch("/api/admin/clear", {
+  1531→  1531→                                method: "POST", headers: { "Content-Type": "application/json" },
+  1532→  1532→                                body: JSON.stringify({ password: adminPwd, target: "chat_all" }),
+  1533→  1533→                              });
+  1534→  1534→                              alert("✓ All chats cleared");
+  1535→  1535→                              // Reload admin data
+  1536→  1536→                              setAdminChats([]);
+  1537→  1537→                            }}
+  1538→  1538→                          >
+  1539→  1539→                            clear all chats
+  1540→  1540→                          </button>
+  1541→  1541→                          <button
+  1542→  1542→                            className="btn btn-ghost btn-sm"
+  1543→  1543→                            style={{ borderColor: "var(--red)", color: "var(--red)" }}
+  1544→  1544→                            onClick={async () => {
+  1545→  1545→                              if (!confirm("Delete ALL contact messages? This cannot be undone.")) return;
+  1546→  1546→                              await fetch("/api/admin/clear", {
+  1547→  1547→                                method: "POST", headers: { "Content-Type": "application/json" },
+  1548→  1548→                                body: JSON.stringify({ password: adminPwd, target: "message_all" }),
+  1549→  1549→                              });
+  1550→  1550→                              alert("✓ All messages cleared");
+  1551→  1551→                              setAdminMsgs([]);
+  1552→  1552→                            }}
+  1553→  1553→                          >
+  1554→  1554→                            clear all messages
+  1555→  1555→                          </button>
+  1556→  1556→                        </div>
+  1557→  1557→                      </div>
+  1558→  1558→                    </div>
+  1559→  1559→                  )}
+  1560→  1560→                </>
+  1561→  1561→              )}
+  1562→  1562→            </div>
+  1563→  1563→          </div>
+  1564→  1564→        </div>
+  1565→  1565→      )}
+  1566→  1566→    </div>
+  1567→  1567→  );
+  1568→  1568→}
+  1569→  1569→

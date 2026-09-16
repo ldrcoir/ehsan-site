@@ -85,6 +85,8 @@ async function callProvider(
       return callOllama(provider, messages);
     case "groq":
       return callGroq(provider, messages);
+    case "openrouter":
+      return callOpenAI(provider, messages);
     case "custom":
       return callCustom(provider, messages);
     default:

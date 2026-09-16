@@ -1,0 +1,335 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Post {
+  id        String   @id @default(cuid())
+  title     String
+  content   String?
+  published Boolean  @default(false)
+  authorId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  message   String
+  ip        String?
+  userAgent String?
+  status    String   @default("new") // new, read, replied, archived
+  createdAt DateTime @default(now())
+  replies   MessageReply[]
+  notes     MessageNote[]
+  tags      MessageTagRelation[]
+
+  @@index([createdAt])
+  @@index([email])
+  @@index([status])
+}
+
+model ChatSession {
+  id        String   @id @default(cuid())
+  visitorId String
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  messages  ChatMessage[]
+
+  @@index([createdAt])
+  @@index([visitorId])
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  sessionId String
+  role      String   // "user" | "assistant"
+  content   String
+  createdAt DateTime @default(now())
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([createdAt])
+}
+
+// Admin replies to contact messages (visible only to admin, optionally pushed to Bale)
+model MessageReply {
+  id        String   @id @default(cuid())
+  messageId String   // references ContactMessage.id
+  reply     String
+  createdAt DateTime @default(now())
+  message   ContactMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+}
+
+// Key-value store for site settings editable from admin panel
+// (name, tagline, status, apiEnabled, baleEnabled, etc.)
+model SiteSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// AI Provider configuration — multiple providers with API keys
+model AiProvider {
+  id        String   @id @default(cuid())
+  name      String   // "openai", "anthropic", "zai", "ollama"
+  label     String   // Display name
+  apiKey    String?  // Encrypted API key (or null for local)
+  baseUrl   String?  // Custom base URL (for Ollama, etc.)
+  model     String   // Model name to use
+  enabled   Boolean  @default(false)
+  priority  Int      @default(0) // Lower = higher priority (fallback order)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enabled, priority])
+}
+
+// CRM: Tags for messages
+model MessageTag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  color     String   @default("#00ff41")
+  createdAt DateTime @default(now())
+  messages  MessageTagRelation[]
+}
+
+// Junction: messages can have multiple tags
+model MessageTagRelation {
+  messageId String
+  tagId     String
+  message   ContactMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  tag       MessageTag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, tagId])
+}
+
+// CRM: Admin notes on messages
+model MessageNote {
+  id        String   @id @default(cuid())
+  messageId String
+  note      String
+  createdAt DateTime @default(now())
+  message   ContactMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+}
+
+// CRM: Message status tracking
+// Status stored as SiteSetting key-value to avoid schema changes, but we add this for structure
+// Lab Equipment — manageable from admin panel, with live status display
+model LabEquipment {
+  id          String   @id @default(cuid())
+  name        String
+  model       String
+  category    String   @default("general") // vna, sa, sg, osc, etc.
+  status      String   @default("online") // online, standby, offline, maintenance
+  description String?
+  specs       String?  // JSON string of key specs
+  order       Int      @default(0)
+  visible     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([visible, order])
+  @@index([category])
+}
+
+// Page views — for analytics dashboard
+model PageView {
+  id        String   @id @default(cuid())
+  path      String
+  referrer  String?
+  userAgent String?
+  ip        String?
+  lang      String?
+  createdAt DateTime @default(now())
+
+  @@index([path, createdAt])
+  @@index([createdAt])
+}
+
+// Tutorial views — track which tutorials are watched most
+model TutorialView {
+  id          String   @id @default(cuid())
+  tutorialId  String
+  ip          String?
+  createdAt   DateTime @default(now())
+
+  @@index([tutorialId])
+  @@index([createdAt])
+}
+
+// ============================================================================
+//  CONTENT MODELS — editable from admin panel
+// ============================================================================
+
+model Book {
+  id          String   @id @default(cuid())
+  titleEn     String
+  titleDe     String?
+  titleFa     String?
+  year        String
+  publisherEn String
+  publisherDe String?
+  publisherFa String?
+  descEn      String
+  descDe      String?
+  descFa      String?
+  cover       String   @default("linear-gradient(135deg,#003b00,#00ff41)")
+  link        String?
+  order       Int      @default(0)
+  visible     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([visible, order])
+}
+
+model Article {
+  id        String   @id @default(cuid())
+  titleEn   String
+  titleDe   String?
+  titleFa   String?
+  venueEn   String
+  venueDe   String?
+  venueFa   String?
+  date      String
+  typeEn    String   @default("Article")
+  typeDe    String?
+  typeFa    String?
+  summaryEn String
+  summaryDe String?
+  summaryFa String?
+  link      String?
+  order     Int      @default(0)
+  visible   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([visible, order])
+}
+
+model Tutorial {
+  id          String   @id @default(cuid())
+  titleEn     String
+  titleDe     String?
+  titleFa     String?
+  duration    String   @default("00:00")
+  levelEn     String   @default("Beginner")
+  levelDe     String?
+  levelFa     String?
+  descEn      String
+  descDe      String?
+  descFa      String?
+  embedUrl   String
+  platform    String   @default("aparat")
+  playlist    String?
+  order       Int      @default(0)
+  visible     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([visible, order])
+  @@index([playlist])
+}
+
+model Skill {
+  id          String   @id @default(cuid())
+  categoryEn  String
+  categoryDe  String?
+  categoryFa  String?
+  items       String
+  order       Int      @default(0)
+  visible     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([visible, order])
+}
+
+model AiInstruction {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  content   String
+  enabled   Boolean  @default(true)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enabled, order])
+}
+
+// Email configuration — SMTP settings for sending replies via email
+model EmailConfig {
+  id        String   @id @default("default")
+  smtpHost  String?
+  smtpPort  String?
+  smtpUser  String?
+  smtpPass  String?
+  fromEmail String?
+  fromName  String?
+  enabled   Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+}
+
+// Telegram configuration — alternative to Bale
+model TelegramConfig {
+  id        String   @id @default("default")
+  botToken  String?
+  chatId    String?
+  enabled   Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+}
+
+// Custom Themes — created from admin Theme Builder
+model CustomTheme {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  bg          String   @default("#000000")
+  bgSoft      String   @default("#030303")
+  bgPanel     String   @default("#050505")
+  bgPanel2    String   @default("#080808")
+  primary     String   @default("#00ff41")
+  primaryDim  String   @default("#008f11")
+  primaryBright String @default("#39ff14")
+  text        String   @default("#c8ffc8")
+  textDim     String   @default("#4a7a4a")
+  textFaint   String   @default("#2a4a2a")
+  border      String   @default("#1a3a1a")
+  borderBright String   @default("#2a6a2a")
+  accent      String   @default("#ffb000")
+  red         String   @default("#ff0040")
+  cyan        String   @default("#00fff0")
+  scanlines   Boolean  @default(false)
+  visible     Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([visible, order])
+}
