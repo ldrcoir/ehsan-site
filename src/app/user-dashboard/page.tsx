@@ -1,15 +1,22 @@
 // ============================================================================
-// /user-dashboard — داشبورد کاربر AccessUser
+// /user-dashboard — داشبورد کاربر + پنل ادمین
 // ============================================================================
-// این صفحه فقط برای کاربران وارد شده قابل دسترسی هست.
-// اگه کاربر session نداشته باشه، به /user-login منتقل می‌شه.
-// اگه در بازه‌ی زمانی مجاز نباشه، پیام هشدار نشون داده می‌شه.
+// این صفحه:
+// - اگه کاربر ادمین باشه: پنل ادمین کامل (همه قابلیت‌ها) نشون می‌ده
+// - اگه کاربر عادی باشه: فقط محتوای مجاز رو نشون می‌ده
+// - اگه session نباشه: به /user-login منتقل می‌شه
 // ============================================================================
 
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import ContentManager from "@/components/ContentManager";
+import TextEditor from "@/components/TextEditor";
+import NavMenuManager from "@/components/NavMenuManager";
+import ThemeBuilder from "@/components/ThemeBuilder";
+import AccessUserManager from "@/components/AccessUserManager";
+import FontSelector from "@/components/FontSelector";
 
 type UserInfo = {
   id: string;
@@ -26,12 +33,16 @@ type UserInfo = {
 
 const DAY_NAMES = ["یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه", "شنبه"];
 
+type Tab = "overview" | "content" | "text" | "nav" | "themes" | "users" | "font" | "settings";
+
 export default function UserDashboardPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<UserInfo | null>(null);
   const [accessAllowed, setAccessAllowed] = useState(true);
   const [accessReason, setAccessReason] = useState("");
+  const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const [adminPwd, setAdminPwd] = useState("");
 
   useEffect(() => {
     fetch("/api/user/verify", { cache: "no-store" })
@@ -50,6 +61,17 @@ export default function UserDashboardPage() {
         router.replace("/user-login");
       });
   }, [router]);
+
+  // جلوگیری از خروج با بستن تب
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "اگر این تب رو ببندید، از پنل ادمین خارج می‌شید. آیا مطمئن هستید؟";
+      return e.returnValue;
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
 
   async function handleLogout() {
     await fetch("/api/user/logout", { method: "POST" });
@@ -72,6 +94,8 @@ export default function UserDashboardPage() {
 
   if (!user) return null;
 
+  const isAdmin = user.role === "admin";
+
   // نمایش بازه‌ی دسترسی به‌صورت متنی
   let accessSchedule = "بدون محدودیت (۲۴/۷)";
   if (user.allowedHourStart !== null && user.allowedHourEnd !== null) {
@@ -85,6 +109,17 @@ export default function UserDashboardPage() {
     accessSchedule += ` — انقضا: ${new Date(user.expiresAt).toLocaleDateString("fa-IR")}`;
   }
 
+  const tabs: { id: Tab; label: string; adminOnly?: boolean }[] = [
+    { id: "overview", label: "📊 داشبورد" },
+    { id: "content", label: "📁 محتوا", adminOnly: true },
+    { id: "text", label: "📝 متن‌ها", adminOnly: true },
+    { id: "nav", label: "🧭 منو", adminOnly: true },
+    { id: "themes", label: "🎨 تم‌ها", adminOnly: true },
+    { id: "users", label: "👥 کاربران", adminOnly: true },
+    { id: "font", label: "🔤 فونت", adminOnly: true },
+    { id: "settings", label: "⚙️ تنظیمات", adminOnly: true },
+  ];
+
   return (
     <div style={{
       minHeight: "100vh",
@@ -94,7 +129,7 @@ export default function UserDashboardPage() {
       padding: 20,
     }}>
       <div style={{
-        maxWidth: 800,
+        maxWidth: 1200,
         margin: "0 auto",
         background: "var(--bg-panel, #050505)",
         border: "1px solid var(--border, #1a3a1a)",
@@ -118,28 +153,47 @@ export default function UserDashboardPage() {
               margin: 0,
               textTransform: "uppercase",
               letterSpacing: 2,
-            }}>📊 User Dashboard</h1>
+            }}>
+              {isAdmin ? "🔐 Admin Panel" : "📊 User Dashboard"}
+            </h1>
             <p style={{
               color: "var(--text-dim, #4a7a4a)",
               fontSize: 11,
               margin: "4px 0 0",
-            }}>خوش آمدید، {user.displayName || user.username}</p>
+            }}>
+              خوش آمدید، {user.displayName || user.username}
+            </p>
           </div>
-          <button
-            onClick={handleLogout}
-            style={{
+          <div style={{ display: "flex", gap: 10 }}>
+            <a href="/" target="_blank" style={{
               padding: "8px 16px",
               background: "transparent",
-              color: "var(--red, #ff0040)",
-              border: "1px solid var(--red, #ff0040)",
+              color: "var(--primary, #00ff41)",
+              border: "1px solid var(--primary, #00ff41)",
               fontFamily: "monospace",
               fontSize: 11,
               cursor: "pointer",
               borderRadius: 4,
               textTransform: "uppercase",
               letterSpacing: 1,
-            }}
-          >Logout →</button>
+              textDecoration: "none",
+            }}>🌐 باز کردن سایت</a>
+            <button
+              onClick={handleLogout}
+              style={{
+                padding: "8px 16px",
+                background: "transparent",
+                color: "var(--red, #ff0040)",
+                border: "1px solid var(--red, #ff0040)",
+                fontFamily: "monospace",
+                fontSize: 11,
+                cursor: "pointer",
+                borderRadius: 4,
+                textTransform: "uppercase",
+                letterSpacing: 1,
+              }}
+            >Logout →</button>
+          </div>
         </div>
 
         {/* Access Status */}
@@ -156,77 +210,81 @@ export default function UserDashboardPage() {
             ⚠️ دسترسی شما در این زمان محدود شده است.
             <br />
             دلیل: <code>{accessReason}</code>
-            <br />
-            در بازه‌ی زمانی مجاز، دوباره تلاش کنید.
           </div>
         )}
 
-        {/* User Info */}
+        {/* Tabs */}
         <div style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 16,
-          marginBottom: 30,
-        }}>
-          <InfoCard label="Username" value={user.username} />
-          <InfoCard label="Role" value={user.role} />
-          <InfoCard label="Last Login" value={user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString("fa-IR") : "—"} />
-          <InfoCard label="Account Status" value={user.active ? "✅ Active" : "❌ Inactive"} />
-        </div>
-
-        {/* Access Schedule */}
-        <div style={{
-          padding: 16,
-          background: "var(--bg, #000)",
-          border: "1px solid var(--border, #1a3a1a)",
-          borderRadius: 4,
+          display: "flex",
+          gap: 8,
           marginBottom: 20,
+          flexWrap: "wrap",
         }}>
-          <div style={{
-            fontSize: 10,
-            color: "var(--text-dim, #4a7a4a)",
-            textTransform: "uppercase",
-            letterSpacing: 1,
-            marginBottom: 8,
-          }}>Access Schedule</div>
-          <div style={{ fontSize: 12, color: "var(--primary-bright, #39ff14)" }}>
-            {accessSchedule}
-          </div>
+          {tabs.map(tab => {
+            if (tab.adminOnly && !isAdmin) return null;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`signal-waveform-btn ${activeTab === tab.id ? "active" : ""}`}
+                style={{
+                  padding: "8px 12px",
+                  fontSize: 11,
+                  borderRadius: 4,
+                }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Quick Actions */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 12,
-        }}>
-          <a href="/" style={{
-            padding: 14,
-            background: "var(--bg, #000)",
-            border: "1px solid var(--border, #1a3a1a)",
-            color: "var(--primary, #00ff41)",
-            fontFamily: "monospace",
-            fontSize: 11,
-            textTransform: "uppercase",
-            letterSpacing: 1,
-            textAlign: "center",
-            textDecoration: "none",
-            borderRadius: 4,
-            cursor: accessAllowed ? "pointer" : "not-allowed",
-            opacity: accessAllowed ? 1 : 0.4,
-          }}>→ Browse Site</a>
-          <button onClick={() => window.location.reload()} style={{
-            padding: 14,
-            background: "var(--bg, #000)",
-            border: "1px solid var(--border, #1a3a1a)",
-            color: "var(--primary, #00ff41)",
-            fontFamily: "monospace",
-            fontSize: 11,
-            textTransform: "uppercase",
-            letterSpacing: 1,
-            cursor: "pointer",
-            borderRadius: 4,
-          }}>↻ Refresh Status</button>
+        {/* Content */}
+        <div style={{ minHeight: 400 }}>
+          {activeTab === "overview" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <InfoCard label="Username" value={user.username} />
+              <InfoCard label="Role" value={user.role === "admin" ? "👑 ادمین" : "👤 کاربر"} />
+              <InfoCard label="Last Login" value={user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString("fa-IR") : "—"} />
+              <InfoCard label="Account Status" value={user.active ? "✅ فعال" : "❌ غیرفعال"} />
+              <div style={{ gridColumn: "1 / -1" }}>
+                <InfoCard label="Access Schedule" value={accessSchedule} />
+              </div>
+            </div>
+          )}
+
+          {activeTab === "content" && isAdmin && (
+            <ContentManager password={adminPwd} lang="fa" />
+          )}
+
+          {activeTab === "text" && isAdmin && (
+            <TextEditor password={adminPwd} lang="fa" />
+          )}
+
+          {activeTab === "nav" && isAdmin && (
+            <NavMenuManager password={adminPwd} lang="fa" />
+          )}
+
+          {activeTab === "themes" && isAdmin && (
+            <ThemeBuilder password={adminPwd} lang="fa" />
+          )}
+
+          {activeTab === "users" && isAdmin && (
+            <AccessUserManager />
+          )}
+
+          {activeTab === "font" && isAdmin && (
+            <FontSelector />
+          )}
+
+          {activeTab === "settings" && (
+            <div style={{ padding: 20, color: "var(--text-dim)", textAlign: "center" }}>
+              <p>برای تنظیمات پیشرفته (تغییر رمز، ایمیل، AI providers)، از پنل قدیمی استفاده کنید:</p>
+              <a href="/#admin" style={{ color: "var(--primary)", textDecoration: "underline" }}>
+                باز کردن پنل قدیمی
+              </a>
+            </div>
+          )}
         </div>
       </div>
     </div>
