@@ -993,9 +993,6 @@ export default function Home() {
                   <p style={{ marginTop: 16, fontSize: "0.72rem", color: "var(--text-faint)" }}>
                     {tt.admin.subtitle}
                   </p>
-                  <p style={{ marginTop: 8, fontSize: "0.68rem", color: "var(--text-faint)" }}>
-                    default: admin / admin123 (change in content.ts)
-                  </p>
                 </form>
               ) : (
                 <>

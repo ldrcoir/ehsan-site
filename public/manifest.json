@@ -1,21 +1,38 @@
 {
   "name": "Personal Site",
-  "short_name": "Portfolio",
-  "description": "RF/Microwave Researcher · AI/ML Programmer · Writer",
+  "short_name": "Site",
+  "description": "Personal portfolio website",
+  "lang": "fa",
+  "dir": "rtl",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#000000",
   "theme_color": "#00ff41",
+  "categories": ["portfolio", "personal", "technology"],
   "icons": [
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Contact",
+      "url": "/#contact"
+    },
+    {
+      "name": "Chat",
+      "url": "/#chat"
     }
   ]
 }

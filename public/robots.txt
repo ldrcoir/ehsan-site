@@ -1,14 +1,33 @@
-User-agent: Googlebot
-Allow: /
+# robots.txt — کنترل دسترسی موتورهای جستجو
+# ==========================================================================
+# این فایل به موتورهای جستجو (Google, Bing, ...) می‌گه کدوم صفحات رو
+# index کنن و کدوم‌ها رو نه.
+# ==========================================================================
 
-User-agent: Bingbot
-Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: facebookexternalhit
-Allow: /
-
+# همه‌ی موتورهای جستجو
 User-agent: *
+
+# صفحات عمومی مجاز
 Allow: /
+Allow: /$
+
+# صفحات غیرعمومی — نباید index بشن
+Disallow: /api/
+Disallow: /user-login
+Disallow: /user-dashboard
+Disallow: /admin
+Disallow: /*?password=
+Disallow: /*?token=
+
+# مسیر سایت‌مپ
+Sitemap: https://ehsanmorad.ir/sitemap.xml
+
+# میزبان سایت
+Host: https://ehsanmorad.ir
+
+# ==========================================================================
+# نکات:
+# - /api/ نباید index بشه چون داده‌های JSON هستن
+# - /user-login و /user-dashboard صفحات خصوصی هستن
+# - Sitemap به موتورهای جستجو کمک می‌کنه همه‌ی صفحات رو پیدا کنن
+# ==========================================================================
