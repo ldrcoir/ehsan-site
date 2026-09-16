@@ -24,52 +24,46 @@ const fallback: SiteContent = {
   navItems: [],
 };
 
-export function useContent() {
+export function useContent(lang: string = "en") {
   const [content, setContent] = useState<SiteContent>(fallback);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    const cached = localStorage.getItem("site_content_cache");
-    const cachedTime = localStorage.getItem("site_content_cache_time");
-    if (cached && cachedTime) {
-      const age = Date.now() - parseInt(cachedTime, 10);
-      if (age < 5 * 60 * 1000) {
-        try {
-          // defer setState to next microtask to avoid synchronous setState in effect
-          Promise.resolve().then(() => {
-            if (!cancelled) {
-              setContent(JSON.parse(cached));
-              setLoading(false);
-            }
-          });
-          return;
-        } catch {}
-      }
-    }
 
-    Promise.all([
-      fetch("/api/content").then(r => r.json()).catch(() => ({ ok: false })),
-      fetch("/api/admin/text").then(r => r.json()).catch(() => ({ ok: false, texts: {} })),
-    ]).then(([contentData, textData]) => {
-      if (cancelled) return;
-      const result = {
-        books: contentData.ok ? contentData.books || [] : [],
-        articles: contentData.ok ? contentData.articles || [] : [],
-        tutorials: contentData.ok ? contentData.tutorials || [] : [],
-        skills: contentData.ok ? contentData.skills || [] : [],
-        aiInstructions: contentData.ok ? contentData.aiInstructions || [] : [],
-        equipment: contentData.ok ? contentData.equipment || [] : [],
-        texts: textData.ok ? textData.texts || {} : {},
-        navItems: contentData.ok ? contentData.navItems || [] : [],
-      };
-      setContent(result);
-      localStorage.setItem("site_content_cache", JSON.stringify(result));
-      localStorage.setItem("site_content_cache_time", String(Date.now()));
-    }).catch(() => {}).finally(() => { if (!cancelled) setLoading(false); });
+    // پاک‌کردن cache قدیمی — وگرنه تغییرات پنل نشون داده نمی‌شه
+    // (cache فقط ۵ دقیقه بود، ولی برای اطمینان از نمایش تغییرات، پاکش می‌کنیم)
+    localStorage.removeItem("site_content_cache");
+    localStorage.removeItem("site_content_cache_time");
+
+    // fetch از /api/content که شامل متن‌ها هم هست
+    fetch("/api/content", { cache: "no-store" })
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return;
+
+        // متن‌ها بر اساس زبان فعلی
+        const texts = (data.ok && data.texts && data.texts[lang]) ? data.texts[lang] : {};
+
+        const result: SiteContent = {
+          books: data.ok ? data.books || [] : [],
+          articles: data.ok ? data.articles || [] : [],
+          tutorials: data.ok ? data.tutorials || [] : [],
+          skills: data.ok ? data.skills || [] : [],
+          aiInstructions: data.ok ? data.aiInstructions || [] : [],
+          equipment: data.ok ? data.equipment || [] : [],
+          texts: texts,
+          navItems: data.ok ? data.navItems || [] : [],
+        };
+        setContent(result);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!cancelled) setLoading(false);
+      });
 
     return () => { cancelled = true; };
-  }, []);
+  }, [lang]);
 
   return { content, loading };
 }
