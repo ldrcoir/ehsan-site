@@ -12,7 +12,7 @@ export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
     const password = url.searchParams.get("password") || "";
-    const isAdmin = password === PERSONAL.adminPassword;
+    const authCheck = await checkAdminPassword(password); const isAdmin = authCheck.ok;
 
     const themes = await db.customTheme.findMany({
       where: isAdmin ? {} : { visible: true },
