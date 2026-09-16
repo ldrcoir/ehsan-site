@@ -2695,3 +2695,51 @@ html[data-theme="solar"] {
 html[data-theme="solar"] body {
   font-family: "Inter", system-ui, sans-serif;
 }
+
+/* ==========================================================================
+   FONT SELECTOR — قابلیت انتخاب فونت از پنل ادمین
+   ========================================================================== */
+/* فونت پیش‌فرض */
+html body {
+  font-family: var(--font-vazirmatn), var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* فونت Vazirmatn (پیش‌فرض فارسی) */
+html[data-font="vazirmatn"] body {
+  font-family: var(--font-vazirmatn), system-ui, sans-serif;
+}
+
+/* فونت Inter (مدرن انگلیسی) */
+html[data-font="inter"] body {
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+/* فونت Lora (سریف کلاسیک) */
+html[data-font="lora"] body {
+  font-family: var(--font-lora), Georgia, serif;
+}
+
+/* فونت Fira Code (مونو اسپیس) */
+html[data-font="fira-code"] body {
+  font-family: var(--font-fira-code), "Courier New", monospace;
+}
+
+/* فونت Geist Mono (مونو اسپیس مدرن) */
+html[data-font="geist-mono"] body {
+  font-family: var(--font-geist-mono), "Courier New", monospace;
+}
+
+/* جلوگیری از خروج کاربر با بستن تب */
+.stay-alive-warning {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: rgba(255, 0, 64, 0.95);
+  color: white;
+  padding: 10px 20px;
+  text-align: center;
+  font-size: 14px;
+  z-index: 9999;
+  display: none;
+}
