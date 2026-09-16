@@ -51,8 +51,8 @@ type TutorialItem = {
 };
 
 export default function Home() {
-  const { content: siteContent, loading: contentLoading } = useContent();
   const [lang, setLang] = useState<Lang>(DEFAULT_LANG);
+  const { content: siteContent, loading: contentLoading } = useContent(lang);
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [toTop, setToTop] = useState(false);
