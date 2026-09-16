@@ -13,6 +13,7 @@
 import sqlite3
 import os
 import sys
+from pathlib import Path
 
 DB_PATH = str(Path(__file__).parent.parent / "db" / "custom.db")
 
