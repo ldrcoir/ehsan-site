@@ -108,19 +108,6 @@ export default function Home() {
       .then(data => {
         if (data.ok && data.clips) {
           setAparatClips(data.clips);
-          // رندر کلیپ‌ها توی container
-          const container = document.getElementById("aparat-clips-container");
-          if (container) {
-            container.innerHTML = data.clips.map((clip: any) => `
-              <div style="background:var(--bg-panel,#050505);border:1px solid var(--border,#1a3a1a);border-radius:8px;overflow:hidden">
-                <div style="padding:12px 16px;border-bottom:1px solid var(--border,#1a3a1a)">
-                  <strong style="color:var(--primary-bright,#39ff14);font-size:14px">${clip.title}</strong>
-                  ${clip.description ? `<p style="color:var(--text-dim,#4a7a4a);font-size:11px;margin:4px 0 0">${clip.description}</p>` : ""}
-                </div>
-                <div style="aspect-ratio:16/9;background:#000">${clip.embedCode}</div>
-              </div>
-            `).join("");
-          }
         }
       })
       .catch(() => {});
@@ -866,7 +853,37 @@ export default function Home() {
             <h2 className="section-title">{lang === "fa" ? "ویدیوها" : "Clips"}</h2>
             <p className="section-subtitle">{lang === "fa" ? "// ویدیوهای آموزشی" : "// educational videos"}</p>
           </header>
-          <div id="aparat-clips-container" style={{ display: "grid", gap: 24, marginTop: 20 }} />
+          {aparatClips.length === 0 ? (
+            <p style={{ color: "var(--text-faint)", textAlign: "center", padding: 40 }}>
+              {lang === "fa" ? "هنوز ویدیویی اضافه نشده." : "No clips yet."}
+            </p>
+          ) : (
+            <div style={{ display: "grid", gap: 24, marginTop: 20 }}>
+              {aparatClips.map((clip: any) => (
+                <div key={clip.id} style={{
+                  background: "var(--bg-panel, #050505)",
+                  border: "1px solid var(--border, #1a3a1a)",
+                  borderRadius: 8,
+                  overflow: "hidden",
+                }}>
+                  <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border, #1a3a1a)" }}>
+                    <strong style={{ color: "var(--primary-bright, #39ff14)", fontSize: 14 }}>
+                      {clip.title}
+                    </strong>
+                    {clip.description && (
+                      <p style={{ color: "var(--text-dim, #4a7a4a)", fontSize: 11, margin: "4px 0 0" }}>
+                        {clip.description}
+                      </p>
+                    )}
+                  </div>
+                  <div
+                    style={{ aspectRatio: "16/9", background: "#000" }}
+                    dangerouslySetInnerHTML={{ __html: clip.embedCode }}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

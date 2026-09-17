@@ -1,15 +1,14 @@
 // ============================================================================
-// /api/admin/clips — مدیریت کلیپ‌های آپارات (فقط ادمین)
+// /api/admin/clips — مدیریت کلیپ‌های آپارات (با session ادمین)
 // ============================================================================
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { checkAdminPassword } from "@/lib/admin-auth";
+import { checkAdminSession } from "@/lib/admin-session";
 
-// GET — لیست همه کلیپ‌ها (Including hidden)
+// GET — لیست همه کلیپ‌ها (including hidden) — فقط ادمین
 export async function GET(req: NextRequest) {
   try {
-    const password = req.headers.get("x-admin-password") || "";
-    const authCheck = await checkAdminPassword(password);
+    const authCheck = await checkAdminSession(req);
     if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
@@ -25,16 +24,15 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST — ساخت یا ویرایش کلیپ
+// POST — ساخت یا ویرایش کلیپ — فقط ادمین
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const password = String(body.password || "");
-    const authCheck = await checkAdminPassword(password);
+    const authCheck = await checkAdminSession(req);
     if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 
+    const body = await req.json();
     const action = String(body.action || "");
 
     if (action === "create") {
@@ -73,16 +71,15 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// DELETE — حذف کلیپ
+// DELETE — حذف کلیپ — فقط ادمین
 export async function DELETE(req: NextRequest) {
   try {
-    const body = await req.json();
-    const password = String(body.password || "");
-    const authCheck = await checkAdminPassword(password);
+    const authCheck = await checkAdminSession(req);
     if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 
+    const body = await req.json();
     await db.aparatClip.delete({
       where: { id: String(body.id) },
     });

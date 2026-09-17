@@ -276,7 +276,7 @@ export default function UserDashboardPage() {
           )}
 
           {activeTab === "clips" && isAdmin && (
-            <AparatClipManager password={adminPwd} />
+            <AparatClipManager />
           )}
 
           {activeTab === "font" && isAdmin && (
