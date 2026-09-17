@@ -1,11 +1,5 @@
 // ============================================================================
-// AparatClipManager — مدیریت کلیپ‌های آپارات
-// ============================================================================
-// ادمین می‌تونه:
-// - کلیپ جدید اضافه کنه (با کد امبد آپارات)
-// - کلیپ‌ها رو ویرایش/حذف کنه
-// - ترتیب نمایش رو تغییر بده
-// - فعال/غیرفعال کنه
+// AparatClipManager — مدیریت کلیپ‌های آپارات (بدون password — از session استفاده می‌کنه)
 // ============================================================================
 
 "use client";
@@ -23,11 +17,12 @@ type Clip = {
   createdAt: string;
 };
 
-export default function AparatClipManager({ password }: { password: string }) {
+export default function AparatClipManager() {
   const [clips, setClips] = useState<Clip[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Clip | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [error, setError] = useState("");
   const [form, setForm] = useState({
     title: "",
     embedCode: "",
@@ -43,16 +38,17 @@ export default function AparatClipManager({ password }: { password: string }) {
 
   async function fetchClips() {
     setLoading(true);
+    setError("");
     try {
-      const res = await fetch("/api/admin/clips", {
-        headers: { "X-Admin-Password": password },
-      });
+      const res = await fetch("/api/admin/clips", { credentials: "include" });
       const data = await res.json();
       if (data.ok) {
         setClips(data.clips || []);
+      } else {
+        setError(data.error || "خطا در بارگذاری");
       }
     } catch (e) {
-      console.error("Failed to fetch clips:", e);
+      setError("خطای شبکه");
     } finally {
       setLoading(false);
     }
@@ -60,8 +56,9 @@ export default function AparatClipManager({ password }: { password: string }) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setError("");
+
     const body = {
-      password,
       action: editing ? "update" : "create",
       id: editing?.id,
       ...form,
@@ -71,6 +68,7 @@ export default function AparatClipManager({ password }: { password: string }) {
       const res = await fetch("/api/admin/clips", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(body),
       });
       const data = await res.json();
@@ -80,10 +78,10 @@ export default function AparatClipManager({ password }: { password: string }) {
         setForm({ title: "", embedCode: "", description: "", category: "general", visible: true, order: 0 });
         fetchClips();
       } else {
-        alert(data.error || "خطا در ذخیره");
+        setError(data.error || "خطا در ذخیره");
       }
     } catch (e) {
-      alert("خطای شبکه");
+      setError("خطای شبکه");
     }
   }
 
@@ -93,7 +91,8 @@ export default function AparatClipManager({ password }: { password: string }) {
       await fetch("/api/admin/clips", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password, id }),
+        credentials: "include",
+        body: JSON.stringify({ id }),
       });
       fetchClips();
     } catch (e) {
@@ -134,6 +133,12 @@ export default function AparatClipManager({ password }: { password: string }) {
           <button onClick={() => setShowForm(false)} className="signal-waveform-btn">✕ انصراف</button>
         </div>
 
+        {error && (
+          <div style={{ padding: 10, marginBottom: 16, background: "rgba(255,0,64,0.1)", border: "1px solid var(--red)", color: "var(--red)", fontSize: 11, borderRadius: 4 }}>
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} style={{ display: "grid", gap: 14, maxWidth: 600 }}>
           <div>
             <label style={labelStyle}>عنوان کلیپ</label>
@@ -155,10 +160,10 @@ export default function AparatClipManager({ password }: { password: string }) {
               required
               rows={4}
               style={inputStyle}
-              placeholder='مثلاً: <iframe src="https://www.aparat.com/video/..." />'
+              placeholder='<iframe src="https://www.aparat.com/video/..." />'
             />
-            <small style={{ color: "var(--text-faint)", fontSize: 10 }}>
-              کد امبد رو از سایت آپارات کپی کن (بخش «اشتراک‌گذاری» → «جای‌گذاری در وبلاگ»)
+            <small style={{ color: "var(--text-faint)", fontSize: 10, marginTop: 4, display: "block" }}>
+              از سایت آپارات: اشتراک‌گذاری → جای‌گذاری در وبلاگ → کد رو کپی کن
             </small>
           </div>
 
@@ -219,6 +224,12 @@ export default function AparatClipManager({ password }: { password: string }) {
         <h3 style={{ margin: 0, color: "var(--primary)" }}>🎬 کلیپ‌های آپارات ({clips.length})</h3>
         <button onClick={startNew} className="signal-waveform-btn active">➕ کلیپ جدید</button>
       </div>
+
+      {error && (
+        <div style={{ padding: 10, marginBottom: 16, background: "rgba(255,0,64,0.1)", border: "1px solid var(--red)", color: "var(--red)", fontSize: 11, borderRadius: 4 }}>
+          {error}
+        </div>
+      )}
 
       {clips.length === 0 ? (
         <p style={{ color: "var(--text-faint)", textAlign: "center", padding: 40 }}>
