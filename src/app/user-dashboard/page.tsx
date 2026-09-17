@@ -17,6 +17,7 @@ import NavMenuManager from "@/components/NavMenuManager";
 import ThemeBuilder from "@/components/ThemeBuilder";
 import AccessUserManager from "@/components/AccessUserManager";
 import FontSelector from "@/components/FontSelector";
+import AparatClipManager from "@/components/AparatClipManager";
 
 type UserInfo = {
   id: string;
@@ -33,7 +34,7 @@ type UserInfo = {
 
 const DAY_NAMES = ["یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه", "شنبه"];
 
-type Tab = "overview" | "content" | "text" | "nav" | "themes" | "users" | "font" | "settings";
+type Tab = "overview" | "content" | "text" | "nav" | "themes" | "users" | "font" | "clips" | "settings";
 
 export default function UserDashboardPage() {
   const router = useRouter();
@@ -116,6 +117,7 @@ export default function UserDashboardPage() {
     { id: "nav", label: "🧭 منو", adminOnly: true },
     { id: "themes", label: "🎨 تم‌ها", adminOnly: true },
     { id: "users", label: "👥 کاربران", adminOnly: true },
+    { id: "clips", label: "🎬 کلیپ‌ها", adminOnly: true },
     { id: "font", label: "🔤 فونت", adminOnly: true },
     { id: "settings", label: "⚙️ تنظیمات", adminOnly: true },
   ];
@@ -271,6 +273,10 @@ export default function UserDashboardPage() {
 
           {activeTab === "users" && isAdmin && (
             <AccessUserManager />
+          )}
+
+          {activeTab === "clips" && isAdmin && (
+            <AparatClipManager password={adminPwd} />
           )}
 
           {activeTab === "font" && isAdmin && (
