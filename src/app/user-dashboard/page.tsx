@@ -34,7 +34,7 @@ type UserInfo = {
 
 const DAY_NAMES = ["یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه", "شنبه"];
 
-type Tab = "overview" | "content" | "text" | "nav" | "themes" | "users" | "font" | "clips" | "settings";
+type Tab = "overview" | "messages" | "content" | "text" | "nav" | "themes" | "users" | "font" | "clips" | "settings";
 
 export default function UserDashboardPage() {
   const router = useRouter();
@@ -112,6 +112,7 @@ export default function UserDashboardPage() {
 
   const tabs: { id: Tab; label: string; adminOnly?: boolean }[] = [
     { id: "overview", label: "📊 داشبورد" },
+    { id: "messages", label: "📨 پیام‌ها", adminOnly: true },
     { id: "content", label: "📁 محتوا", adminOnly: true },
     { id: "text", label: "📝 متن‌ها", adminOnly: true },
     { id: "nav", label: "🧭 منو", adminOnly: true },
@@ -244,51 +245,81 @@ export default function UserDashboardPage() {
         {/* Content */}
         <div style={{ minHeight: 400 }}>
           {activeTab === "overview" && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-              <InfoCard label="Username" value={user.username} />
-              <InfoCard label="Role" value={user.role === "admin" ? "👑 ادمین" : "👤 کاربر"} />
-              <InfoCard label="Last Login" value={user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString("fa-IR") : "—"} />
-              <InfoCard label="Account Status" value={user.active ? "✅ فعال" : "❌ غیرفعال"} />
-              <div style={{ gridColumn: "1 / -1" }}>
-                <InfoCard label="Access Schedule" value={accessSchedule} />
+            <div>
+              <HelpBox text="این داشبورد اطلاعات حساب شماست. اگه ادمین هستی، تب‌های دیگه برای مدیریت سایت در دسترسه." />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16 }}>
+                <InfoCard label="Username" value={user.username} />
+                <InfoCard label="Role" value={user.role === "admin" ? "👑 ادمین" : "👤 کاربر"} />
+                <InfoCard label="Last Login" value={user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString("fa-IR") : "—"} />
+                <InfoCard label="Account Status" value={user.active ? "✅ فعال" : "❌ غیرفعال"} />
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <InfoCard label="Access Schedule" value={accessSchedule} />
+                </div>
               </div>
             </div>
           )}
 
+          {activeTab === "messages" && isAdmin && (
+            <MessagesPanel password={adminPwd} />
+          )}
+
           {activeTab === "content" && isAdmin && (
-            <ContentManager password={adminPwd} lang="fa" />
+            <div>
+              <HelpBox text="اینجا می‌تونی کتاب‌ها، مقالات، آموزش‌ها، مهارت‌ها و تجهیزات رو اضافه/ویرایش/حذف کنی. روی هر مورد کلیک کن تا فرم ویرایش باز بشه. برای نمایش تیک visible رو بزن." />
+              <ContentManager password={adminPwd} lang="fa" />
+            </div>
           )}
 
           {activeTab === "text" && isAdmin && (
-            <TextEditor password={adminPwd} lang="fa" />
+            <div>
+              <HelpBox text="همه‌ی متن‌های سایت (عنوان‌ها، توضیحات، دکمه‌ها) رو از اینجا می‌تونی عوض کنی. تغییرات بلافاصله روی سایت اعمال می‌شه." />
+              <TextEditor password={adminPwd} lang="fa" />
+            </div>
           )}
 
           {activeTab === "nav" && isAdmin && (
-            <NavMenuManager password={adminPwd} lang="fa" />
+            <div>
+              <HelpBox text="منوی بالای سایت رو مدیریت کن. می‌تونی لینک‌های جدید اضافه کنی، ترتیبشون رو عوض کنی یا مخفیشون کنی." />
+              <NavMenuManager password={adminPwd} lang="fa" />
+            </div>
           )}
 
           {activeTab === "themes" && isAdmin && (
-            <ThemeBuilder password={adminPwd} lang="fa" />
+            <div>
+              <HelpBox text="تم رنگی سایت رو بساز یا عوض کن. ۷ تم آماده موجوده، یا تم سفارشی بساز. رنگ‌ها رو انتخاب کن و ذخیره بزن." />
+              <ThemeBuilder password={adminPwd} lang="fa" />
+            </div>
           )}
 
           {activeTab === "users" && isAdmin && (
-            <AccessUserManager />
+            <div>
+              <HelpBox text="کاربران جدید بساز. می‌تونی ساعت/روز دسترسی تعیین کنی. مثلاً فقط ۹ تا ۱۷ دوشنبه تا جمعه. تعداد کاربر نامحدوده." />
+              <AccessUserManager />
+            </div>
           )}
 
           {activeTab === "clips" && isAdmin && (
-            <AparatClipManager />
+            <div>
+              <HelpBox text="ویدیوهای آپارات رو اضافه کن. از سایت آپارات: اشتراک‌گذاری → جای‌گذاری در وبلاگ → کد رو کپی کن → اینجا بذار. ویدیو توی صفحه‌ی اصلی نشون داده می‌شه." />
+              <AparatClipManager />
+            </div>
           )}
 
           {activeTab === "font" && isAdmin && (
-            <FontSelector />
+            <div>
+              <HelpBox text="فونت سایت رو انتخاب کن. انتخاب تو مرورگر ذخیره می‌شه. ۵ فونت موجود هست." />
+              <FontSelector />
+            </div>
           )}
 
           {activeTab === "settings" && (
-            <div style={{ padding: 20, color: "var(--text-dim)", textAlign: "center" }}>
-              <p>برای تنظیمات پیشرفته (تغییر رمز، ایمیل، AI providers)، از پنل قدیمی استفاده کنید:</p>
-              <a href="/#admin" style={{ color: "var(--primary)", textDecoration: "underline" }}>
-                باز کردن پنل قدیمی
-              </a>
+            <div>
+              <HelpBox text="تنظیمات پیشرفته: تغییر رمز، تنظیم ایمیل، اتصال به هوش مصنوعی (Ollama/OpenAI/Groq). برای آموزش هوش مصنوعی محلی، فایل OLLAMA_GUIDE_FA.md رو بخون." />
+              <div style={{ padding: 20, color: "var(--text-dim)", textAlign: "center" }}>
+                <a href="/#admin" style={{ color: "var(--primary)", textDecoration: "underline" }}>
+                  باز کردن پنل تنظیمات کامل
+                </a>
+              </div>
             </div>
           )}
         </div>
@@ -317,6 +348,171 @@ function InfoCard({ label, value }: { label: string; value: string }) {
         color: "var(--primary-bright, #39ff14)",
         fontFamily: "monospace",
       }}>{value}</div>
+    </div>
+  );
+}
+
+// ============================================================================
+// HelpBox — کادر توضیحات راهنما برای هر تب
+// ============================================================================
+function HelpBox({ text }: { text: string }) {
+  return (
+    <div style={{
+      padding: "10px 14px",
+      marginBottom: 16,
+      background: "rgba(0, 255, 65, 0.05)",
+      border: "1px solid rgba(0, 255, 65, 0.2)",
+      borderRadius: 4,
+      fontSize: 11,
+      color: "var(--text-dim, #4a7a4a)",
+      lineHeight: 1.6,
+    }}>
+      💡 {text}
+    </div>
+  );
+}
+
+// ============================================================================
+// MessagesPanel — نمایش پیام‌های تماس دریافتی
+// ============================================================================
+function MessagesPanel({ password }: { password: string }) {
+  const [messages, setMessages] = useState<any[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+
+  useEffect(() => {
+    if (!password) {
+      // اگه password خالی هست، از session استفاده کن
+      fetch("/api/messages", { credentials: "include" })
+        .then(r => r.json())
+        .then(data => {
+          if (data.ok) setMessages(data.messages || []);
+          else setMessages([]);
+        })
+        .catch(() => setMessages([]))
+        .finally(() => setLoading(false));
+    } else {
+      fetch(`/api/messages?password=${encodeURIComponent(password)}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.ok) setMessages(data.messages || []);
+          else setMessages([]);
+        })
+        .catch(() => setMessages([]))
+        .finally(() => setLoading(false));
+    }
+  }, [password]);
+
+  async function sendReply(msgId: string) {
+    if (!replyText.trim()) return;
+    try {
+      await fetch("/api/admin/reply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ password, messageId: msgId, reply: replyText }),
+      });
+      setReplyingTo(null);
+      setReplyText("");
+      alert("پاسخ ارسال شد ✅");
+    } catch {
+      alert("خطا در ارسال");
+    }
+  }
+
+  async function deleteMessage(msgId: string) {
+    if (!confirm("حذف این پیام؟")) return;
+    try {
+      await fetch("/api/admin/clear", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ password, target: "message", id: msgId }),
+      });
+      setMessages(prev => prev ? prev.filter(m => m.id !== msgId) : prev);
+    } catch {
+      alert("خطا در حذف");
+    }
+  }
+
+  if (loading) return <div style={{ padding: 20, color: "var(--text-dim)" }}>در حال بارگذاری پیام‌ها...</div>;
+
+  return (
+    <div>
+      <HelpBox text="پیام‌هایی که بازدیدکنندگان از فرم تماس سایت فرستادن. می‌تونی پاسخ بدی یا حذف کنی." />
+      {messages && messages.length === 0 ? (
+        <p style={{ color: "var(--text-faint)", textAlign: "center", padding: 40 }}>
+          پیامی دریافت نشده.
+        </p>
+      ) : (
+        <div style={{ display: "grid", gap: 12 }}>
+          {messages?.map(msg => (
+            <div key={msg.id} style={{
+              padding: 16,
+              background: "var(--bg, #000)",
+              border: "1px solid var(--border, #1a3a1a)",
+              borderRadius: 6,
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                <div>
+                  <strong style={{ color: "var(--primary-bright, #39ff14)" }}>{msg.name}</strong>
+                  <span style={{ color: "var(--text-dim)", fontSize: 10, marginRight: 8 }}>{msg.email}</span>
+                </div>
+                <span style={{ color: "var(--text-faint)", fontSize: 9 }}>
+                  {new Date(msg.createdAt).toLocaleString("fa-IR")}
+                </span>
+              </div>
+              <p style={{ fontSize: 12, color: "var(--text)", margin: "4px 0" }}>{msg.message}</p>
+              {msg.replies && msg.replies.length > 0 && (
+                <div style={{ marginTop: 8, padding: 8, background: "rgba(0,255,65,0.05)", borderRadius: 4 }}>
+                  {msg.replies.map((r: any) => (
+                    <p key={r.id} style={{ fontSize: 11, color: "var(--text-dim)", margin: "2px 0" }}>
+                      ↳ {r.reply}
+                    </p>
+                  ))}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <button
+                  onClick={() => { setReplyingTo(msg.id); setReplyText(""); }}
+                  className="signal-waveform-btn"
+                  style={{ padding: "4px 8px", fontSize: 10 }}
+                >↩️ پاسخ</button>
+                <button
+                  onClick={() => deleteMessage(msg.id)}
+                  className="signal-waveform-btn"
+                  style={{ padding: "4px 8px", fontSize: 10 }}
+                >🗑️ حذف</button>
+              </div>
+              {replyingTo === msg.id && (
+                <div style={{ marginTop: 8 }}>
+                  <textarea
+                    value={replyText}
+                    onChange={e => setReplyText(e.target.value)}
+                    placeholder="پاسخ خود را بنویسید..."
+                    rows={3}
+                    style={{
+                      width: "100%",
+                      padding: 8,
+                      background: "var(--bg)",
+                      border: "1px solid var(--border)",
+                      color: "var(--primary-bright)",
+                      fontSize: 12,
+                      borderRadius: 4,
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                    <button onClick={() => sendReply(msg.id)} className="signal-waveform-btn active" style={{ padding: "4px 12px", fontSize: 10 }}>📤 ارسال</button>
+                    <button onClick={() => setReplyingTo(null)} className="signal-waveform-btn" style={{ padding: "4px 12px", fontSize: 10 }}>✕ انصراف</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

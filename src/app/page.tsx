@@ -722,11 +722,13 @@ export default function Home() {
             </div>
           </div>
           <div className={`hero-visual ${reveal("hero-visual")}`} data-reveal="hero-visual">
-            {/* <InteractiveTerminal lang={lang} /> */}
+            <InteractiveTerminal lang={lang} />
           </div>
         </div>
         {/* Oscilloscope under hero — RF vibe */}
-        {/* <Oscilloscope height={70} /> */}
+        <div className="container">
+          <Oscilloscope height={70} />
+        </div>
       </section>
 
       {/* ABOUT — with Smith Chart decoration */}
@@ -759,9 +761,9 @@ export default function Home() {
           </div>
 
           {/* RF Equipment Rack — lab equipment from DB */}
-          {/* <LabEquipmentRack equipment={siteContent.equipment} /> */}
+          <LabEquipmentRack equipment={siteContent.equipment} />
           {/* Signal Lab — Generator + Oscilloscope (wirelessly connected) */}
-          {/* <SignalLab /> */}
+          <SignalLab />
         </div>
       </section>
 
@@ -843,7 +845,7 @@ export default function Home() {
       </section>
 
       {/* CHAT — AI concierge */}
-      {/* <ChatSection lang={lang} /> */}
+      <ChatSection lang={lang} />
 
       {/* CLIPS — Aparat video clips managed by admin */}
       <section className="section" id="clips">
