@@ -90,6 +90,7 @@ export default function Home() {
   // By gating render on `mounted`, the server and the first client render
   // both produce an empty container, then the script loads and fills it.
   const [mounted, setMounted] = useState(false);
+  const [aparatClips, setAparatClips] = useState<any[]>([]);
   useEffect(() => {
     setMounted(true);
     // Load reCAPTCHA script only on client, after mount
@@ -101,6 +102,28 @@ export default function Home() {
       s.defer = true;
       document.head.appendChild(s);
     }
+    // بارگذاری کلیپ‌های آپارات از API
+    fetch("/api/clips")
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok && data.clips) {
+          setAparatClips(data.clips);
+          // رندر کلیپ‌ها توی container
+          const container = document.getElementById("aparat-clips-container");
+          if (container) {
+            container.innerHTML = data.clips.map((clip: any) => `
+              <div style="background:var(--bg-panel,#050505);border:1px solid var(--border,#1a3a1a);border-radius:8px;overflow:hidden">
+                <div style="padding:12px 16px;border-bottom:1px solid var(--border,#1a3a1a)">
+                  <strong style="color:var(--primary-bright,#39ff14);font-size:14px">${clip.title}</strong>
+                  ${clip.description ? `<p style="color:var(--text-dim,#4a7a4a);font-size:11px;margin:4px 0 0">${clip.description}</p>` : ""}
+                </div>
+                <div style="aspect-ratio:16/9;background:#000">${clip.embedCode}</div>
+              </div>
+            `).join("");
+          }
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const tt = UI[lang];
@@ -834,6 +857,18 @@ export default function Home() {
 
       {/* CHAT — AI concierge */}
       {/* <ChatSection lang={lang} /> */}
+
+      {/* CLIPS — Aparat video clips managed by admin */}
+      <section className="section" id="clips">
+        <div className="container">
+          <header className="section-head">
+            <p className="section-eyebrow">07 — clips</p>
+            <h2 className="section-title">{lang === "fa" ? "ویدیوها" : "Clips"}</h2>
+            <p className="section-subtitle">{lang === "fa" ? "// ویدیوهای آموزشی" : "// educational videos"}</p>
+          </header>
+          <div id="aparat-clips-container" style={{ display: "grid", gap: 24, marginTop: 20 }} />
+        </div>
+      </section>
 
       {/* CONTACT */}
       <section className="section section-alt" id="contact">
