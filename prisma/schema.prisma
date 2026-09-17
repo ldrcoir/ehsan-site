@@ -456,3 +456,23 @@ model SecurityLog {
   @@index([ip])
   @@index([createdAt])
 }
+
+// ============================================================================
+// AparatClip — کلیپ‌های آپارات که ادمین اضافه می‌کنه
+// ============================================================================
+// ادمین کد امبد آپارات رو وارد می‌کنه و کاربران می‌تونن ببینن.
+// کاربران عادی فقط می‌تونن ببینن — اضافه‌کردن فقط توسط ادمین هست.
+// ============================================================================
+model AparatClip {
+  id          String   @id @default(cuid())
+  title       String                            // عنوان کلیپ
+  embedCode   String                            // کد امبد آپارات (مثلاً https://www.aparat.com/video/...)
+  description String   @default("")             // توضیحات
+  category    String   @default("general")      // دسته‌بندی
+  visible     Boolean  @default(true)           // آیا نمایش داده بشه؟
+  order       Int      @default(0)               // ترتیب نمایش
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([visible, order])
+}
