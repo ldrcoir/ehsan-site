@@ -1429,12 +1429,23 @@ export default function Home() {
                         <h4>Security — Password & Handle</h4>
                         <div className="admin-setting-row">
                           <span className="admin-setting-label">New password (min 6 chars)</span>
-                          <input
-                            className="admin-setting-input"
-                            type="password"
-                            id="newPassword"
-                            placeholder="new password..."
-                          />
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <input
+                              className="admin-setting-input"
+                              type="password"
+                              id="newPassword"
+                              placeholder="new password..."
+                              style={{ flex: 1 }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const el = document.getElementById("newPassword") as HTMLInputElement;
+                                el.type = el.type === "password" ? "text" : "password";
+                              }}
+                              style={{ padding: "0 8px", fontSize: 11, cursor: "pointer", background: "var(--bg)", border: "1px solid var(--border)", color: "var(--green-dim)", borderRadius: 4 }}
+                            >👁</button>
+                          </div>
                         </div>
                         <button
                           className="btn btn-primary btn-sm admin-save-btn"
@@ -1452,7 +1463,7 @@ export default function Home() {
                             });
                             const data = await res.json();
                             if (data.ok) {
-                              alert("✓ Password changed! Use new password next time: " + newPwd);
+                              alert("✓ رمز با موفقیت عوض شد! دفعه بعد از رمز جدید استفاده کن.");
                               setAdminPwd(newPwd);
                               el.value = "";
                             } else {

@@ -37,6 +37,7 @@ export async function GET(request: NextRequest) {
       username: user.username,
       displayName: user.displayName,
       role: user.role,
+        permissions: user.permissions,
       allowedHourStart: user.allowedHourStart,
       allowedHourEnd: user.allowedHourEnd,
       allowedDays: user.allowedDays,

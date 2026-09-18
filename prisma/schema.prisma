@@ -383,6 +383,10 @@ model AccessUser {
   passwordHash    String                     // هش رمز عبور (bcrypt)
   displayName     String   @default("")      // نام نمایشی
   role            String   @default("user")  // user | admin
+  // لیست دسترسی‌های کاربر — با کاما جدا می‌شه
+  // مثال: "messages,clips,content" یعنی فقط به این ۳ بخش دسترسی داره
+  // اگه "*" یا null باشه یعنی همه بخش‌ها (برای ادمین)
+  permissions     String?                    // messages|clips|content|text|nav|themes|users|font|settings
   // ساعت شروع دسترسی (0-23). اگه null یعنی بدون محدودیت ساعت.
   allowedHourStart Int?
   // ساعت پایان دسترسی (0-23). اگه null یعنی بدون محدودیت ساعت.

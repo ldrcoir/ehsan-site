@@ -45,6 +45,7 @@ export async function GET(request: NextRequest) {
       allowedHourStart: true,
       allowedHourEnd: true,
       allowedDays: true,
+      permissions: true,
       expiresAt: true,
       active: true,
       loginCount: true,
@@ -75,6 +76,7 @@ export async function POST(request: NextRequest) {
   const allowedHourStart = body.allowedHourStart === null || body.allowedHourStart === undefined ? null : Number(body.allowedHourStart);
   const allowedHourEnd = body.allowedHourEnd === null || body.allowedHourEnd === undefined ? null : Number(body.allowedHourEnd);
   const allowedDays: string | null = body.allowedDays || null;
+  const permissions: string | null = body.permissions || null;
   const expiresAt: Date | null = body.expiresAt ? new Date(body.expiresAt) : null;
   const active: boolean = body.active !== false;
 
@@ -110,6 +112,7 @@ export async function POST(request: NextRequest) {
       allowedHourStart,
       allowedHourEnd,
       allowedDays,
+      permissions,
       expiresAt,
       active,
     },
@@ -121,6 +124,7 @@ export async function POST(request: NextRequest) {
       allowedHourStart: true,
       allowedHourEnd: true,
       allowedDays: true,
+      permissions: true,
       expiresAt: true,
       active: true,
       createdAt: true,

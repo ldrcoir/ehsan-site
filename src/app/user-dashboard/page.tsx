@@ -24,6 +24,7 @@ type UserInfo = {
   username: string;
   displayName: string;
   role: string;
+  permissions: string | null;
   allowedHourStart: number | null;
   allowedHourEnd: number | null;
   allowedDays: string | null;
@@ -96,6 +97,18 @@ export default function UserDashboardPage() {
   if (!user) return null;
 
   const isAdmin = user.role === "admin";
+  // لیست دسترسی‌های کاربر
+  const userPermissions = user.permissions
+    ? user.permissions.split(",").filter(Boolean)
+    : [];
+
+  // تابع بررسی دسترسی به تب
+  function hasTabAccess(tabId: Tab): boolean {
+    if (isAdmin) return true;
+    if (tabId === "overview") return true;
+    if (tabId === "settings") return true;
+    return userPermissions.includes(tabId);
+  }
 
   // نمایش بازه‌ی دسترسی به‌صورت متنی
   let accessSchedule = "بدون محدودیت (۲۴/۷)";
@@ -224,7 +237,7 @@ export default function UserDashboardPage() {
           flexWrap: "wrap",
         }}>
           {tabs.map(tab => {
-            if (tab.adminOnly && !isAdmin) return null;
+            if (!hasTabAccess(tab.id)) return null;
             return (
               <button
                 key={tab.id}
