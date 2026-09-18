@@ -22,6 +22,7 @@ type User = {
   username: string;
   displayName: string;
   role: string;
+  permissions: string | null;
   allowedHourStart: number | null;
   allowedHourEnd: number | null;
   allowedDays: string | null;
@@ -32,6 +33,15 @@ type User = {
   deactivatedReason: string;
   createdAt: string;
 };
+
+const PERMISSION_SECTIONS = [
+  { id: "messages", label: "📨 پیام‌ها" },
+  { id: "clips", label: "🎬 کلیپ‌ها" },
+  { id: "content", label: "📁 محتوا" },
+  { id: "text", label: "📝 متن‌ها" },
+  { id: "nav", label: "🧭 منو" },
+  { id: "themes", label: "🎨 تم‌ها" },
+];
 
 const DAY_NAMES = [
   { value: 0, label: "یکشنبه" },
@@ -62,6 +72,7 @@ export default function AccessUserManager() {
     allowedHourStart: "" as string | number,
     allowedHourEnd: "" as string | number,
     allowedDays: [] as number[],
+    permissions: [] as string[],
     expiresAt: "",
     active: true,
   });
@@ -111,6 +122,7 @@ export default function AccessUserManager() {
       allowedHourStart: user.allowedHourStart ?? "",
       allowedHourEnd: user.allowedHourEnd ?? "",
       allowedDays: user.allowedDays ? user.allowedDays.split(",").map(d => parseInt(d, 10)) : [],
+      permissions: user.permissions ? user.permissions.split(",").filter(Boolean) : [],
       expiresAt: user.expiresAt ? new Date(user.expiresAt).toISOString().slice(0, 10) : "",
       active: user.active,
     });
@@ -127,6 +139,7 @@ export default function AccessUserManager() {
       allowedHourStart: "",
       allowedHourEnd: "",
       allowedDays: [],
+      permissions: [],
       expiresAt: "",
       active: true,
     });
@@ -145,6 +158,7 @@ export default function AccessUserManager() {
       allowedHourStart: form.allowedHourStart === "" ? null : Number(form.allowedHourStart),
       allowedHourEnd: form.allowedHourEnd === "" ? null : Number(form.allowedHourEnd),
       allowedDays: form.allowedDays.length > 0 ? form.allowedDays.join(",") : null,
+      permissions: form.permissions.length > 0 ? form.permissions.join(",") : null,
       expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : null,
       active: form.active,
     };
@@ -365,6 +379,36 @@ export default function AccessUserManager() {
               هیچی انتخاب نکن = همه روزها
             </small>
           </div>
+
+          {/* انتخاب دسترسی‌های بخش‌بندی */}
+          {form.role === "user" && (
+            <div>
+              <label style={labelStyle}>دسترسی به بخش‌ها</label>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
+                {PERMISSION_SECTIONS.map(perm => (
+                  <button
+                    key={perm.id}
+                    type="button"
+                    onClick={() => {
+                      setForm(prev => ({
+                        ...prev,
+                        permissions: prev.permissions.includes(perm.id)
+                          ? prev.permissions.filter(p => p !== perm.id)
+                          : [...prev.permissions, perm.id],
+                      }));
+                    }}
+                    className={`signal-waveform-btn ${form.permissions.includes(perm.id) ? "active" : ""}`}
+                    style={{ padding: "6px 10px", fontSize: 10 }}
+                  >
+                    {perm.label}
+                  </button>
+                ))}
+              </div>
+              <small style={{ color: "var(--text-faint)", fontSize: 10, display: "block", marginTop: 6 }}>
+                هیچی انتخاب نکن = فقط داشبورد. ادمین به همه بخش‌ها دسترسی داره.
+              </small>
+            </div>
+          )}
 
           <div>
             <label style={labelStyle}>تاریخ انقضا</label>

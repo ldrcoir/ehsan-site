@@ -53,6 +53,7 @@ export async function PUT(
     data.allowedHourEnd = body.allowedHourEnd === null ? null : Number(body.allowedHourEnd);
   }
   if (body.allowedDays !== undefined) data.allowedDays = body.allowedDays || null;
+  if (body.permissions !== undefined) data.permissions = body.permissions || null;
   if (body.expiresAt !== undefined) {
     data.expiresAt = body.expiresAt ? new Date(body.expiresAt) : null;
   }
@@ -83,6 +84,7 @@ export async function PUT(
       allowedHourStart: true,
       allowedHourEnd: true,
       allowedDays: true,
+      permissions: true,
       expiresAt: true,
       active: true,
       updatedAt: true,
