@@ -12,8 +12,11 @@ export async function POST(req: Request) {
     // Optional: verify the request is from Bale using a secret in the URL
     const url = new URL(req.url);
     const secret = url.searchParams.get("secret");
-    const expectedSecret = process.env.BALE_WEBHOOK_SECRET || "";
-    if (expectedSecret && secret !== expectedSecret) {
+    const expectedSecret = process.env.BALE_WEBHOOK_SECRET;
+    if (!expectedSecret) {
+      return NextResponse.json({ ok: false, error: "webhook_not_configured" }, { status: 503 });
+    }
+    if (secret !== expectedSecret) {
       return NextResponse.json({ ok: false, error: "invalid_secret" }, { status: 403 });
     }
 

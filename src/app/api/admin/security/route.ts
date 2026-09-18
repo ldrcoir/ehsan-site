@@ -88,13 +88,7 @@ export async function POST(req: Request) {
           });
         }
 
-        // همچنین ذخیره توی SiteSetting برای backward compatibility
-        await db.siteSetting.upsert({
-          where: { key: "adminPassword" },
-          update: { value: newPassword },
-          create: { key: "adminPassword", value: newPassword },
-        });
-
+        // فقط هش bcrypt در دیتابیس ذخیره می‌شه — نه plain text
         return NextResponse.json({ ok: true, message: "Password changed. Use new password next time." });
       }
 

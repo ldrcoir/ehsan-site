@@ -16,8 +16,12 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { db } from "./db";
 
-const SESSION_SECRET = process.env.SESSION_SECRET || "change-this-in-production-please";
-const SESSION_DURATION_HOURS = 24; // مدت اعتبار session به ساعت
+const SESSION_SECRET = process.env.SESSION_SECRET;
+if (!SESSION_SECRET && process.env.NODE_ENV === "production") {
+  throw new Error("SESSION_SECRET env var is required in production");
+}
+const SECRET = SESSION_SECRET || "dev-only-insecure-secret-do-not-use-in-prod";
+const SESSION_DURATION_HOURS = 24;
 
 // ----------------------------------------------------------------------------
 // hashPassword — هش کردن رمز عبور با bcrypt
@@ -178,5 +182,5 @@ export function getSessionFromRequest(request: Request): { userId: string; expir
 // hmac — ساخت HMAC امضا با SHA-256
 // ----------------------------------------------------------------------------
 function hmac(message: string): string {
-  return crypto.createHmac("sha256", SESSION_SECRET).update(message).digest("hex");
+  return crypto.createHmac("sha256", SECRET).update(message).digest("hex");
 }

@@ -16,6 +16,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { verifyPassword, createSessionToken, logAccess, getClientIp } from "@/lib/access-auth";
 
+// Rate limiting — ۵ تلاش در ۱۵ دقیقه
+const RATE_LIMIT_WINDOW = 15 * 60 * 1000;
+const RATE_LIMIT_MAX = 5;
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const record = loginAttempts.get(ip);
+  if (!record || now > record.resetAt) {
+    loginAttempts.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
+    return true;
+  }
+  if (record.count >= RATE_LIMIT_MAX) return false;
+  record.count++;
+  return true;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -28,6 +45,14 @@ export async function POST(request: NextRequest) {
 
     const ip = getClientIp(request);
     const userAgent = request.headers.get("user-agent");
+
+    // Rate limit check
+    if (ip && !checkRateLimit(ip)) {
+      return NextResponse.json(
+        { ok: false, error: "rate_limit" },
+        { status: 429 }
+      );
+    }
 
     // پیدا کردن کاربر
     const user = await db.accessUser.findUnique({ where: { username } });
