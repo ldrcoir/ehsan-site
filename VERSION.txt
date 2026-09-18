@@ -1,291 +1,130 @@
 ================================================================
   PERSONAL SITE — VERSION HISTORY & DEPLOYMENT GUIDE
-  آخرین نسخه: V19.1 — 2026-09-03
+  آخرین نسخه: V14.0 — 2026-09-18
 ================================================================
 
-## 📌 نسخه فعلی: V19.1
+## 📌 نسخه فعلی: V14.0
 
 ================================================================
   تاریخچه نسخه‌ها
 ================================================================
 
-V1.0  (2026-08-10) — ساخت سایت اولیه
-  - Next.js 16 + TypeScript + Tailwind
-  - تم ترمینال سبز روی مشکی
-  - بخش‌ها: Hero, About, Skills, Projects, Contact
-  - فرم تماس ساده
+V14.0 (2026-09-18) — امنیت + دسترسی بخش‌بندی + آموزش آپدیت
+  - حذف fallback admin123 (فقط دیتابیس معتبره)
+  - SESSION_SECRET اجباری در production
+  - Sanitization کد امبد آپارات (XSS prevention)
+  - Rate limit برای login (۵ تلاش/۱۵ دقیقه)
+  - Webhook secret اجباری
+  - حذف plain-text password از SiteSetting
+  - دسترسی بخش‌بندی کاربران (permissions)
+  - فیلد رمز با دکمه نمایش/مخفی
+  - تب پیام‌ها در پنل ادمین
+  - HelpBox برای هر تب
+  - آموزش آپدیت (V14)
 
-V2.0  (2026-08-10) — تم‌سازی و دوزبانه
-  - ۳ تم: Terminal, Midnight, Clean
-  - ۲ زبان: EN, FA با RTL
-  - شمسی کردن تاریخ برای فارسی
-  - حذف دکمه Hire me
+V13.0 (2026-09-17) — کلیپ آپارات + ریست رمز + SEO
+  - مدل AparatClip در دیتابیس
+  - /api/admin/clips (CRUD)
+  - /api/clips (عمومی)
+  - /clips صفحه
+  - AparatClipManager کامپوننت
+  - reset-admin-password.sh
+  - SEO کامل (OpenGraph, Twitter, JSON-LD)
 
-V3.0  (2026-08-10) — فرم تماس واقعی + ضد اسپم
-  - API /api/contact با ذخیره در DB
-  - Rate limiting + bot detection + spam filter
-  - ذخیره پیام‌ها در SQLite
+V12.0 (2026-09-16) — دسترسی بخش‌بندی + دکمه رمز
+  - فیلد permissions در AccessUser
+  - فیلتر تب‌ها بر اساس permissions
+  - دکمه 👁 برای نمایش/مخفی رمز
 
-V4.0  (2026-08-10) — پنل ادمین اولیه
-  - دسترسی با #admin یا Ctrl+Shift+A
-  - تب messages و chats
-  - پاسخ به پیام‌ها
+V11.0 (2026-09-16) — پیام‌ها + HelpBox
+  - تب پیام‌ها در داشبورد
+  - HelpBox برای هر تب
+  - re-enable همه کامپوننت‌ها
 
-V5.0  (2026-08-10) — تم ماتریکسی + ترمینال تعاملی
-  - پس‌زمینه Matrix Rain
-  - ترمینال تعاملی با دستورات (help, about, scan, etc.)
-  - اسیلوسکوپ + ژنراتور سیگنال اولیه
-  - ایستر اگ‌ها (matrix, coffee, 42)
+V10.0 (2026-09-15) — نصب مستقیم (بدون Docker)
+  - install.sh با Node.js + Nginx
+  - Swap خودکار
+  - npm با mirror چین
 
-V6.0  (2026-08-10) — CRM کامل
-  - تگ‌های سفارشی برای پیام‌ها
-  - یادداشت خصوصی
-  - وضعیت پیام (new/read/replied/archived)
-  - جستجو + خروجی CSV
+V9.0 (2026-09-15) — غیرفعال‌سازی + کلیپ
+  - (بعداً re-enable شد)
 
-V7.0  (2026-08-10) — چت AI
-  - بات با شخصیت دوستانه
-  - تحویل زنده پاسخ به بازدیدکننده
-  - ذخیره مکالمات در DB
-  - شخصیت قابل ویرایش از پنل
+V8.0 (2026-09-16) — SEO + clean seed
+  - metadataBase, openGraph, twitter
+  - robots.txt کامل
+  - manifest.json کامل
 
-V8.0  (2026-08-10) — چند ارائه‌دهنده AI
-  - Z.ai (پیش‌فرض), OpenAI, Anthropic, Ollama
-  - زنجیره fallback
-  - مدیریت API Key از پنل
+V7.0 (2026-09-16) — پنل ادمین جدید
+  - /user-dashboard به‌عنوان پنل اصلی
+  - FontSelector (۵ فونت)
+  - beforeunload protection
+  - Ollama guide
 
-V9.0  (2026-08-10) — Bale Messenger
-  - اعلان خودکار پیام جدید به Bale
-  - وب‌هوک برای پاسخ از Bale
-  - دستورات: /list /reply /chat /disable /enable /stats
+V6.0 (2026-09-16) — رفع admin login
+  - checkAdminPassword از دیتابیس
+  - همه APIها از admin-auth استفاده می‌کنن
 
-V10.0 (2026-08-10) — اسیلوسکوپ واقعی
-  - TIME/DIV, VOLT/DIV, OFFSET, TRIGGER, COUPLING
-  - اندازه‌گیری خودکار (Vpp, Vrms, Vavg, freq, period)
-  - ژنراتور با AM/FM modulation
+V5.0 (2026-09-16) — رفع متن‌ها
+  - useContent از /api/content
+  - ۳ زبان (fa/en/de)
+  - حذف cache
 
-V11.0 (2026-08-10) — مدیریت محتوا از دیتابیس
-  - مدل‌های Prisma: Book, Article, Tutorial, Skill, AiInstruction
-  - API CRUD کامل
-  - bulk import برای آموزش‌های آپارات
+V4.0 (2026-09-16) — رف path دیتابیس
+  - db.ts با process.cwd()
+  - .env با مسیر مطلق
 
-V12.0 (2026-08-10) — صفحه‌بندی و آرشیو
-  - ArchiveGrid با جستجو + مرتب‌سازی + صفحه‌بندی
-  - رک تجهیزات آزمایشگاه با نمایش زنده
+V3.0 (2026-09-16) — نصب خودکار
+  - install.sh
+  - Swap
+  - mirror چین
 
-V13.0 (2026-08-10) — تم‌ساز رنگی
-  - ۷ تم آماده + تم‌ساز با ۱۵ رنگ
-  - نمونه زنده
-  - CRT scanlines toggle
+V2.0 (2026-09-15) — رفع خطاهای نصب
+  - package.json dev script
+  - docker-entrypoint.sh
+  - seed scripts با مسیر نسبی
 
-V14.0 (2026-08-10) — جستجوی سراسری
-  - جستجوی همزمان کتاب/مقاله/آموزش/بخش‌ها
-  - میانبر کیبورد / و Escape
-
-V15.0 (2026-08-10) — ساعات کاری + خود-پاسخ‌گو
-  - تنظیم ساعات کاری از پنل
-  - پیام خود-پاسخ‌گو وقتی آفلاین
-
-V16.0 (2026-08-10) — امنیت
-  - کپچا روی فرم تماس
-  - مسدودسازی IP خودکار (۳ پیام مشکوک → ۲۴ ساعت)
-  - داشبورد امنیت با لاگ کامل
-  - تشخیص پیام مشکوک + هشدار به Bale/Telegram
-
-V17.0 (2026-08-10) — متن‌ها از دیتابیس
-  - ۳۶ متن قابل ویرایش از پنل texts
-  - منوی ناوبری از دیتابیس
-  - داشبورد آمار بازدید
-
-V19.1  (2026-09-03) — رفع همه خطاها و warning ها
-  - صفر خطای TypeScript
-  - صفر warning در ESLint
-  - اضافه شدن مدل‌های BlockedIp و SecurityLog
-  - رفع duplicate property در PERSONAL
-  - رفع emailLabel و TUTORIALS و dataset و prev null
-  - الگوی useEffect اصلاح شد در ۵ کامپوننت
-  - tsconfig و eslint config بهبود یافت
-
-V19.0  (2026-09-03) — سیستم دسترسی مبتنی بر زمان + رفع hydration
-  - مدل AccessUser در Prisma (دسترسی ساعت/روز/انقضا)
-  - مدل AccessLog برای حسابرسی
-  - APIهای user/login, user/verify, user/logout
-  - APIهای admin/users (CRUD) + admin/users/logs
-  - صفحه /user-login و /user-dashboard
-  - کامپوننت AccessUserManager در پنل ادمین
-  - session token با HMAC + cookie httpOnly
-  - bcryptjs برای هش رمز
-  - رفع خطای hydration (reCAPTCHA فقط بعد از mount)
-  - کامنت‌های توصیفی فارسی در فایل‌های کلیدی
-
-V18.4 (2026-08-28) — اصلاحات Signal Lab
-  - رفع مشکل مدولاسیون FM/AM: state به SignalLab منتقل شد (lift up)
-  - حذف لرزش پیش‌نمایش ژنراتور (phase accumulation حذف شد)
-  - حذف لرزش اسیلوسکوپ (deterministic rendering از t=0 تا t=timeWindow)
-  - اصلاح فرمول FM: beta = modDepth × 5
-  - رفع «یک‌سوم راست scope خالی»: x = frac × w به‌جای i
-  - رفع خطای hydration صفحه اصلی: suppressHydrationWarning روی <body>
-  - voltDiv پیش‌فرض: 1V → 2V (۵V peak از صفحه بیرون نمی‌زنه)
-  - اسکریپت keep-alive.sh: supervisor سرور dev در sandbox
-
-V18.0 (2026-08-26) — نسخه نهایی
-  - ربات = شما (نه دستیار): "من [نام شما] هستم"
-  - محدودسازی ربات: رمز/کد/داده حساس نمی‌ده
-  - Telegram کامل
-  - Groq provider (ultra-fast)
-  - OpenRouter (Qwen Cloud)
-  - ایمیل ساده (formsubmit.co — بدون SMTP)
-  - PWA (نصب به‌عنوان اپ)
-  - RSS Feed
-  - Sitemap.xml
-  - PGP Key
-  - بک‌آپ خودکار (cron هر شب)
-  - Docker کامل با cron
-  - ضدسرقت: قفل دامنه + واترمارک Canvas + DevTools detection
+V1.0 (2026-08-10) — ساخت اولیه
+  - Next.js 16 + TypeScript + Prisma + SQLite
+  - تم ترمینال
+  - پنل ادمین
+  - ۳ زبان
 
 ================================================================
-  راهنمای استقرار با Docker
+  نصب
 ================================================================
 
-## پیش‌نیازها:
-- فقط Docker و Docker Compose روی VPS نصب باشه
+wget https://github.com/ldrcoir/ehsan-site/raw/main/public/install.zip
+unzip install.zip
+cd personal-site
+sudo ./install.sh
 
-## نصب از صفر:
-
-```bash
-# ۱. فایل zip رو روی VPS آپلود کن
-scp personal-site-final.zip user@your-vps:/home/user/
-
-# ۲. از حالت فشرده خارج کن
-ssh user@your-vps
-unzip personal-site-final.zip
-cd personal-site-final
-
-# ۳. اجرا کن — همه‌چیز خودکار نصب می‌شه
-docker-compose up -d
-
-# ۴. سایت روی پورت ۳۰۰۰ در دسترسه
-# http://your-vps-ip:3000
-```
-
-## انتقال از VPS قدیمی به VPS جدید:
-
-### روی VPS قدیمی:
-```bash
-# ۱. دیتابیس رو بک‌آپ بگیر
-docker cp personal-site:/app/db/custom.db ./backup.db
-
-# ۲. کل پوشه رو zip کن
-cd /home/user
-zip -r personal-site-backup.zip personal-site-final/ backup.db
-
-# ۳. دانلود کن
-scp user@old-vps:/home/user/personal-site-backup.zip ./
-```
-
-### روی VPS جدید:
-```bash
-# ۱. فایل zip رو آپلود کن
-unzip personal-site-backup.zip
-cd personal-site-final
-
-# ۲. دیتابیس رو بازگردانی کن
-docker-compose up -d
-# صبر کن تا سرور بالا بیاد
-docker cp ../backup.db personal-site:/app/db/custom.db
-docker-compose restart
-
-# ۳. دامنه جدیدت رو به AUTHORIZED_DOMAINS اضافه کن
-# فایل src/lib/canvas-protect.ts و src/app/page.tsx رو ویرایش کن
-# خط authorizedDomains رو پیدا کن و دامنه جدید رو اضافه کن
-
-# ۴. بازسازی container
-docker-compose up -d --build
-```
-
-## بک‌آپ خودکار:
-- هر شب ساعت ۲ بامداد دیتابیس بک‌آپ می‌شه
-- ۷ روز نگه‌داری می‌شه
-- بک‌آپ‌ها در /app/backups/ ذخیره می‌شن
-- برای دسترسی: `docker exec personal-site ls /app/backups/`
-
-## بک‌آپ دستی:
-```bash
-# بک‌آپ
-docker cp personal-site:/app/db/custom.db ./backup-$(date +%Y%m%d).db
-
-# بازیابی
-docker cp ./backup-20260826.db personal-site:/app/db/custom.db
-docker-compose restart
-```
+ورود ادمین:
+  http://YOUR_IP:3000/user-login
+  username: admin
+  password: admin123
+  ⚠️ از پنل رمز رو عوض کن!
 
 ================================================================
-  ورود به پنل ادمین
+  ریست رمز ادمین (اگه فراموش کردی)
 ================================================================
 
-- آدرس: http://your-domain:3000/#admin
-- یا: Ctrl+Shift+A
-- نام کاربری: admin
-- رمز: admin123
-- ⚠ حتماً از پنل settings → Security عوض کن!
+cd /home/ehsan/personal-site
+sudo bash scripts/reset-admin-password.sh
 
 ================================================================
-  ساختار فایل‌ها
+  آموزش
 ================================================================
 
-```
-personal-site-final/
-├── VERSION.txt              ← این فایل
-├── Dockerfile               ← تنظیمات Docker
-├── docker-compose.yml       ← اجرای خودکار
-├── docker-entrypoint.sh     ← اسکریپت راه‌انداز
-├── .dockerignore
-├── prisma/
-│   └── schema.prisma        ← ۲۳ مدل دیتابیس
-├── src/
-│   ├── app/
-│   │   ├── page.tsx         ← صفحه اصلی (۱۷۰۰+ خط)
-│   │   ├── layout.tsx       ← HTML shell
-│   │   ├── personal.css     ← تمام استایل‌ها
-│   │   └── api/             ← ۲۵ API route
-│   ├── components/          ← ۲۱ کامپوننت
-│   └── lib/                ← ۸ ماژول
-├── scripts/
-│   ├── seed_content.py      ← داده‌های اولیه محتوا
-│   ├── seed_equipment.py    ← داده‌های تجهیزات
-│   ├── seed_texts.py        ← داده‌های متن‌ها
-│   ├── auto-backup.sh        ← بک‌آپ خودکار
-│   └── list_messages.py     ← مشاهده پیام‌ها
-├── public/
-│   ├── manifest.json        ← PWA manifest
-│   ├── icon-192.png          ← آیکون PWA
-│   └── icon-512.png
-├── CODING_TUTORIAL_FA.docx  ← آموزش کدنویسی فارسی (۲۰ فصل)
-├── SITE_TUTORIAL_FA.docx    ← آموزش سایت فارسی
-└── API_SETUP.md              ← راهنمای API و Bale
-```
+فایل TUTORIAL_FA_V14.docx رو بخون — ۸ فصل کامل:
+  ۱. مقدمه
+  ۲. نصب
+  ۳. امنیت
+  ۴. سیستم کاربران
+  ۵. کلیپ آپارات
+  ۶. هوش مصنوعی (Ollama)
+  ۷. SEO
+  ۸. جمع‌بندی
+
+همچنین OLLAMA_GUIDE_FA.md برای آموزش هوش مصنوعی محلی.
 
 ================================================================
-  آمار نهایی
-================================================================
-
-- ۲۵ API route
-- ۲۱ کامپوننت
-- ۲۳ جدول دیتابیس
-- ۹ تب پنل ادمین
-- ۷ تم رنگی + تم‌ساز
-- ۶ ارائه‌دهنده AI (Z.ai, OpenAI, Anthropic, Ollama, Groq, OpenRouter)
-- ۳ زبان (EN, DE, FA)
-- ۳۶ متن قابل ویرایش از پنل
-- ۲۰ فصل آموزش فارسی
-- Docker کامل با بک‌آپ خودکار
-
-================================================================
-  تماس و پشتیبانی
-================================================================
-
-این فایل رو نگه دار — هر بار که پیام دادی، این فایل رو چک کن
-تا بدونی کدوم نسخه روی سرورته و چه قابلیت‌هایی داره.
-
-نسخه فعلی: V19.1
-تاریخ: 2026-09-03
