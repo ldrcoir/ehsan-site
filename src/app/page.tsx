@@ -1,4 +1,5 @@
 "use client";
+import { sanitizeEmbed } from "@/lib/sanitize-embed";
 
 import { useEffect, useState, type FormEvent } from "react";
 import "./personal.css";
@@ -880,7 +881,7 @@ export default function Home() {
                   </div>
                   <div
                     style={{ aspectRatio: "16/9", background: "#000" }}
-                    dangerouslySetInnerHTML={{ __html: clip.embedCode }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeEmbed(clip.embedCode) }}
                   />
                 </div>
               ))}

@@ -2,6 +2,7 @@
 // /clips — صفحه نمایش کلیپ‌های آپارات
 // ============================================================================
 "use client";
+import { sanitizeEmbed } from "@/lib/sanitize-embed";
 
 import { useEffect, useState } from "react";
 
@@ -53,7 +54,7 @@ export default function ClipsPage() {
                   <h2 style={{ color: "#39ff14", margin: 0, fontSize: 16 }}>{clip.title}</h2>
                   {clip.description && <p style={{ color: "#4a7a4a", fontSize: 11, marginTop: 4 }}>{clip.description}</p>}
                 </div>
-                <div style={{ aspectRatio: "16/9", background: "#000" }} dangerouslySetInnerHTML={{ __html: clip.embedCode }} />
+                <div style={{ aspectRatio: "16/9", background: "#000" }} dangerouslySetInnerHTML={{ __html: sanitizeEmbed(clip.embedCode) }} />
               </div>
             ))}
           </div>
