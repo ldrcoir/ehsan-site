@@ -1,38 +1,29 @@
+// ============================================================================
+// /api/admin/security — مدیریت امنیت ادمین (تغییر رمز، handle، نام)
+// ============================================================================
+// SECURITY: فقط از دیتابیس چک می‌شه — هیچ fallback نیست.
+// ============================================================================
+
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { verifyPassword, hashPassword, logAccess, getClientIp } from "@/lib/access-auth";
-import { PERSONAL } from "@/lib/content";
+import { checkAdminPassword } from "@/lib/admin-auth";
 
 // ----------------------------------------------------------------------------
 // GET /api/admin/security?password=xxx
-// Returns current security settings
 // ----------------------------------------------------------------------------
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
     const password = url.searchParams.get("password") || "";
 
-    // بررسی رمز: اول از دیتابیس، بعد از PERSONAL
-    const adminUser = await db.accessUser.findFirst({
-      where: { role: "admin", active: true },
-    });
-
-    let passwordOk = false;
-    if (adminUser) {
-      passwordOk = await verifyPassword(password, adminUser.passwordHash);
-    }
-    if (!passwordOk) {
-      passwordOk = true;
-    }
-
-    if (!passwordOk) {
+    const authCheck = await checkAdminPassword(password);
+    if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 
     return NextResponse.json({
       ok: true,
-      currentHandle: PERSONAL.handle,
-      currentName: PERSONAL.fullName,
       hasPassword: true,
     });
   } catch (err) {
@@ -52,21 +43,10 @@ export async function POST(req: Request) {
 
     const password = String(body.password || "");
 
-    // بررسی رمز: اول از دیتابیس، بعد از PERSONAL
-    const adminUser = await db.accessUser.findFirst({
-      where: { role: "admin", active: true },
-    });
-
-    let passwordOk = false;
-    if (adminUser) {
-      passwordOk = await verifyPassword(password, adminUser.passwordHash);
-    }
-    if (!passwordOk) {
-      passwordOk = true;
-    }
-
-    if (!passwordOk) {
-      await logAccess(adminUser?.id || "unknown", "admin_login_failed", getClientIp(req as any), req.headers.get("user-agent"), "wrong admin password");
+    const authCheck = await checkAdminPassword(password);
+    if (!authCheck.ok) {
+      const ip = getClientIp(req as any);
+      await logAccess("unknown", "admin_login_failed", ip, req.headers.get("user-agent"), "wrong admin password on security endpoint");
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 
@@ -79,7 +59,11 @@ export async function POST(req: Request) {
           return NextResponse.json({ ok: false, error: "password_too_short" }, { status: 400 });
         }
 
-        // عوض‌کردن رمز توی دیتابیس (نه فایل content.ts — چون تو standalone کار نمی‌کنه)
+        // عوض‌کردن رمز فقط تو دیتابیس (هش bcrypt)
+        const adminUser = await db.accessUser.findFirst({
+          where: { role: "admin", active: true },
+        });
+
         if (adminUser) {
           const newHash = await hashPassword(newPassword);
           await db.accessUser.update({
@@ -88,8 +72,7 @@ export async function POST(req: Request) {
           });
         }
 
-        // فقط هش bcrypt در دیتابیس ذخیره می‌شه — نه plain text
-        return NextResponse.json({ ok: true, message: "Password changed. Use new password next time." });
+        return NextResponse.json({ ok: true, message: "Password changed." });
       }
 
       case "change_handle": {

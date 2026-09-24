@@ -17,10 +17,10 @@ import crypto from "crypto";
 import { db } from "./db";
 
 const SESSION_SECRET = process.env.SESSION_SECRET;
-if (!SESSION_SECRET && process.env.NODE_ENV === "production") {
-  throw new Error("SESSION_SECRET env var is required in production");
+if (!SESSION_SECRET) {
+  throw new Error("SESSION_SECRET env var is required (use: openssl rand -hex 32)");
 }
-const SECRET = SESSION_SECRET || "dev-only-insecure-secret-do-not-use-in-prod";
+const SECRET = SESSION_SECRET;
 const SESSION_DURATION_HOURS = 24;
 
 // ----------------------------------------------------------------------------
@@ -64,9 +64,11 @@ export function verifySessionToken(token: string): { userId: string; expiresAt: 
     const expiresAt = parseInt(expiresAtStr, 10);
     if (isNaN(expiresAt)) return null;
     if (Date.now() > expiresAt) return null; // منقضی شده
-    // بررسی امضا
+    // بررسی امضا با timingSafeEqual (جلوگیری از timing attack)
     const expectedSig = hmac(`${userId}.${expiresAt}`);
-    if (sig !== expectedSig) return null; // امضا نامعتبر
+    const sigBuf = Buffer.from(sig, "hex");
+    const expBuf = Buffer.from(expectedSig, "hex");
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) return null;
     return { userId, expiresAt };
   } catch {
     return null;
