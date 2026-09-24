@@ -1,3 +1,4 @@
+import { checkAdminAuth } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { processBaleWebhook } from "@/lib/bale";
 import { getSetting } from "@/lib/settings";
@@ -47,12 +48,9 @@ export async function POST(req: Request) {
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const password = url.searchParams.get("password") || "";
-  const adminPassword = process.env.PERSONAL_ADMIN_PASSWORD;
-    if (!adminPassword) {
-      return NextResponse.json({ ok: false, error: "admin_password_not_configured" }, { status: 503 });
-    }
 
-  if (password !== adminPassword) {
+  const authCheck = await checkAdminAuth(req, password);
+  if (!authCheck.ok) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 

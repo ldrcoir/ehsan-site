@@ -103,8 +103,8 @@ export async function POST(request: NextRequest) {
     // ست کردن cookie — httpOnly برای جلوگیری از XSS، secure در production
     response.cookies.set("access_session", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      secure: true,
+      sameSite: "strict",
       path: "/",
       maxAge: 60 * 60 * 24, // 24 ساعت
     });
