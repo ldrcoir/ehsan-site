@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Vazirmatn } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "@/components/ui/toaster";
 import { Inter, Lora, Fira_Code } from "next/font/google";
 
 // ============================================================================
@@ -147,7 +146,6 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         {children}
-        <Toaster />
       </body>
     </html>
   );
