@@ -11,6 +11,7 @@ interface SiteContent {
   equipment: any[];
   texts: Record<string, string>;
   navItems: any[];
+  settings: Record<string, string>;
 }
 
 const fallback: SiteContent = {
@@ -22,6 +23,7 @@ const fallback: SiteContent = {
   equipment: [],
   texts: {},
   navItems: [],
+  settings: {},
 };
 
 export function useContent(lang: string = "en") {
@@ -54,6 +56,7 @@ export function useContent(lang: string = "en") {
           equipment: data.ok ? data.equipment || [] : [],
           texts: texts,
           navItems: data.ok ? data.navItems || [] : [],
+          settings: data.ok ? data.settings || {} : {},
         };
         setContent(result);
         setLoading(false);

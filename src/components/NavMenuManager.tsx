@@ -6,14 +6,14 @@ import { useEffect, useState } from "react";
  * NavMenuManager — Add/edit/delete/reorder navigation menu items.
  */
 
-export default function NavMenuManager({ password, lang }: { password: string; lang: string }) {
+export default function NavMenuManager({ lang }: { lang: string }) {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<any | null>(null);
   const fa = lang === "fa";  const loadItems = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/nav?password=${password}`);
+      const res = await fetch(`/api/admin/nav?password=`);
       const data = await res.json();
       if (data.ok) setItems(data.items || []);
     } catch {}
@@ -30,12 +30,13 @@ export default function NavMenuManager({ password, lang }: { password: string; l
   const save = async (item: any) => {
     const isNew = !item.id;
     const action = isNew ? "create" : "update";
-    const payload: any = { password, action };
+    const payload: any = { action };
     if (!isNew) payload.id = item.id;
     payload.data = { ...item };
     delete payload.data.id; delete payload.data.createdAt; delete payload.data.updatedAt;
     await fetch("/api/admin/nav", {
       method: "POST", headers: { "Content-Type": "application/json" },
+        credentials: "include",
       body: JSON.stringify(payload),
     });
     setEditing(null);
@@ -46,7 +47,8 @@ export default function NavMenuManager({ password, lang }: { password: string; l
     if (!confirm(fa ? "حذف؟" : "Delete?")) return;
     await fetch("/api/admin/nav", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password, action: "delete", id }),
+        credentials: "include",
+      body: JSON.stringify({ action: "delete", id }),
     });
     loadItems();
   };
@@ -54,7 +56,8 @@ export default function NavMenuManager({ password, lang }: { password: string; l
   const toggle = async (id: string) => {
     await fetch("/api/admin/nav", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password, action: "toggle", id }),
+        credentials: "include",
+      body: JSON.stringify({ action: "toggle", id }),
     });
     loadItems();
   };
@@ -68,9 +71,11 @@ export default function NavMenuManager({ password, lang }: { password: string; l
     const b = items[newIdx];
     await Promise.all([
       fetch("/api/admin/nav", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password, action: "update", id: a.id, data: { order: b.order } }) }),
+        credentials: "include",
+        body: JSON.stringify({ action: "update", id: a.id, data: { order: b.order } }) }),
       fetch("/api/admin/nav", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password, action: "update", id: b.id, data: { order: a.order } }) }),
+        credentials: "include",
+        body: JSON.stringify({ action: "update", id: b.id, data: { order: a.order } }) }),
     ]);
     loadItems();
   };

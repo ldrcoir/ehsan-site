@@ -6,7 +6,7 @@ type ContentType = "book" | "article" | "tutorial" | "skill" | "aiInstruction" |
 
 interface Item { id?: string; [key: string]: any; }
 
-export default function ContentManager({ password, lang }: { password: string; lang: string }) {
+export default function ContentManager({ lang }: { lang: string }) {
   const [activeType, setActiveType] = useState<ContentType>("tutorial");
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,7 +27,7 @@ export default function ContentManager({ password, lang }: { password: string; l
     setLoading(true);
     try {
       const endpoint = activeType === "equipment" ? "equipment" : "content";
-      const res = await fetch(`/api/admin/${endpoint}?password=${password}&type=${activeType}`);
+      const res = await fetch(`/api/admin/${endpoint}?password=&type=${activeType}`);
       const data = await res.json();
       if (data.ok) setItems(data.items || []);
     } catch {}
@@ -43,7 +43,7 @@ export default function ContentManager({ password, lang }: { password: string; l
     const isNew = !item.id;
     const action = isNew ? "create" : "update";
     const endpoint = activeType === "equipment" ? "equipment" : "content";
-    const payload: any = { password, type: activeType, action };
+    const payload: any = { type: activeType, action };
     if (!isNew) payload.id = item.id;
     payload.data = { ...item };
     delete payload.data.id; delete payload.data.createdAt; delete payload.data.updatedAt;
@@ -53,6 +53,7 @@ export default function ContentManager({ password, lang }: { password: string; l
     try {
       await fetch(`/api/admin/${endpoint}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(payload),
       });
       setEditing(null); loadItems();
@@ -64,7 +65,8 @@ export default function ContentManager({ password, lang }: { password: string; l
     const endpoint = activeType === "equipment" ? "equipment" : "content";
     await fetch(`/api/admin/${endpoint}`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password, type: activeType, action: "delete", id }),
+        credentials: "include",
+      body: JSON.stringify({ type: activeType, action: "delete", id }),
     });
     loadItems();
   };
@@ -73,7 +75,8 @@ export default function ContentManager({ password, lang }: { password: string; l
     const endpoint = activeType === "equipment" ? "equipment" : "content";
     await fetch(`/api/admin/${endpoint}`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password, type: activeType, action: "toggle", id }),
+        credentials: "include",
+      body: JSON.stringify({ type: activeType, action: "toggle", id }),
     });
     loadItems();
   };
@@ -85,7 +88,8 @@ export default function ContentManager({ password, lang }: { password: string; l
       const endpoint = activeType === "equipment" ? "equipment" : "content";
       const res = await fetch(`/api/admin/${endpoint}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password, type: activeType, action: "bulk_import", items: parsed }),
+        credentials: "include",
+        body: JSON.stringify({ type: activeType, action: "bulk_import", items: parsed }),
       });
       const data = await res.json();
       if (data.ok) {

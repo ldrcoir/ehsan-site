@@ -455,7 +455,7 @@ export default function Home() {
       <header className={`navbar ${scrolled ? "scrolled" : ""}`}>
         <div className="container nav-inner">
           <a href="#hero" className="brand" onClick={(e) => handleNavClick(e, "#hero")}>
-            <span className="brand-name">{tx("admin.handle", PERSONAL.handle)}</span>
+            <span className="brand-name">{siteContent.settings?.handle || PERSONAL.handle}</span>
           </a>
           <nav className={`nav-links ${menuOpen ? "open" : ""}`}>
             {siteContent.navItems.length > 0 ? (
@@ -524,7 +524,7 @@ export default function Home() {
         <div className="container hero-grid">
           <div className={`hero-text ${reveal("hero-text")}`} data-reveal="hero-text">
             <p className="hero-greeting">{tx("hero.greeting", tt.hero.greeting)}</p>
-            <h1 className="hero-title">{tx("admin.name_" + lang, PERSONAL.fullName[lang])}</h1>
+            <h1 className="hero-title">{siteContent.settings?.["name_" + lang] || PERSONAL.fullName[lang]}</h1>
             <p className="hero-subtitle">{PERSONAL.tagline[lang]}</p>
             <div className="hero-cta">
               <a href="#articles" className="btn btn-primary" onClick={(e) => handleNavClick(e, "#articles")}>{tx("hero.cta1", tt.hero.cta)}</a>
@@ -779,7 +779,7 @@ export default function Home() {
       {/* FOOTER */}
       <footer className="footer">
         <div className="container footer-inner">
-          <p>© {year ?? ""} {tx("admin.name_" + lang, PERSONAL.fullName[lang])}. {tt.footer.built}</p>
+          <p>© {year ?? ""} {siteContent.settings?.["name_" + lang] || PERSONAL.fullName[lang]}. {tt.footer.built}</p>
           <ul className="footer-links">
             <li><a href="#about" onClick={(e) => handleNavClick(e, "#about")}>{tt.nav.about}</a></li>
             <li><a href="#books" onClick={(e) => handleNavClick(e, "#books")}>{tt.nav.books}</a></li>

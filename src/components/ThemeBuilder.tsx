@@ -57,13 +57,13 @@ const COLOR_FIELDS: { key: keyof ThemeColors; label: string; desc: string }[] = 
   { key: "cyan", label: "Cyan", desc: "User messages in chat" },
 ];
 
-export default function ThemeBuilder({ password, lang }: { password: string; lang: string }) {
+export default function ThemeBuilder({ lang }: { lang: string }) {
   const [themes, setThemes] = useState<ThemeColors[]>([]);
   const [editing, setEditing] = useState<ThemeColors | null>(null);
   const [loading, setLoading] = useState(true);  const loadThemes = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/themes?password=${password}`);
+      const res = await fetch(`/api/admin/themes?password=`);
       const data = await res.json();
       if (data.ok) setThemes(data.themes || []);
     } catch {}
@@ -80,13 +80,14 @@ export default function ThemeBuilder({ password, lang }: { password: string; lan
   const saveTheme = async (t: ThemeColors) => {
     const isNew = !t.id;
     const action = isNew ? "create" : "update";
-    const payload: any = { password, action };
+    const payload: any = { action };
     if (!isNew) payload.id = t.id;
     payload.data = { ...t };
     delete payload.data.id;
     try {
       const res = await fetch("/api/admin/themes", {
         method: "POST", headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(payload),
       });
       const data = await res.json();
@@ -101,7 +102,8 @@ export default function ThemeBuilder({ password, lang }: { password: string; lan
     if (!confirm("Delete this theme?")) return;
     await fetch("/api/admin/themes", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password, action: "delete", id }),
+        credentials: "include",
+      body: JSON.stringify({ action: "delete", id }),
     });
     loadThemes();
   };
@@ -109,7 +111,8 @@ export default function ThemeBuilder({ password, lang }: { password: string; lan
   const toggleTheme = async (id: string) => {
     await fetch("/api/admin/themes", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password, action: "toggle", id }),
+        credentials: "include",
+      body: JSON.stringify({ action: "toggle", id }),
     });
     loadThemes();
   };

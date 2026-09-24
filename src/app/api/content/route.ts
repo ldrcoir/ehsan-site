@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
  */
 export async function GET() {
   try {
-    const [books, articles, tutorials, skills, instructions, equipment, navItems, texts] = await Promise.all([
+    const [books, articles, tutorials, skills, instructions, equipment, navItems, texts, settings] = await Promise.all([
       db.book.findMany({ where: { visible: true }, orderBy: { order: "asc" } }),
       db.article.findMany({ where: { visible: true }, orderBy: { order: "asc" } }),
       db.tutorial.findMany({ where: { visible: true }, orderBy: { order: "asc" } }),
@@ -17,6 +17,7 @@ export async function GET() {
       db.labEquipment.findMany({ where: { visible: true }, orderBy: { order: "asc" } }),
       db.navItem.findMany({ where: { visible: true }, orderBy: { order: "asc" } }),
       db.siteText.findMany(),
+      db.siteSetting.findMany(),
     ]);
 
     // تبدیل متن‌ها به فرمت مناسب برای frontend
@@ -48,6 +49,7 @@ export async function GET() {
       })),
       navItems,
       texts: textsByLang,
+      settings: Object.fromEntries(settings.map(s => [s.key, s.value])),
     });
   } catch (err) {
     console.error("[/api/content] error:", err);

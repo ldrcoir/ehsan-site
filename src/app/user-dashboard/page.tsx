@@ -18,6 +18,7 @@ import ThemeBuilder from "@/components/ThemeBuilder";
 import AccessUserManager from "@/components/AccessUserManager";
 import FontSelector from "@/components/FontSelector";
 import AparatClipManager from "@/components/AparatClipManager";
+import SettingsPanel from "@/components/SettingsPanel";
 
 type UserInfo = {
   id: string;
@@ -44,7 +45,7 @@ export default function UserDashboardPage() {
   const [accessAllowed, setAccessAllowed] = useState(true);
   const [accessReason, setAccessReason] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("overview");
-  const [adminPwd, setAdminPwd] = useState("");
+  const [lang, setLang] = useState<string>("fa");
 
   useEffect(() => {
     fetch("/api/user/verify", { cache: "no-store" })
@@ -194,6 +195,24 @@ export default function UserDashboardPage() {
               letterSpacing: 1,
               textDecoration: "none",
             }}>🌐 باز کردن سایت</a>
+            <select
+              value={lang}
+              onChange={(e) => setLang(e.target.value)}
+              style={{
+                padding: "6px 10px",
+                background: "transparent",
+                color: "var(--primary, #00ff41)",
+                border: "1px solid var(--border, #1a3a1a)",
+                fontFamily: "monospace",
+                fontSize: 11,
+                borderRadius: 4,
+                cursor: "pointer",
+              }}
+            >
+              <option value="fa" style={{ background: "#000" }}>فارسی</option>
+              <option value="en" style={{ background: "#000" }}>English</option>
+              <option value="de" style={{ background: "#000" }}>Deutsch</option>
+            </select>
             <button
               onClick={handleLogout}
               style={{
@@ -273,34 +292,34 @@ export default function UserDashboardPage() {
           )}
 
           {activeTab === "messages" && isAdmin && (
-            <MessagesPanel password={adminPwd} />
+            <MessagesPanel />
           )}
 
           {activeTab === "content" && isAdmin && (
             <div>
               <HelpBox text="اینجا می‌تونی کتاب‌ها، مقالات، آموزش‌ها، مهارت‌ها و تجهیزات رو اضافه/ویرایش/حذف کنی. روی هر مورد کلیک کن تا فرم ویرایش باز بشه. برای نمایش تیک visible رو بزن." />
-              <ContentManager password={adminPwd} lang="fa" />
+              <ContentManager lang="fa" />
             </div>
           )}
 
           {activeTab === "text" && isAdmin && (
             <div>
               <HelpBox text="همه‌ی متن‌های سایت (عنوان‌ها، توضیحات، دکمه‌ها) رو از اینجا می‌تونی عوض کنی. تغییرات بلافاصله روی سایت اعمال می‌شه." />
-              <TextEditor password={adminPwd} lang="fa" />
+              <TextEditor lang="fa" />
             </div>
           )}
 
           {activeTab === "nav" && isAdmin && (
             <div>
               <HelpBox text="منوی بالای سایت رو مدیریت کن. می‌تونی لینک‌های جدید اضافه کنی، ترتیبشون رو عوض کنی یا مخفیشون کنی." />
-              <NavMenuManager password={adminPwd} lang="fa" />
+              <NavMenuManager lang="fa" />
             </div>
           )}
 
           {activeTab === "themes" && isAdmin && (
             <div>
               <HelpBox text="تم رنگی سایت رو بساز یا عوض کن. ۷ تم آماده موجوده، یا تم سفارشی بساز. رنگ‌ها رو انتخاب کن و ذخیره بزن." />
-              <ThemeBuilder password={adminPwd} lang="fa" />
+              <ThemeBuilder lang="fa" />
             </div>
           )}
 
@@ -326,14 +345,7 @@ export default function UserDashboardPage() {
           )}
 
           {activeTab === "settings" && (
-            <div>
-              <HelpBox text="تنظیمات پیشرفته: تغییر رمز، تنظیم ایمیل، اتصال به هوش مصنوعی (Ollama/OpenAI/Groq). برای آموزش هوش مصنوعی محلی، فایل OLLAMA_GUIDE_FA.md رو بخون." />
-              <div style={{ padding: 20, color: "var(--text-dim)", textAlign: "center" }}>
-                <a href="/#admin" style={{ color: "var(--primary)", textDecoration: "underline" }}>
-                  باز کردن پنل تنظیمات کامل
-                </a>
-              </div>
-            </div>
+            <SettingsPanel />
           )}
         </div>
       </div>
@@ -388,34 +400,22 @@ function HelpBox({ text }: { text: string }) {
 // ============================================================================
 // MessagesPanel — نمایش پیام‌های تماس دریافتی
 // ============================================================================
-function MessagesPanel({ password }: { password: string }) {
+function MessagesPanel() {
   const [messages, setMessages] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
 
   useEffect(() => {
-    if (!password) {
-      // اگه password خالی هست، از session استفاده کن
-      fetch("/api/messages", { credentials: "include" })
-        .then(r => r.json())
-        .then(data => {
-          if (data.ok) setMessages(data.messages || []);
-          else setMessages([]);
-        })
-        .catch(() => setMessages([]))
-        .finally(() => setLoading(false));
-    } else {
-      fetch(`/api/messages?password=${encodeURIComponent(password)}`)
-        .then(r => r.json())
-        .then(data => {
-          if (data.ok) setMessages(data.messages || []);
-          else setMessages([]);
-        })
-        .catch(() => setMessages([]))
-        .finally(() => setLoading(false));
-    }
-  }, [password]);
+    fetch("/api/messages?password=", { credentials: "include" })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) setMessages(data.messages || []);
+        else setMessages([]);
+      })
+      .catch(() => setMessages([]))
+      .finally(() => setLoading(false));
+  }, []);
 
   async function sendReply(msgId: string) {
     if (!replyText.trim()) return;
@@ -424,7 +424,7 @@ function MessagesPanel({ password }: { password: string }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ password, messageId: msgId, reply: replyText }),
+        body: JSON.stringify({ messageId: msgId, reply: replyText }),
       });
       setReplyingTo(null);
       setReplyText("");
@@ -441,7 +441,7 @@ function MessagesPanel({ password }: { password: string }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ password, target: "message", id: msgId }),
+        body: JSON.stringify({ target: "message", id: msgId }),
       });
       setMessages(prev => prev ? prev.filter(m => m.id !== msgId) : prev);
     } catch {

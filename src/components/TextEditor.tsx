@@ -7,14 +7,14 @@ import { useEffect, useState } from "react";
  * Each text has EN/FA/DE values.
  */
 
-export default function TextEditor({ password, lang }: { password: string; lang: string }) {
+export default function TextEditor({ lang }: { lang: string }) {
   const [texts, setTexts] = useState<Record<string, { en: string; fa: string; de: string }>>({});
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
   const [savedKey, setSavedKey] = useState<string | null>(null);  const loadTexts = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/text?password=${password}`);
+      const res = await fetch(`/api/admin/text?password=`);
       const data = await res.json();
       if (data.ok) setTexts(data.texts || {});
     } catch {}
@@ -31,7 +31,8 @@ export default function TextEditor({ password, lang }: { password: string; lang:
   const saveText = async (key: string, val: { en: string; fa: string; de: string }) => {
     const res = await fetch("/api/admin/text", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password, action: "set", key, ...val }),
+        credentials: "include",
+      body: JSON.stringify({ action: "set", key, ...val }),
     });
     const data = await res.json();
     if (data.ok) {
