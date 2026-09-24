@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     const userAgent = request.headers.get("user-agent");
 
     // Rate limit check
-    if (ip && !checkRateLimit(ip)) {
+    const rateLimitKey = ip || "unknown"; if (!checkRateLimit(rateLimitKey)) {
       return NextResponse.json(
         { ok: false, error: "rate_limit" },
         { status: 429 }
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
 
     // اگه کاربر وجود نداشت یا رمز اشتباه بود — پیام یکسان برای جلوگیری از user enumeration
     if (!user) {
-      await logAccess("unknown", "login_failed", ip, userAgent, `username=${username}`);
+      // skip log اگه کاربر وجود نداره (FK violation)
       return NextResponse.json({ ok: false, error: "invalid_credentials" }, { status: 401 });
     }
 

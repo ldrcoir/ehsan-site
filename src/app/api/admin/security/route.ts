@@ -7,7 +7,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { verifyPassword, hashPassword, logAccess, getClientIp } from "@/lib/access-auth";
-import { checkAdminPassword } from "@/lib/admin-auth";
+import { checkAdminAuth } from "@/lib/admin-auth";
 
 // ----------------------------------------------------------------------------
 // GET /api/admin/security?password=xxx
@@ -17,7 +17,7 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const password = url.searchParams.get("password") || "";
 
-    const authCheck = await checkAdminPassword(password);
+    const authCheck = await checkAdminAuth(req, password);
     if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
@@ -43,10 +43,10 @@ export async function POST(req: Request) {
 
     const password = String(body.password || "");
 
-    const authCheck = await checkAdminPassword(password);
+    const authCheck = await checkAdminAuth(req, password);
     if (!authCheck.ok) {
       const ip = getClientIp(req as any);
-      await logAccess("unknown", "admin_login_failed", ip, req.headers.get("user-agent"), "wrong admin password on security endpoint");
+      // skip log اگه کاربر وجود نداره (FK violation)
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 

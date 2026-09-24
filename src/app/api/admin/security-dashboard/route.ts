@@ -1,7 +1,6 @@
-import { checkAdminPassword } from "@/lib/admin-auth";
+import { checkAdminAuth } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { PERSONAL } from "@/lib/content";
 
 /**
  * GET /api/admin/security-dashboard?password=xxx
@@ -11,7 +10,7 @@ export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
     const password = url.searchParams.get("password") || "";
-    const authCheck = await checkAdminPassword(password); if (!authCheck.ok) {
+    const authCheck = await checkAdminAuth(req, password); if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 
@@ -50,7 +49,7 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => null);
     if (!body) return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
     const password = String(body.password || "");
-    const authCheck = await checkAdminPassword(password); if (!authCheck.ok) {
+    const authCheck = await checkAdminAuth(req, password); if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 
