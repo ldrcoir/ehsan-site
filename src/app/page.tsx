@@ -937,7 +937,7 @@ export default function Home() {
                 {mounted ? (
                   <div
                     className="g-recaptcha"
-                    data-sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
+                    data-sitekey={process.env.NEXT_PUBLIC_RECAPTCHA_SITEKEY || ""}
                     data-theme="dark"
                   ></div>
                 ) : (
@@ -1526,21 +1526,65 @@ export default function Home() {
                             if (data.ok) {
                               const container = document.getElementById("aiProvidersList");
                               if (container) {
-                                container.innerHTML = data.providers.map((p: any) => `
-                                  <div style="border:1px solid var(--border);padding:10px;display:flex;flex-direction:column;gap:6px;">
-                                    <div style="display:flex;justify-content:space-between;align-items:center;">
-                                      <strong style="color:var(--green-bright);font-size:0.85rem;">${p.label}</strong>
-                                      <span style="font-size:0.7rem;color:${p.enabled ? 'var(--green)' : 'var(--text-dim)'};">${p.enabled ? '● enabled' : '○ disabled'}</span>
-                                    </div>
-                                    <div style="font-size:0.72rem;color:var(--text-dim);">Model: ${p.model} · Priority: ${p.priority}</div>
-                                    <input type="password" placeholder="API Key: ${p.apiKey || 'not set'}" style="background:var(--bg);border:1px solid var(--border);color:var(--green-bright);font-family:var(--font-mono);font-size:0.75rem;padding:4px;" id="key_${p.id}" />
-                                    <input type="text" placeholder="Model name" value="${p.model}" style="background:var(--bg);border:1px solid var(--border);color:var(--green-bright);font-family:var(--font-mono);font-size:0.75rem;padding:4px;" id="model_${p.id}" />
-                                    <div style="display:flex;gap:4px;">
-                                      <button onclick="window.__updateProvider('${p.id}', '${p.id}')" style="background:var(--green);color:#000;border:0;padding:4px 8px;font-size:0.7rem;cursor:pointer;font-family:var(--font-mono);">save</button>
-                                      <button onclick="window.__toggleProvider('${p.id}')" style="background:var(--bg-panel-2);border:1px solid var(--border);color:var(--green);padding:4px 8px;font-size:0.7rem;cursor:pointer;font-family:var(--font-mono);">${p.enabled ? 'disable' : 'enable'}</button>
-                                    </div>
-                                  </div>
-                                `).join("");
+                                // XSS-safe: استفاده از textContent و createElement به‌جای innerHTML
+                                container.innerHTML = "";
+                                data.providers.forEach((p: any) => {
+                                  const div = document.createElement("div");
+                                  div.style.cssText = "border:1px solid var(--border);padding:10px;display:flex;flex-direction:column;gap:6px;";
+                                  
+                                  const header = document.createElement("div");
+                                  header.style.cssText = "display:flex;justify-content:space-between;align-items:center;";
+                                  
+                                  const label = document.createElement("strong");
+                                  label.style.cssText = "color:var(--green-bright);font-size:0.85rem;";
+                                  label.textContent = p.label;
+                                  
+                                  const status = document.createElement("span");
+                                  status.style.cssText = `font-size:0.7rem;color:${p.enabled ? 'var(--green)' : 'var(--text-dim)'};`;
+                                  status.textContent = p.enabled ? "● enabled" : "○ disabled";
+                                  
+                                  header.appendChild(label);
+                                  header.appendChild(status);
+                                  div.appendChild(header);
+                                  
+                                  const info = document.createElement("div");
+                                  info.style.cssText = "font-size:0.72rem;color:var(--text-dim);";
+                                  info.textContent = `Model: ${p.model} · Priority: ${p.priority}`;
+                                  div.appendChild(info);
+                                  
+                                  const keyInput = document.createElement("input");
+                                  keyInput.type = "password";
+                                  keyInput.placeholder = `API Key: ${p.apiKey ? '••••' : 'not set'}`;
+                                  keyInput.id = `key_${p.id}`;
+                                  keyInput.style.cssText = "background:var(--bg);border:1px solid var(--border);color:var(--green-bright);font-family:var(--font-mono);font-size:0.75rem;padding:4px;";
+                                  div.appendChild(keyInput);
+                                  
+                                  const modelInput = document.createElement("input");
+                                  modelInput.type = "text";
+                                  modelInput.placeholder = "Model name";
+                                  modelInput.value = p.model;
+                                  modelInput.id = `model_${p.id}`;
+                                  modelInput.style.cssText = "background:var(--bg);border:1px solid var(--border);color:var(--green-bright);font-family:var(--font-mono);font-size:0.75rem;padding:4px;";
+                                  div.appendChild(modelInput);
+                                  
+                                  const btnDiv = document.createElement("div");
+                                  btnDiv.style.cssText = "display:flex;gap:4px;";
+                                  
+                                  const saveBtn = document.createElement("button");
+                                  saveBtn.textContent = "save";
+                                  saveBtn.style.cssText = "background:var(--green);color:#000;border:0;padding:4px 8px;font-size:0.7rem;cursor:pointer;font-family:var(--font-mono);";
+                                  saveBtn.onclick = () => (window as any).__updateProvider(p.id, p.id);
+                                  btnDiv.appendChild(saveBtn);
+                                  
+                                  const toggleBtn = document.createElement("button");
+                                  toggleBtn.textContent = p.enabled ? "disable" : "enable";
+                                  toggleBtn.style.cssText = "background:var(--bg-panel-2);border:1px solid var(--border);color:var(--green);padding:4px 8px;font-size:0.7rem;cursor:pointer;font-family:var(--font-mono);";
+                                  toggleBtn.onclick = () => (window as any).__toggleProvider(p.id);
+                                  btnDiv.appendChild(toggleBtn);
+                                  
+                                  div.appendChild(btnDiv);
+                                  container.appendChild(div);
+                                });
                               }
                             }
                           }}
