@@ -23,7 +23,7 @@ export const PERSONAL = {
   },
   // Admin credentials — CHANGE THESE
   adminUsername: "admin",
-  adminPassword: "admin123",
+  adminPassword: "change-this-from-panel",
   // Short tagline shown under the hero name
   tagline: {
     en: "Your Tagline Here",

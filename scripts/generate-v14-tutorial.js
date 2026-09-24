@@ -1,5 +1,5 @@
 // ============================================================================
-// generate-v14-tutorial.js — تولید فایل Word آموزشی نسخه V14
+// generate-v14-tutorial.js — تولید فایل Word آموزشی نسخه V15
 // ============================================================================
 
 const fs = require("fs");
@@ -123,7 +123,7 @@ children.push(new Paragraph({
   alignment: AlignmentType.CENTER, spacing: { after: 240 }, bidirectional: true,
 }));
 children.push(new Paragraph({
-  children: [new TextRun({ text: "نسخه V14.0 — ۱۴۰۳", font: FONT_FA, size: 36, color: COLOR_PRIMARY, rightToLeft: true })],
+  children: [new TextRun({ text: "نسخه V15.0 — ۱۴۰۳", font: FONT_FA, size: 36, color: COLOR_PRIMARY, rightToLeft: true })],
   alignment: AlignmentType.CENTER, spacing: { after: 600 }, bidirectional: true,
 }));
 children.push(new Paragraph({
@@ -343,8 +343,8 @@ children.push(faPara("موفق باشی! 🚀"));
 // ساخت سند
 // ----------------------------------------------------------------------------
 const doc = new Document({
-  creator: "Personal Site V14",
-  title: "آموزش کامل ساخت سایت شخصی V14",
+  creator: "Personal Site V15",
+  title: "آموزش کامل ساخت سایت شخصی V15",
   styles: {
     default: {
       document: {
@@ -370,7 +370,7 @@ const doc = new Document({
     headers: {
       default: new Header({
         children: [new Paragraph({
-          children: [new TextRun({ text: "آموزش سایت شخصی — V14.0", font: FONT_FA, size: 16, color: COLOR_DIM, rightToLeft: true })],
+          children: [new TextRun({ text: "آموزش سایت شخصی — V15.0", font: FONT_FA, size: 16, color: COLOR_DIM, rightToLeft: true })],
           alignment: AlignmentType.CENTER, bidirectional: true,
         })],
       }),
@@ -391,7 +391,7 @@ const doc = new Document({
   }],
 });
 
-const outputPath = "/home/z/my-project/download/TUTORIAL_FA_V14.docx";
+const outputPath = "/home/z/my-project/download/TUTORIAL_FA_V15.docx";
 Packer.toBuffer(doc).then(buffer => {
   fs.writeFileSync(outputPath, buffer);
   console.log(`✅ Tutorial generated: ${outputPath}`);
