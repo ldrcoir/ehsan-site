@@ -1,107 +1,75 @@
-V15.0 (2026-09-19) — حذف کامل admin123 و PERSONAL.adminPassword
-  - حذف fallback admin123 از bale/webhook
-  - حذف PERSONAL.adminPassword از admin/security/route.ts
-  - تغییر adminPassword در content.ts به "change-this-from-panel"
-  - هیچ hardcoded password در سورس نیست
-
-
 ================================================================
   PERSONAL SITE — VERSION HISTORY & DEPLOYMENT GUIDE
-  آخرین نسخه: V15.0 — 2026-09-19
+  آخرین نسخه: V16.0 — 2026-09-24
 ================================================================
 
-## 📌 نسخه فعلی: V15.0
+## 📌 نسخه فعلی: V16.0
 
 ================================================================
   تاریخچه نسخه‌ها
 ================================================================
 
-V15.0 (2026-09-19) — امنیت + دسترسی بخش‌بندی + آموزش آپدیت
-  - حذف fallback admin123 (فقط دیتابیس معتبره)
-  - SESSION_SECRET اجباری در production
-  - Sanitization کد امبد آپارات (XSS prevention)
+V16.0 (2026-09-24) — ممیزی امنیتی کامل + ۲ Worker پیشرفته
+  - رفع Authentication Bypass (passwordOk=true) — Critical
+  - حذف کامل admin123 fallback از همه فایل‌ها
+  - SESSION_SECRET اجباری در همه محیط‌ها
+  - reCAPTCHA اجباری + fail-closed + URLSearchParams
+  - timingSafeEqual برای HMAC (جلوگیری از timing attack)
+  - Cookie secure:true + sameSite:strict
+  - Security headers (X-Frame-Options, X-Content-Type-Options, etc.)
+  - sanitize-embed.ts برای جلوگیری از XSS در کلیپ آپارات
   - Rate limit برای login (۵ تلاش/۱۵ دقیقه)
-  - Webhook secret اجباری
+  - Webhook secrets اجباری (Bale + Telegram)
   - حذف plain-text password از SiteSetting
+  - Unified auth: checkAdminAuth (session cookie + password)
+  - XSS fix در providers panel (createElement به‌جای innerHTML)
+  - ignoreBuildErrors: false
+  - reactStrictMode: true
+  - پاک‌سازی همه dead code و ایمپورت‌های اضافی
+  - ۱۰ تب پنل ادمین + HelpBox
+  - دسترسی بخش‌بندی کاربران (permissions)
+  - کلیپ آپارات با sanitize
+  - ۵ فونت قابل انتخاب
+  - SEO کامل (OpenGraph, Twitter, JSON-LD, sitemap, robots, manifest)
+
+V15.0 (2026-09-19) — حذف کامل admin123 و PERSONAL.adminPassword
+  - حذف fallback admin123 از bale/webhook
+  - حذف PERSONAL.adminPassword از admin/security/route.ts
+  - تغییر adminPassword در content.ts به "change-this-from-panel"
+
+V14.0 (2026-09-18) — امنیت + دسترسی بخش‌بندی + آموزش آپدیت
   - دسترسی بخش‌بندی کاربران (permissions)
   - فیلد رمز با دکمه نمایش/مخفی
   - تب پیام‌ها در پنل ادمین
   - HelpBox برای هر تب
-  - آموزش آپدیت (V14)
 
 V13.0 (2026-09-17) — کلیپ آپارات + ریست رمز + SEO
   - مدل AparatClip در دیتابیس
   - /api/admin/clips (CRUD)
   - /api/clips (عمومی)
   - /clips صفحه
-  - AparatClipManager کامپوننت
   - reset-admin-password.sh
-  - SEO کامل (OpenGraph, Twitter, JSON-LD)
+  - SEO کامل
 
 V12.0 (2026-09-16) — دسترسی بخش‌بندی + دکمه رمز
-  - فیلد permissions در AccessUser
-  - فیلتر تب‌ها بر اساس permissions
-  - دکمه 👁 برای نمایش/مخفی رمز
-
 V11.0 (2026-09-16) — پیام‌ها + HelpBox
-  - تب پیام‌ها در داشبورد
-  - HelpBox برای هر تب
-  - re-enable همه کامپوننت‌ها
-
 V10.0 (2026-09-15) — نصب مستقیم (بدون Docker)
-  - install.sh با Node.js + Nginx
-  - Swap خودکار
-  - npm با mirror چین
-
-V9.0 (2026-09-15) — غیرفعال‌سازی + کلیپ
-  - (بعداً re-enable شد)
-
+V9.0 (2026-09-15) — کلیپ آپارات
 V8.0 (2026-09-16) — SEO + clean seed
-  - metadataBase, openGraph, twitter
-  - robots.txt کامل
-  - manifest.json کامل
-
-V7.0 (2026-09-16) — پنل ادمین جدید
-  - /user-dashboard به‌عنوان پنل اصلی
-  - FontSelector (۵ فونت)
-  - beforeunload protection
-  - Ollama guide
-
-V6.0 (2026-09-16) — رفع admin login
-  - checkAdminPassword از دیتابیس
-  - همه APIها از admin-auth استفاده می‌کنن
-
-V5.0 (2026-09-16) — رفع متن‌ها
-  - useContent از /api/content
-  - ۳ زبان (fa/en/de)
-  - حذف cache
-
-V4.0 (2026-09-16) — رف path دیتابیس
-  - db.ts با process.cwd()
-  - .env با مسیر مطلق
-
-V3.0 (2026-09-16) — نصب خودکار
-  - install.sh
-  - Swap
-  - mirror چین
-
+V7.0 (2026-09-16) — پنل ادمین جدید + FontSelector
+V6.0 (2026-09-16) — رفع admin login از دیتابیس
+V5.0 (2026-09-16) — رفع متن‌ها (۳ زبان)
+V4.0 (2026-09-16) — رفع path دیتابیس
+V3.0 (2026-09-16) — نصب خودکار + Swap + mirror
 V2.0 (2026-09-15) — رفع خطاهای نصب
-  - package.json dev script
-  - docker-entrypoint.sh
-  - seed scripts با مسیر نسبی
-
 V1.0 (2026-08-10) — ساخت اولیه
-  - Next.js 16 + TypeScript + Prisma + SQLite
-  - تم ترمینال
-  - پنل ادمین
-  - ۳ زبان
 
 ================================================================
   نصب
 ================================================================
 
-wget https://github.com/ldrcoir/ehsan-site/raw/main/public/install.zip
-unzip install.zip
+wget https://github.com/ldrcoir/ehsan-site/raw/main/public/install-v16.zip
+unzip install-v16.zip
 cd personal-site
 sudo ./install.sh
 
@@ -119,19 +87,27 @@ cd /home/ehsan/personal-site
 sudo bash scripts/reset-admin-password.sh
 
 ================================================================
+  امنیت (V16)
+================================================================
+
+✅ Authentication Bypass — رفع شد
+✅ Hardcoded admin123 — حذف شد
+✅ SESSION_SECRET — اجباری
+✅ reCAPTCHA — اجباری + fail-closed
+✅ timingSafeEqual — پیاده شد
+✅ XSS prevention — sanitize-embed
+✅ Rate limit — login (۵/۱۵دقیقه)
+✅ Webhook secrets — اجباری
+✅ Cookie secure:true + sameSite:strict
+✅ Security headers — اضافه شد
+✅ No plain-text password storage
+✅ ignoreBuildErrors: false
+
+================================================================
   آموزش
 ================================================================
 
-فایل TUTORIAL_FA_V14.docx رو بخون — ۸ فصل کامل:
-  ۱. مقدمه
-  ۲. نصب
-  ۳. امنیت
-  ۴. سیستم کاربران
-  ۵. کلیپ آپارات
-  ۶. هوش مصنوعی (Ollama)
-  ۷. SEO
-  ۸. جمع‌بندی
-
-همچنین OLLAMA_GUIDE_FA.md برای آموزش هوش مصنوعی محلی.
+فایل TUTORIAL_FA_V16.docx — ۸ فصل کامل
+فایل OLLAMA_GUIDE_FA.md — راهنمای هوش مصنوعی محلی
 
 ================================================================
