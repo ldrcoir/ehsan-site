@@ -20,6 +20,20 @@ const SESSION_SECRET = process.env.SESSION_SECRET;
 if (!SESSION_SECRET) {
   throw new Error("SESSION_SECRET env var is required (use: openssl rand -hex 32)");
 }
+// جلوگیری از placeholder ضعیف
+const KNOWN_BAD_SECRETS = new Set([
+  "build-placeholder",
+  "change-me",
+  "secret",
+  "your-secret-here",
+  "changeme",
+  "",
+]);
+if (KNOWN_BAD_SECRETS.has(SESSION_SECRET) || SESSION_SECRET.length < 32) {
+  throw new Error(
+    "SESSION_SECRET is too weak or placeholder. Generate a strong one with: openssl rand -hex 32"
+  );
+}
 const SECRET = SESSION_SECRET;
 const SESSION_DURATION_HOURS = 24;
 

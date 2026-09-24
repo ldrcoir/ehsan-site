@@ -1,12 +1,15 @@
 import { checkAdminAuth } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { setSetting } from "@/lib/settings";
+import { setSetting, getSetting } from "@/lib/settings";
 
 /**
  * POST /api/admin/settings
- * Body: { password, settings: { key: value, ... } }
- * Updates site settings (API kill switch, Bale config, display name, etc.)
+ *
+ * Body variants:
+ *  { settings: { key: value, ... } }            — bulk update multiple settings
+ *  { action: "get_telegram" }                    — return Telegram config (token+chatId)
+ *  { action: "set_telegram", token, chatId }     — set Telegram config
  */
 export async function POST(req: Request) {
   try {
@@ -16,10 +19,38 @@ export async function POST(req: Request) {
     }
 
     const password = String(body.password || "");
-    const authCheck = await checkAdminAuth(req, password); if (!authCheck.ok) {
+    const authCheck = await checkAdminAuth(req, password);
+    if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 
+    // --- Special actions ---
+    const action = typeof body.action === "string" ? body.action : "";
+    if (action === "get_telegram") {
+      const [token, chatId, enabled] = await Promise.all([
+        getSetting("telegramBotToken"),
+        getSetting("telegramChatId"),
+        getSetting("telegramEnabled"),
+      ]);
+      return NextResponse.json({
+        ok: true,
+        telegramBotToken: token,
+        telegramChatId: chatId,
+        telegramEnabled: enabled,
+      });
+    }
+    if (action === "set_telegram") {
+      const token = String(body.token || "").trim();
+      const chatId = String(body.chatId || "").trim();
+      await Promise.all([
+        setSetting("telegramBotToken", token),
+        setSetting("telegramChatId", chatId),
+        setSetting("telegramEnabled", token ? "true" : "false"),
+      ]);
+      return NextResponse.json({ ok: true });
+    }
+
+    // --- Default: bulk update settings ---
     const settings = body.settings;
     if (!settings || typeof settings !== "object") {
       return NextResponse.json(
@@ -33,6 +64,9 @@ export async function POST(req: Request) {
       "baleEnabled",
       "baleBotToken",
       "baleChatId",
+      "telegramEnabled",
+      "telegramBotToken",
+      "telegramChatId",
       "adminDisplayName",
       "adminTagline",
       "adminStatus",
@@ -57,8 +91,10 @@ export async function POST(req: Request) {
 }
 
 /**
- * GET /api/admin/settings?password=xxx
- * Returns current site settings.
+ * GET /api/admin/settings
+ * Returns current site settings (excluding secrets like API keys / bot tokens).
+ * Note: Bot tokens are returned so the admin panel can populate the form;
+ * they are not displayed as plaintext in the UI (input type=password).
  */
 export async function GET(req: Request) {
   try {
@@ -75,6 +111,9 @@ export async function GET(req: Request) {
       "baleEnabled",
       "baleBotToken",
       "baleChatId",
+      "telegramEnabled",
+      "telegramBotToken",
+      "telegramChatId",
       "adminDisplayName",
       "adminTagline",
       "adminStatus",

@@ -1,16 +1,19 @@
 import { NextResponse } from "next/server";
+import crypto from "crypto";
 import { processTelegramWebhook, sendTelegramMessage } from "@/lib/telegram";
 
-/** POST /api/telegram/webhook */
+/** POST /api/telegram/webhook?secret=XXX — با timingSafeEqual بررسی می‌شه */
 export async function POST(req: Request) {
   try {
     const url = new URL(req.url);
-    const secret = url.searchParams.get("secret");
+    const secret = url.searchParams.get("secret") || req.headers.get("x-webhook-secret") || "";
     const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
     if (!expectedSecret) {
       return NextResponse.json({ ok: false, error: "webhook_not_configured" }, { status: 503 });
     }
-    if (secret !== expectedSecret) {
+    const secretBuf = Buffer.from(secret);
+    const expBuf = Buffer.from(expectedSecret);
+    if (secretBuf.length !== expBuf.length || !crypto.timingSafeEqual(secretBuf, expBuf)) {
       return NextResponse.json({ ok: false, error: "invalid_secret" }, { status: 403 });
     }
     const body = await req.json().catch(() => null);

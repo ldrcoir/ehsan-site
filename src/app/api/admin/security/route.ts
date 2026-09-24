@@ -92,9 +92,12 @@ export async function POST(req: Request) {
 
       case "change_name": {
         const newName = String(body.newName || "").trim();
-        const lang = String(body.lang || "en");
+        const lang = String(body.lang || "en").slice(0, 3);
         if (!newName) {
           return NextResponse.json({ ok: false, error: "empty_name" }, { status: 400 });
+        }
+        if (!["fa", "en", "de"].includes(lang)) {
+          return NextResponse.json({ ok: false, error: "invalid_lang" }, { status: 400 });
         }
 
         await db.siteSetting.upsert({
@@ -104,6 +107,20 @@ export async function POST(req: Request) {
         });
 
         return NextResponse.json({ ok: true, message: "Name changed." });
+      }
+
+      case "change_tagline": {
+        const newTagline = String(body.newTagline || "").trim();
+        const lang = String(body.lang || "en").slice(0, 3);
+        if (!["fa", "en", "de"].includes(lang)) {
+          return NextResponse.json({ ok: false, error: "invalid_lang" }, { status: 400 });
+        }
+        await db.siteSetting.upsert({
+          where: { key: `tagline_${lang}` },
+          update: { value: newTagline },
+          create: { key: `tagline_${lang}`, value: newTagline },
+        });
+        return NextResponse.json({ ok: true });
       }
 
       default:

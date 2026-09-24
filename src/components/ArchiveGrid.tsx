@@ -141,7 +141,7 @@ export default function ArchiveGrid({
                   <p className="article-summary">{(item.summaryEn || "").slice(0, 120)}...</p>
                 </div>
                 {item.link && item.link !== "#" && (
-                  <a href={item.link} target="_blank" rel="noopener noreferrer" className="article-link" onClick={(e) => e.stopPropagation()}>
+                  <a href={(() => { try { const u = new URL(item.link); if (u.protocol === "http:" || u.protocol === "https:") return item.link; } catch {} return "#"; })()} target="_blank" rel="noopener noreferrer" className="article-link" onClick={(e) => e.stopPropagation()}>
                     {lang === "fa" ? "خواندن" : "read"} →
                   </a>
                 )}
@@ -164,7 +164,7 @@ export default function ArchiveGrid({
                   <h3>{item.titleEn || item.titleFa}</h3>
                   <p>{(item.descEn || "").slice(0, 100)}...</p>
                   {item.link && item.link !== "#" && (
-                    <a href={item.link} target="_blank" rel="noopener noreferrer" className="book-link" onClick={(e) => e.stopPropagation()}>
+                    <a href={(() => { try { const u = new URL(item.link); if (u.protocol === "http:" || u.protocol === "https:") return item.link; } catch {} return "#"; })()} target="_blank" rel="noopener noreferrer" className="book-link" onClick={(e) => e.stopPropagation()}>
                       {lang === "fa" ? "باز کردن" : "open"} →
                     </a>
                   )}

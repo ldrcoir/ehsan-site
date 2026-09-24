@@ -14,7 +14,7 @@ export default function TextEditor({ lang }: { lang: string }) {
   const [savedKey, setSavedKey] = useState<string | null>(null);  const loadTexts = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/text?password=`);
+      const res = await fetch(`/api/admin/text`, { credentials: "include" });
       const data = await res.json();
       if (data.ok) setTexts(data.texts || {});
     } catch {}
@@ -31,8 +31,14 @@ export default function TextEditor({ lang }: { lang: string }) {
   const saveText = async (key: string, val: { en: string; fa: string; de: string }) => {
     const res = await fetch("/api/admin/text", {
       method: "POST", headers: { "Content-Type": "application/json" },
-        credentials: "include",
-      body: JSON.stringify({ action: "set", key, ...val }),
+      credentials: "include",
+      body: JSON.stringify({
+        action: "set",
+        key,
+        valueEn: val.en,
+        valueFa: val.fa,
+        valueDe: val.de,
+      }),
     });
     const data = await res.json();
     if (data.ok) {

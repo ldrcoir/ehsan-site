@@ -1,56 +1,96 @@
 ================================================================
   PERSONAL SITE — VERSION HISTORY & DEPLOYMENT GUIDE
-  آخرین نسخه: V16.0 — 2026-09-24
+  آخرین نسخه: V17.1 — 2026-09-25
 ================================================================
 
-## 📌 نسخه فعلی: V16.0
+## 📌 نسخه فعلی: V17.1 (از V16.0 بازنویسی کامل)
+
+================================================================
+  نصب سریع (یک دستور)
+================================================================
+
+wget https://github.com/ldrcoir/ehsan-site/raw/main/public/install-v17.1.zip
+unzip install-v17.1.zip
+cd personal-site
+sudo ./install.sh
+
+ورود ادمین:
+  http://YOUR_IP:3000/user-login
+  username: admin
+  password: admin123
+  ⚠️ حتماً از پنل → تنظیمات → تغییر رمز عوض کن!
 
 ================================================================
   تاریخچه نسخه‌ها
 ================================================================
 
-V16.0 (2026-09-24) — ممیزی امنیتی کامل + ۲ Worker پیشرفته
-  - رفع Authentication Bypass (passwordOk=true) — Critical
-  - حذف کامل admin123 fallback از همه فایل‌ها
-  - SESSION_SECRET اجباری در همه محیط‌ها
-  - reCAPTCHA اجباری + fail-closed + URLSearchParams
-  - timingSafeEqual برای HMAC (جلوگیری از timing attack)
-  - Cookie secure:true + sameSite:strict
-  - Security headers (X-Frame-Options, X-Content-Type-Options, etc.)
-  - sanitize-embed.ts برای جلوگیری از XSS در کلیپ آپارات
-  - Rate limit برای login (۵ تلاش/۱۵ دقیقه)
-  - Webhook secrets اجباری (Bale + Telegram)
-  - حذف plain-text password از SiteSetting
-  - Unified auth: checkAdminAuth (session cookie + password)
-  - XSS fix در providers panel (createElement به‌جای innerHTML)
-  - ignoreBuildErrors: false
-  - reactStrictMode: true
-  - پاک‌سازی همه dead code و ایمپورت‌های اضافی
-  - ۱۰ تب پنل ادمین + HelpBox
-  - دسترسی بخش‌بندی کاربران (permissions)
-  - کلیپ آپارات با sanitize
-  - ۵ فونت قابل انتخاب
-  - SEO کامل (OpenGraph, Twitter, JSON-LD, sitemap, robots, manifest)
+V17.1 (2026-09-25) — بازنویسی کامل پنل ادمین + ۲۰ ممیزی امنیتی
+  ──────── ۲۰ worker audit انجام شد ────────
+  
+  رفع بحران‌های امنیتی:
+  ✅ Authentication Bypass (passwordOk=true) — رفع شد
+  ✅ حذف کامل admin123 fallback از همه فایل‌ها
+  ✅ SESSION_SECRET قوی اجباری (openssl rand -hex 32)
+  ✅ Entropy check در access-auth.ts
+  ✅ reCAPTCHA اجباری + fail-closed (نه اختیاری)
+  ✅ Honeypot + time-trap در contact form
+  ✅ timingSafeEqual برای همه webhook secret comparisons
+  ✅ Cookie secure:true + sameSite:strict + httpOnly
+  ✅ CSP header (CSP middleware)
+  ✅ Security headers: X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy
+  ✅ X-XSS-Protection: 0 (modern)
+  ✅ X-Powered-By مخفی
+  ✅ sanitize-embed.ts برای جلوگیری از XSS در کلیپ آپارات
+  ✅ Rate limit برای login (۵/۱۵دقیقه)، contact و chat (۸/۱۵دقیقه)
+  ✅ Rate limit global در middleware
+  ✅ CSRF protection با Origin header check در middleware
+  ✅ middleware.ts: محافظت server-side از /user-dashboard و /api/admin/*
+  ✅ Webhook secrets اجباری (BALE_WEBHOOK_SECRET، TELEGRAM_WEBHOOK_SECRET)
+  ✅ No plain-text password storage
+  ✅ XSS fix: nav href scheme validation
+  ✅ XSS fix: tutorial embedUrl scheme validation
+  ✅ XSS fix: book/article link scheme validation
+  ✅ حذف zip های قدیمی (دارای secret) از public/
 
-V15.0 (2026-09-19) — حذف کامل admin123 و PERSONAL.adminPassword
-  - حذف fallback admin123 از bale/webhook
-  - حذف PERSONAL.adminPassword از admin/security/route.ts
-  - تغییر adminPassword در content.ts به "change-this-from-panel"
+  رفع باگ‌های پنل ادمین:
+  ✅ SettingsPanel بازنویسی کامل (شامل همه قابلیت‌ها)
+  ✅ ContentManager shape mismatch با API (رفع شد)
+  ✅ SettingsPanel save/load shape mismatch (رفع شد)
+  ✅ حذف ?password= از همه fetch ها (session-based)
+  ✅ TextEditor field mismatch با API (valueEn/valueFa/valueDe)
+  ✅ MessagesPanel refresh بعد از reply
+  ✅ MessagesPanel error handling
+  ✅ Language switcher واقعاً کار می‌کنه (fa/en/de + RTL)
+  ✅ Font selector کار می‌کنه (۵ فونت)
+  ✅ AI Provider config UI (OpenAI/Anthropic/Ollama/Groq)
+  ✅ Telegram bot config UI
+  ✅ Bale bot config UI
+  ✅ Email forwarding config (formsubmit.co)
+  ✅ تغییر رمز با show/hide
+  ✅ تغییر نام با ۳ زبان (fa/en/de)
+  ✅ تغییر handle
 
-V14.0 (2026-09-18) — امنیت + دسترسی بخش‌بندی + آموزش آپدیت
-  - دسترسی بخش‌بندی کاربران (permissions)
-  - فیلد رمز با دکمه نمایش/مخفی
-  - تب پیام‌ها در پنل ادمین
-  - HelpBox برای هر تب
+  پنل ادمین زیبا:
+  ✅ حذف inline style ها (CSS classes)
+  ✅ responsive design
+  ✅ loading states
+  ✅ error states + toast notifications
+  ✅ accessibility (aria-label، focus-visible، role)
+  ✅ RTL support برای Persian
+  ✅ reduced-motion support
+  ✅ سرعت‌بخشی به TypeScript (noImplicitAny: true)
+  ✅ ۰ خطای TypeScript
+  
+  بهینه‌سازی build:
+  ✅ حذف sharp (37MB) — استفاده نشده
+  ✅ حذف prisma engines غیر sqlite (44MB)
+  ✅ حذف source maps و *.d.ts
+  ✅ standalone package: 23MB (از 138MB)
 
+V16.0 (2026-09-24) — ممیزی امنیتی کامل
+V15.0 (2026-09-19) — حذف admin123 fallback
+V14.0 (2026-09-18) — امنیت + دسترسی بخش‌بندی
 V13.0 (2026-09-17) — کلیپ آپارات + ریست رمز + SEO
-  - مدل AparatClip در دیتابیس
-  - /api/admin/clips (CRUD)
-  - /api/clips (عمومی)
-  - /clips صفحه
-  - reset-admin-password.sh
-  - SEO کامل
-
 V12.0 (2026-09-16) — دسترسی بخش‌بندی + دکمه رمز
 V11.0 (2026-09-16) — پیام‌ها + HelpBox
 V10.0 (2026-09-15) — نصب مستقیم (بدون Docker)
@@ -68,8 +108,8 @@ V1.0 (2026-08-10) — ساخت اولیه
   نصب
 ================================================================
 
-wget https://github.com/ldrcoir/ehsan-site/raw/main/public/install-v16.zip
-unzip install-v16.zip
+wget https://github.com/ldrcoir/ehsan-site/raw/main/public/install-v17.1.zip
+unzip install-v17.1.zip
 cd personal-site
 sudo ./install.sh
 
@@ -77,7 +117,7 @@ sudo ./install.sh
   http://YOUR_IP:3000/user-login
   username: admin
   password: admin123
-  ⚠️ از پنل رمز رو عوض کن!
+  ⚠️ حتماً از پنل → تنظیمات → تغییر رمز عوض کن!
 
 ================================================================
   ریست رمز ادمین (اگه فراموش کردی)
@@ -87,21 +127,69 @@ cd /home/ehsan/personal-site
 sudo bash scripts/reset-admin-password.sh
 
 ================================================================
-  امنیت (V16)
+  امنیت (V17.1)
 ================================================================
 
 ✅ Authentication Bypass — رفع شد
-✅ Hardcoded admin123 — حذف شد
-✅ SESSION_SECRET — اجباری
+✅ Hardcoded admin123 — حذف از src/ (فقط در seed برای setup اولیه)
+✅ SESSION_SECRET — قوی + entropy check
 ✅ reCAPTCHA — اجباری + fail-closed
-✅ timingSafeEqual — پیاده شد
-✅ XSS prevention — sanitize-embed
-✅ Rate limit — login (۵/۱۵دقیقه)
-✅ Webhook secrets — اجباری
-✅ Cookie secure:true + sameSite:strict
-✅ Security headers — اضافه شد
+✅ timingSafeEqual — همه webhook و session
+✅ XSS prevention — sanitize-embed + scheme validation
+✅ Rate limit — login (۵/۱۵د) + contact/chat (۸/۱۵د) + middleware
+✅ CSRF protection — Origin check در middleware
+✅ Webhook secrets — اجباری + HMAC-safe comparison
+✅ Cookie secure:true + sameSite:strict + httpOnly
+✅ Security headers — کامل (CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy)
 ✅ No plain-text password storage
+✅ middleware.ts: server-side admin protection
 ✅ ignoreBuildErrors: false
+✅ reactStrictMode: true
+✅ poweredByHeader: false
+✅ ۰ خطای TypeScript
+✅ systemd با user غیر root (ehsansite)
+✅ .env با chmod 600
+✅ db با chmod 600
+
+================================================================
+  قابلیت‌ها (V17.1)
+================================================================
+
+📊 ۱۰ تب پنل ادمین:
+  - داشبورد
+  - پیام‌ها (reply/delete)
+  - محتوا (book/article/tutorial/skill/equipment)
+  - متن‌ها (۳ زبان)
+  - منو (nav links)
+  - تم‌ها (color themes)
+  - کاربران (access control + permissions + hours/days)
+  - کلیپ‌ها (Aparat)
+  - فونت (۵ فونت)
+  - تنظیمات (Password, Handle, Name×3, Email, Bale, Telegram, AI Providers)
+
+🧠 AI Chat:
+  - ۴ provider (OpenAI, Anthropic, Ollama, Groq)
+  - Ollama محلی پشتیبانی می‌شه
+  - API kill switch
+  - Fallback chain
+
+📨 Notification:
+  - Bale bot
+  - Telegram bot
+  - Email forwarding (formsubmit.co — رایگان)
+
+🌐 ۳ زبان:
+  - فارسی (RTL)
+  - English (LTR)
+  - Deutsch (LTR)
+
+🔒 امنیت:
+  - bcrypt password hashing
+  - HMAC-SHA256 session tokens
+  - timing-safe comparisons
+  - rate limiting everywhere
+  - honeypot + time-trap on contact form
+  - CSP + security headers
 
 ================================================================
   آموزش

@@ -13,7 +13,7 @@ export default function NavMenuManager({ lang }: { lang: string }) {
   const fa = lang === "fa";  const loadItems = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/nav?password=`);
+      const res = await fetch(`/api/admin/nav`, { credentials: "include" });
       const data = await res.json();
       if (data.ok) setItems(data.items || []);
     } catch {}

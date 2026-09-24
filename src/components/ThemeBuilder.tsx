@@ -63,7 +63,7 @@ export default function ThemeBuilder({ lang }: { lang: string }) {
   const [loading, setLoading] = useState(true);  const loadThemes = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/themes?password=`);
+      const res = await fetch(`/api/admin/themes`, { credentials: "include" });
       const data = await res.json();
       if (data.ok) setThemes(data.themes || []);
     } catch {}

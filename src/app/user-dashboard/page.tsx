@@ -1,10 +1,10 @@
 // ============================================================================
-// /user-dashboard — داشبورد کاربر + پنل ادمین
+// /user-dashboard — داشبورد کاربر + پنل ادمین (V17.1)
 // ============================================================================
 // این صفحه:
 // - اگه کاربر ادمین باشه: پنل ادمین کامل (همه قابلیت‌ها) نشون می‌ده
 // - اگه کاربر عادی باشه: فقط محتوای مجاز رو نشون می‌ده
-// - اگه session نباشه: به /user-login منتقل می‌شه
+// - اگه session نباشه: middleware به /user-login منتقل می‌کنه
 // ============================================================================
 
 "use client";
@@ -38,6 +38,47 @@ const DAY_NAMES = ["یکشنبه", "دوشنبه", "سه‌شنبه", "چهار�
 
 type Tab = "overview" | "messages" | "content" | "text" | "nav" | "themes" | "users" | "font" | "clips" | "settings";
 
+type Lang = "fa" | "en" | "de";
+
+const TAB_LABELS: Record<Lang, Record<Tab, string>> = {
+  fa: {
+    overview: "📊 داشبورد",
+    messages: "📨 پیام‌ها",
+    content: "📁 محتوا",
+    text: "📝 متن‌ها",
+    nav: "🧭 منو",
+    themes: "🎨 تم‌ها",
+    users: "👥 کاربران",
+    clips: "🎬 کلیپ‌ها",
+    font: "🔤 فونت",
+    settings: "⚙️ تنظیمات",
+  },
+  en: {
+    overview: "📊 Dashboard",
+    messages: "📨 Messages",
+    content: "📁 Content",
+    text: "📝 Texts",
+    nav: "🧭 Menu",
+    themes: "🎨 Themes",
+    users: "👥 Users",
+    clips: "🎬 Clips",
+    font: "🔤 Font",
+    settings: "⚙️ Settings",
+  },
+  de: {
+    overview: "📊 Übersicht",
+    messages: "📨 Nachrichten",
+    content: "📁 Inhalt",
+    text: "📝 Texte",
+    nav: "🧭 Menü",
+    themes: "🎨 Themen",
+    users: "👥 Benutzer",
+    clips: "🎬 Clips",
+    font: "🔤 Schrift",
+    settings: "⚙️ Einstellungen",
+  },
+};
+
 export default function UserDashboardPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -45,10 +86,16 @@ export default function UserDashboardPage() {
   const [accessAllowed, setAccessAllowed] = useState(true);
   const [accessReason, setAccessReason] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("overview");
-  const [lang, setLang] = useState<string>("fa");
+  const [lang, setLang] = useState<Lang>("fa");
 
   useEffect(() => {
-    fetch("/api/user/verify", { cache: "no-store" })
+    // Load saved panel language
+    const savedLang = (localStorage.getItem("panel_lang") as Lang) || "fa";
+    setLang(savedLang);
+    document.documentElement.lang = savedLang;
+    document.documentElement.dir = savedLang === "fa" ? "rtl" : "ltr";
+
+    fetch("/api/user/verify", { cache: "no-store", credentials: "include" })
       .then(r => r.json())
       .then(data => {
         if (!data.ok) {
@@ -65,45 +112,29 @@ export default function UserDashboardPage() {
       });
   }, [router]);
 
-  // جلوگیری از خروج با بستن تب
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = "اگر این تب رو ببندید، از پنل ادمین خارج می‌شید. آیا مطمئن هستید؟";
-      return e.returnValue;
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, []);
+  function switchLang(newLang: Lang) {
+    setLang(newLang);
+    localStorage.setItem("panel_lang", newLang);
+    document.documentElement.lang = newLang;
+    document.documentElement.dir = newLang === "fa" ? "rtl" : "ltr";
+  }
 
   async function handleLogout() {
-    await fetch("/api/user/logout", { method: "POST" });
+    await fetch("/api/user/logout", { method: "POST", credentials: "include" });
     router.replace("/user-login");
   }
 
   if (loading) {
-    return (
-      <div style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "#000",
-        color: "#00ff41",
-        fontFamily: "monospace",
-      }}>...</div>
-    );
+    return <div className="dashboard-loading" aria-live="polite">Loading</div>;
   }
 
   if (!user) return null;
 
   const isAdmin = user.role === "admin";
-  // لیست دسترسی‌های کاربر
   const userPermissions = user.permissions
     ? user.permissions.split(",").filter(Boolean)
     : [];
 
-  // تابع بررسی دسترسی به تب
   function hasTabAccess(tabId: Tab): boolean {
     if (isAdmin) return true;
     if (tabId === "overview") return true;
@@ -111,235 +142,203 @@ export default function UserDashboardPage() {
     return userPermissions.includes(tabId);
   }
 
-  // نمایش بازه‌ی دسترسی به‌صورت متنی
-  let accessSchedule = "بدون محدودیت (۲۴/۷)";
+  let accessSchedule = lang === "fa" ? "بدون محدودیت (۲۴/۷)" :
+    lang === "en" ? "No restriction (24/7)" : "Keine Einschränkung (24/7)";
   if (user.allowedHourStart !== null && user.allowedHourEnd !== null) {
-    accessSchedule = `ساعات ${user.allowedHourStart}:00 تا ${user.allowedHourEnd}:00 (UTC)`;
+    if (lang === "fa") {
+      accessSchedule = `ساعات ${user.allowedHourStart}:00 تا ${user.allowedHourEnd}:00 (UTC)`;
+    } else if (lang === "en") {
+      accessSchedule = `Hours ${user.allowedHourStart}:00 to ${user.allowedHourEnd}:00 (UTC)`;
+    } else {
+      accessSchedule = `Stunden ${user.allowedHourStart}:00 bis ${user.allowedHourEnd}:00 (UTC)`;
+    }
   }
   if (user.allowedDays) {
     const days = user.allowedDays.split(",").map(d => DAY_NAMES[parseInt(d, 10)] || d).join("، ");
-    accessSchedule += ` — روزها: ${days}`;
+    accessSchedule += ` — ${lang === "fa" ? "روزها" : lang === "en" ? "Days" : "Tage"}: ${days}`;
   }
   if (user.expiresAt) {
-    accessSchedule += ` — انقضا: ${new Date(user.expiresAt).toLocaleDateString("fa-IR")}`;
+    accessSchedule += ` — ${lang === "fa" ? "انقضا" : lang === "en" ? "Expires" : "Läuft ab"}: ${new Date(user.expiresAt).toLocaleDateString("fa-IR")}`;
   }
 
-  const tabs: { id: Tab; label: string; adminOnly?: boolean }[] = [
-    { id: "overview", label: "📊 داشبورد" },
-    { id: "messages", label: "📨 پیام‌ها", adminOnly: true },
-    { id: "content", label: "📁 محتوا", adminOnly: true },
-    { id: "text", label: "📝 متن‌ها", adminOnly: true },
-    { id: "nav", label: "🧭 منو", adminOnly: true },
-    { id: "themes", label: "🎨 تم‌ها", adminOnly: true },
-    { id: "users", label: "👥 کاربران", adminOnly: true },
-    { id: "clips", label: "🎬 کلیپ‌ها", adminOnly: true },
-    { id: "font", label: "🔤 فونت", adminOnly: true },
-    { id: "settings", label: "⚙️ تنظیمات", adminOnly: true },
-  ];
+  const tabs: Tab[] = ["overview", "messages", "content", "text", "nav", "themes", "users", "clips", "font", "settings"];
+
+  const t = {
+    fa: { welcome: "خوش آمدید", adminPanel: "🔐 پنل ادمین", userDashboard: "📊 داشبورد کاربر", openSite: "🌐 باز کردن سایت", logout: "خروج", accessWarning: "⚠️ دسترسی شما در این زمان محدود شده است.", reason: "دلیل", username: "نام کاربری", role: "نقش", lastLogin: "آخرین ورود", status: "وضعیت حساب", accessSchedule: "بازه دسترسی", active: "✅ فعال", inactive: "❌ غیرفعال", admin: "👑 ادمین", regularUser: "👤 کاربر", loadingMessages: "در حال بارگذاری پیام‌ها..." },
+    en: { welcome: "Welcome", adminPanel: "🔐 Admin Panel", userDashboard: "📊 User Dashboard", openSite: "🌐 Open Site", logout: "Logout", accessWarning: "⚠️ Your access is restricted at this time.", reason: "Reason", username: "Username", role: "Role", lastLogin: "Last Login", status: "Account Status", accessSchedule: "Access Schedule", active: "✅ Active", inactive: "❌ Inactive", admin: "👑 Admin", regularUser: "👤 User", loadingMessages: "Loading messages..." },
+    de: { welcome: "Willkommen", adminPanel: "🔐 Admin-Panel", userDashboard: "📊 Benutzer-Dashboard", openSite: "🌐 Seite öffnen", logout: "Abmelden", accessWarning: "⚠️ Ihr Zugriff ist derzeit eingeschränkt.", reason: "Grund", username: "Benutzername", role: "Rolle", lastLogin: "Letzte Anmeldung", status: "Kontostatus", accessSchedule: "Zugriffsplan", active: "✅ Aktiv", inactive: "❌ Inaktiv", admin: "👑 Admin", regularUser: "👤 Benutzer", loadingMessages: "Nachrichten laden..." },
+  }[lang];
 
   return (
-    <div style={{
-      minHeight: "100vh",
-      background: "var(--bg, #000)",
-      color: "var(--text, #c8ffc8)",
-      fontFamily: "monospace",
-      padding: 20,
-    }}>
-      <div style={{
-        maxWidth: 1200,
-        margin: "0 auto",
-        background: "var(--bg-panel, #050505)",
-        border: "1px solid var(--border, #1a3a1a)",
-        borderRadius: 8,
-        padding: 30,
-        boxShadow: "0 0 40px rgba(0, 255, 65, 0.1)",
-      }}>
+    <div className="dashboard-shell">
+      <div className="dashboard-container">
         {/* Header */}
-        <div style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 30,
-          paddingBottom: 20,
-          borderBottom: "1px solid var(--border, #1a3a1a)",
-        }}>
+        <div className="dashboard-header">
           <div>
-            <h1 style={{
-              color: "var(--primary, #00ff41)",
-              fontSize: 18,
-              margin: 0,
-              textTransform: "uppercase",
-              letterSpacing: 2,
-            }}>
-              {isAdmin ? "🔐 Admin Panel" : "📊 User Dashboard"}
-            </h1>
-            <p style={{
-              color: "var(--text-dim, #4a7a4a)",
-              fontSize: 11,
-              margin: "4px 0 0",
-            }}>
-              خوش آمدید، {user.displayName || user.username}
-            </p>
+            <h1 className="dashboard-title">{isAdmin ? t.adminPanel : t.userDashboard}</h1>
+            <p className="dashboard-subtitle">{t.welcome}، {user.displayName || user.username}</p>
           </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <a href="/" target="_blank" style={{
-              padding: "8px 16px",
-              background: "transparent",
-              color: "var(--primary, #00ff41)",
-              border: "1px solid var(--primary, #00ff41)",
-              fontFamily: "monospace",
-              fontSize: 11,
-              cursor: "pointer",
-              borderRadius: 4,
-              textTransform: "uppercase",
-              letterSpacing: 1,
-              textDecoration: "none",
-            }}>🌐 باز کردن سایت</a>
+          <div className="dashboard-actions">
+            <a href="/" target="_blank" rel="noopener noreferrer" className="dashboard-btn">
+              {t.openSite}
+            </a>
             <select
               value={lang}
-              onChange={(e) => setLang(e.target.value)}
-              style={{
-                padding: "6px 10px",
-                background: "transparent",
-                color: "var(--primary, #00ff41)",
-                border: "1px solid var(--border, #1a3a1a)",
-                fontFamily: "monospace",
-                fontSize: 11,
-                borderRadius: 4,
-                cursor: "pointer",
-              }}
+              onChange={e => switchLang(e.target.value as Lang)}
+              className="dashboard-select"
+              aria-label="Language"
             >
-              <option value="fa" style={{ background: "#000" }}>فارسی</option>
-              <option value="en" style={{ background: "#000" }}>English</option>
-              <option value="de" style={{ background: "#000" }}>Deutsch</option>
+              <option value="fa">فارسی</option>
+              <option value="en">English</option>
+              <option value="de">Deutsch</option>
             </select>
             <button
               onClick={handleLogout}
-              style={{
-                padding: "8px 16px",
-                background: "transparent",
-                color: "var(--red, #ff0040)",
-                border: "1px solid var(--red, #ff0040)",
-                fontFamily: "monospace",
-                fontSize: 11,
-                cursor: "pointer",
-                borderRadius: 4,
-                textTransform: "uppercase",
-                letterSpacing: 1,
-              }}
-            >Logout →</button>
+              className="dashboard-btn danger"
+            >
+              {t.logout} →
+            </button>
           </div>
         </div>
 
         {/* Access Status */}
         {!accessAllowed && (
-          <div style={{
-            padding: 16,
-            marginBottom: 20,
-            background: "rgba(255, 176, 0, 0.1)",
-            border: "1px solid var(--amber, #ffb000)",
-            color: "var(--amber, #ffb000)",
-            fontSize: 12,
-            borderRadius: 4,
-          }}>
-            ⚠️ دسترسی شما در این زمان محدود شده است.
+          <div className="dashboard-access-warning" role="alert">
+            {t.accessWarning}
             <br />
-            دلیل: <code>{accessReason}</code>
+            {t.reason}: <code>{accessReason}</code>
           </div>
         )}
 
         {/* Tabs */}
-        <div style={{
-          display: "flex",
-          gap: 8,
-          marginBottom: 20,
-          flexWrap: "wrap",
-        }}>
+        <div className="dashboard-tabs" role="tablist">
           {tabs.map(tab => {
-            if (!hasTabAccess(tab.id)) return null;
+            if (!hasTabAccess(tab)) return null;
             return (
               <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`signal-waveform-btn ${activeTab === tab.id ? "active" : ""}`}
-                style={{
-                  padding: "8px 12px",
-                  fontSize: 11,
-                  borderRadius: 4,
-                }}
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`dashboard-tab ${activeTab === tab ? "active" : ""}`}
+                role="tab"
+                aria-selected={activeTab === tab}
               >
-                {tab.label}
+                {TAB_LABELS[lang][tab]}
               </button>
             );
           })}
         </div>
 
         {/* Content */}
-        <div style={{ minHeight: 400 }}>
+        <div className="dashboard-content">
           {activeTab === "overview" && (
             <div>
-              <HelpBox text="این داشبورد اطلاعات حساب شماست. اگه ادمین هستی، تب‌های دیگه برای مدیریت سایت در دسترسه." />
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16 }}>
-                <InfoCard label="Username" value={user.username} />
-                <InfoCard label="Role" value={user.role === "admin" ? "👑 ادمین" : "👤 کاربر"} />
-                <InfoCard label="Last Login" value={user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString("fa-IR") : "—"} />
-                <InfoCard label="Account Status" value={user.active ? "✅ فعال" : "❌ غیرفعال"} />
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <InfoCard label="Access Schedule" value={accessSchedule} />
+              <div className="dashboard-help-box">
+                {lang === "fa" && "💡 این داشبورد اطلاعات حساب شماست. اگه ادمین هستی، تب‌های دیگه برای مدیریت سایت در دسترسه."}
+                {lang === "en" && "💡 This is your account dashboard. If you are an admin, other tabs are available for site management."}
+                {lang === "de" && "💡 Dies ist Ihr Konto-Dashboard. Als Admin stehen Ihnen weitere Tabs zur Verfügung."}
+              </div>
+              <div className="dashboard-info-grid">
+                <div className="dashboard-info-card">
+                  <div className="dashboard-info-label">{t.username}</div>
+                  <div className="dashboard-info-value">{user.username}</div>
+                </div>
+                <div className="dashboard-info-card">
+                  <div className="dashboard-info-label">{t.role}</div>
+                  <div className="dashboard-info-value">{user.role === "admin" ? t.admin : t.regularUser}</div>
+                </div>
+                <div className="dashboard-info-card">
+                  <div className="dashboard-info-label">{t.lastLogin}</div>
+                  <div className="dashboard-info-value">{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString("fa-IR") : "—"}</div>
+                </div>
+                <div className="dashboard-info-card">
+                  <div className="dashboard-info-label">{t.status}</div>
+                  <div className="dashboard-info-value">{user.active ? t.active : t.inactive}</div>
+                </div>
+                <div className="dashboard-info-card full">
+                  <div className="dashboard-info-label">{t.accessSchedule}</div>
+                  <div className="dashboard-info-value">{accessSchedule}</div>
                 </div>
               </div>
             </div>
           )}
 
           {activeTab === "messages" && isAdmin && (
-            <MessagesPanel />
+            <MessagesPanel lang={lang} />
           )}
 
           {activeTab === "content" && isAdmin && (
             <div>
-              <HelpBox text="اینجا می‌تونی کتاب‌ها، مقالات، آموزش‌ها، مهارت‌ها و تجهیزات رو اضافه/ویرایش/حذف کنی. روی هر مورد کلیک کن تا فرم ویرایش باز بشه. برای نمایش تیک visible رو بزن." />
-              <ContentManager lang="fa" />
+              <div className="dashboard-help-box">
+                {lang === "fa" && "💡 اینجا می‌تونی کتاب‌ها، مقالات، آموزش‌ها، مهارت‌ها و تجهیزات رو اضافه/ویرایش/حذف کنی. برای نمایش تیک visible رو بزن."}
+                {lang === "en" && "💡 Here you can add/edit/delete books, articles, tutorials, skills, and equipment. Toggle visible to show."}
+                {lang === "de" && "💡 Hier können Sie Bücher, Artikel, Tutorials, Fähigkeiten und Geräte hinzufügen/bearbeiten."}
+              </div>
+              <ContentManager lang={lang} />
             </div>
           )}
 
           {activeTab === "text" && isAdmin && (
             <div>
-              <HelpBox text="همه‌ی متن‌های سایت (عنوان‌ها، توضیحات، دکمه‌ها) رو از اینجا می‌تونی عوض کنی. تغییرات بلافاصله روی سایت اعمال می‌شه." />
-              <TextEditor lang="fa" />
+              <div className="dashboard-help-box">
+                {lang === "fa" && "💡 همه‌ی متن‌های سایت (عنوان‌ها، توضیحات، دکمه‌ها) رو از اینجا می‌تونی عوض کنی. تغییرات بلافاصله روی سایت اعمال می‌شه."}
+                {lang === "en" && "💡 Edit all site texts (headings, descriptions, buttons). Changes apply immediately."}
+                {lang === "de" && "💡 Bearbeiten Sie alle Texte der Website. Änderungen werden sofort angewendet."}
+              </div>
+              <TextEditor lang={lang} />
             </div>
           )}
 
           {activeTab === "nav" && isAdmin && (
             <div>
-              <HelpBox text="منوی بالای سایت رو مدیریت کن. می‌تونی لینک‌های جدید اضافه کنی، ترتیبشون رو عوض کنی یا مخفیشون کنی." />
-              <NavMenuManager lang="fa" />
+              <div className="dashboard-help-box">
+                {lang === "fa" && "💡 منوی بالای سایت رو مدیریت کن. می‌تونی لینک‌های جدید اضافه کنی، ترتیبشون رو عوض کنی یا مخفیشون کنی."}
+                {lang === "en" && "💡 Manage the top navigation menu. Add new links, reorder, or hide them."}
+                {lang === "de" && "💡 Verwalten Sie das obere Navigationsmenü."}
+              </div>
+              <NavMenuManager lang={lang} />
             </div>
           )}
 
           {activeTab === "themes" && isAdmin && (
             <div>
-              <HelpBox text="تم رنگی سایت رو بساز یا عوض کن. ۷ تم آماده موجوده، یا تم سفارشی بساز. رنگ‌ها رو انتخاب کن و ذخیره بزن." />
-              <ThemeBuilder lang="fa" />
+              <div className="dashboard-help-box">
+                {lang === "fa" && "💡 تم رنگی سایت رو بساز یا عوض کن. رنگ‌ها رو انتخاب کن و ذخیره بزن."}
+                {lang === "en" && "💡 Create or change the site color theme. Pick colors and save."}
+                {lang === "de" && "💡 Erstellen oder ändern Sie das Farbschema der Website."}
+              </div>
+              <ThemeBuilder lang={lang} />
             </div>
           )}
 
           {activeTab === "users" && isAdmin && (
             <div>
-              <HelpBox text="کاربران جدید بساز. می‌تونی ساعت/روز دسترسی تعیین کنی. مثلاً فقط ۹ تا ۱۷ دوشنبه تا جمعه. تعداد کاربر نامحدوده." />
+              <div className="dashboard-help-box">
+                {lang === "fa" && "💡 کاربران جدید بساز. می‌تونی ساعت/روز دسترسی تعیین کنی. مثلاً فقط ۹ تا ۱۷ دوشنبه تا جمعه."}
+                {lang === "en" && "💡 Create new users. You can set access hours/days, e.g. only 9 to 17 Monday to Friday."}
+                {lang === "de" && "💡 Erstellen Sie neue Benutzer mit Zugriffszeiten."}
+              </div>
               <AccessUserManager />
             </div>
           )}
 
           {activeTab === "clips" && isAdmin && (
             <div>
-              <HelpBox text="ویدیوهای آپارات رو اضافه کن. از سایت آپارات: اشتراک‌گذاری → جای‌گذاری در وبلاگ → کد رو کپی کن → اینجا بذار. ویدیو توی صفحه‌ی اصلی نشون داده می‌شه." />
+              <div className="dashboard-help-box">
+                {lang === "fa" && "💡 ویدیوهای آپارات رو اضافه کن. از سایت آپارات: اشتراک‌گذاری → جای‌گذاری در وبلاگ → کد رو کپی کن."}
+                {lang === "en" && "💡 Add Aparat videos. From Aparat site: Share → Embed in blog → Copy code."}
+                {lang === "de" && "💡 Fügen Sie Aparat-Videos hinzu."}
+              </div>
               <AparatClipManager />
             </div>
           )}
 
           {activeTab === "font" && isAdmin && (
             <div>
-              <HelpBox text="فونت سایت رو انتخاب کن. انتخاب تو مرورگر ذخیره می‌شه. ۵ فونت موجود هست." />
+              <div className="dashboard-help-box">
+                {lang === "fa" && "💡 فونت سایت رو انتخاب کن. انتخاب تو مرورگر ذخیره می‌شه."}
+                {lang === "en" && "💡 Select the site font. Your choice is saved in your browser."}
+                {lang === "de" && "💡 Wählen Sie die Schriftart der Website."}
+              </div>
               <FontSelector />
             </div>
           )}
@@ -353,65 +352,25 @@ export default function UserDashboardPage() {
   );
 }
 
-function InfoCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{
-      padding: 12,
-      background: "var(--bg, #000)",
-      border: "1px solid var(--border, #1a3a1a)",
-      borderRadius: 4,
-    }}>
-      <div style={{
-        fontSize: 9,
-        color: "var(--text-dim, #4a7a4a)",
-        textTransform: "uppercase",
-        letterSpacing: 1,
-        marginBottom: 4,
-      }}>{label}</div>
-      <div style={{
-        fontSize: 13,
-        color: "var(--primary-bright, #39ff14)",
-        fontFamily: "monospace",
-      }}>{value}</div>
-    </div>
-  );
-}
-
-// ============================================================================
-// HelpBox — کادر توضیحات راهنما برای هر تب
-// ============================================================================
-function HelpBox({ text }: { text: string }) {
-  return (
-    <div style={{
-      padding: "10px 14px",
-      marginBottom: 16,
-      background: "rgba(0, 255, 65, 0.05)",
-      border: "1px solid rgba(0, 255, 65, 0.2)",
-      borderRadius: 4,
-      fontSize: 11,
-      color: "var(--text-dim, #4a7a4a)",
-      lineHeight: 1.6,
-    }}>
-      💡 {text}
-    </div>
-  );
-}
-
 // ============================================================================
 // MessagesPanel — نمایش پیام‌های تماس دریافتی
 // ============================================================================
-function MessagesPanel() {
+function MessagesPanel({ lang }: { lang: Lang }) {
   const [messages, setMessages] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch("/api/messages?password=", { credentials: "include" })
+    fetch("/api/messages", { credentials: "include" })
       .then(r => r.json())
       .then(data => {
         if (data.ok) setMessages(data.messages || []);
-        else setMessages([]);
+        else {
+          setMessages([]);
+          setError(data.error || "load_failed");
+        }
       })
       .catch(() => setMessages([]))
       .finally(() => setLoading(false));
@@ -420,105 +379,119 @@ function MessagesPanel() {
   async function sendReply(msgId: string) {
     if (!replyText.trim()) return;
     try {
-      await fetch("/api/admin/reply", {
+      const res = await fetch("/api/admin/reply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ messageId: msgId, reply: replyText }),
       });
-      setReplyingTo(null);
-      setReplyText("");
-      alert("پاسخ ارسال شد ✅");
+      const data = await res.json();
+      if (data.ok) {
+        setReplyingTo(null);
+        setReplyText("");
+        // Refresh messages
+        const refreshRes = await fetch("/api/messages", { credentials: "include" });
+        const refreshData = await refreshRes.json();
+        if (refreshData.ok) setMessages(refreshData.messages || []);
+      } else {
+        setError(data.error || "reply_failed");
+      }
     } catch {
-      alert("خطا در ارسال");
+      setError("network");
     }
   }
 
   async function deleteMessage(msgId: string) {
-    if (!confirm("حذف این پیام؟")) return;
+    if (!confirm(lang === "fa" ? "حذف این پیام؟" : lang === "en" ? "Delete this message?" : "Diese Nachricht löschen?")) return;
     try {
-      await fetch("/api/admin/clear", {
+      const res = await fetch("/api/admin/clear", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ target: "message", id: msgId }),
       });
-      setMessages(prev => prev ? prev.filter(m => m.id !== msgId) : prev);
+      const data = await res.json();
+      if (data.ok) {
+        setMessages(prev => prev ? prev.filter(m => m.id !== msgId) : prev);
+      } else {
+        setError(data.error || "delete_failed");
+      }
     } catch {
-      alert("خطا در حذف");
+      setError("network");
     }
   }
 
-  if (loading) return <div style={{ padding: 20, color: "var(--text-dim)" }}>در حال بارگذاری پیام‌ها...</div>;
+  if (loading) {
+    return <div className="dashboard-empty-state">{lang === "fa" ? "در حال بارگذاری پیام‌ها..." : lang === "en" ? "Loading messages..." : "Nachrichten laden..."}</div>;
+  }
+
+  const replyLabel = lang === "fa" ? "↩️ پاسخ" : lang === "en" ? "↩️ Reply" : "↩️ Antworten";
+  const deleteLabel = lang === "fa" ? "🗑️ حذف" : lang === "en" ? "🗑️ Delete" : "🗑️ Löschen";
+  const sendLabel = lang === "fa" ? "📤 ارسال" : lang === "en" ? "📤 Send" : "📤 Senden";
+  const cancelLabel = lang === "fa" ? "✕ انصراف" : lang === "en" ? "✕ Cancel" : "✕ Abbrechen";
+  const placeholder = lang === "fa" ? "پاسخ خود را بنویسید..." : lang === "en" ? "Type your reply..." : "Antwort eingeben...";
+  const emptyLabel = lang === "fa" ? "پیامی دریافت نشده." : lang === "en" ? "No messages." : "Keine Nachrichten.";
 
   return (
     <div>
-      <HelpBox text="پیام‌هایی که بازدیدکنندگان از فرم تماس سایت فرستادن. می‌تونی پاسخ بدی یا حذف کنی." />
+      {error && (
+        <div className="dashboard-access-warning" role="alert" style={{ background: "rgba(255,0,64,0.1)", borderColor: "var(--red)", color: "var(--red)" }}>
+          Error: {error}
+        </div>
+      )}
+      <div className="dashboard-help-box">
+        {lang === "fa" && "💡 پیام‌هایی که بازدیدکنندگان از فرم تماس سایت فرستادن. می‌تونی پاسخ بدی یا حذف کنی."}
+        {lang === "en" && "💡 Messages from the contact form. You can reply or delete."}
+        {lang === "de" && "💡 Nachrichten vom Kontaktformular. Sie können antworten oder löschen."}
+      </div>
       {messages && messages.length === 0 ? (
-        <p style={{ color: "var(--text-faint)", textAlign: "center", padding: 40 }}>
-          پیامی دریافت نشده.
-        </p>
+        <p className="dashboard-empty-state">{emptyLabel}</p>
       ) : (
-        <div style={{ display: "grid", gap: 12 }}>
+        <div className="dashboard-messages-list">
           {messages?.map(msg => (
-            <div key={msg.id} style={{
-              padding: 16,
-              background: "var(--bg, #000)",
-              border: "1px solid var(--border, #1a3a1a)",
-              borderRadius: 6,
-            }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+            <div key={msg.id} className="dashboard-message-card">
+              <div className="dashboard-message-header">
                 <div>
-                  <strong style={{ color: "var(--primary-bright, #39ff14)" }}>{msg.name}</strong>
-                  <span style={{ color: "var(--text-dim)", fontSize: 10, marginRight: 8 }}>{msg.email}</span>
+                  <strong className="dashboard-message-name">{msg.name}</strong>
+                  <span className="dashboard-message-email">{msg.email}</span>
                 </div>
-                <span style={{ color: "var(--text-faint)", fontSize: 9 }}>
+                <span className="dashboard-message-date">
                   {new Date(msg.createdAt).toLocaleString("fa-IR")}
                 </span>
               </div>
-              <p style={{ fontSize: 12, color: "var(--text)", margin: "4px 0" }}>{msg.message}</p>
+              <p className="dashboard-message-text">{msg.message}</p>
               {msg.replies && msg.replies.length > 0 && (
-                <div style={{ marginTop: 8, padding: 8, background: "rgba(0,255,65,0.05)", borderRadius: 4 }}>
+                <div className="dashboard-message-replies">
                   {msg.replies.map((r: any) => (
-                    <p key={r.id} style={{ fontSize: 11, color: "var(--text-dim)", margin: "2px 0" }}>
+                    <p key={r.id} className="dashboard-message-reply-text">
                       ↳ {r.reply}
                     </p>
                   ))}
                 </div>
               )}
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <div className="dashboard-message-actions">
                 <button
                   onClick={() => { setReplyingTo(msg.id); setReplyText(""); }}
-                  className="signal-waveform-btn"
-                  style={{ padding: "4px 8px", fontSize: 10 }}
-                >↩️ پاسخ</button>
+                  className="dashboard-btn"
+                >{replyLabel}</button>
                 <button
                   onClick={() => deleteMessage(msg.id)}
-                  className="signal-waveform-btn"
-                  style={{ padding: "4px 8px", fontSize: 10 }}
-                >🗑️ حذف</button>
+                  className="dashboard-btn danger"
+                >{deleteLabel}</button>
               </div>
               {replyingTo === msg.id && (
-                <div style={{ marginTop: 8 }}>
+                <div className="dashboard-reply-form">
                   <textarea
                     value={replyText}
                     onChange={e => setReplyText(e.target.value)}
-                    placeholder="پاسخ خود را بنویسید..."
+                    placeholder={placeholder}
                     rows={3}
-                    style={{
-                      width: "100%",
-                      padding: 8,
-                      background: "var(--bg)",
-                      border: "1px solid var(--border)",
-                      color: "var(--primary-bright)",
-                      fontSize: 12,
-                      borderRadius: 4,
-                      boxSizing: "border-box",
-                    }}
+                    className="dashboard-reply-textarea"
+                    autoFocus
                   />
-                  <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-                    <button onClick={() => sendReply(msg.id)} className="signal-waveform-btn active" style={{ padding: "4px 12px", fontSize: 10 }}>📤 ارسال</button>
-                    <button onClick={() => setReplyingTo(null)} className="signal-waveform-btn" style={{ padding: "4px 12px", fontSize: 10 }}>✕ انصراف</button>
+                  <div className="dashboard-message-actions">
+                    <button onClick={() => sendReply(msg.id)} className="dashboard-btn">{sendLabel}</button>
+                    <button onClick={() => setReplyingTo(null)} className="dashboard-btn">{cancelLabel}</button>
                   </div>
                 </div>
               )}

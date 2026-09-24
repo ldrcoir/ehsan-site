@@ -462,13 +462,23 @@ export default function Home() {
               siteContent.navItems.map((item: any) => {
                 const labelField = `label${lang.charAt(0).toUpperCase() + lang.slice(1)}`;
                 const label = item[labelField] || item.labelEn || "";
+                // اعتبارسنجی scheme — جلوگیری از javascript: و data:
+                const safeHref = (() => {
+                  const h = String(item.href || "#");
+                  if (h.startsWith("#") || h.startsWith("/") || h.startsWith("mailto:") || h.startsWith("tel:")) return h;
+                  try {
+                    const u = new URL(h);
+                    if (u.protocol === "http:" || u.protocol === "https:") return h;
+                  } catch {}
+                  return "#";
+                })();
                 return (
                   <a
                     key={item.id}
-                    href={item.href}
+                    href={safeHref}
                     target={item.target === "_blank" ? "_blank" : undefined}
                     rel={item.target === "_blank" ? "noopener noreferrer" : undefined}
-                    onClick={item.href.startsWith("#") ? (e) => handleNavClick(e, item.href) : undefined}
+                    onClick={safeHref.startsWith("#") ? (e) => handleNavClick(e, safeHref) : undefined}
                   >
                     {label}
                   </a>
@@ -820,7 +830,20 @@ export default function Home() {
             </div>
             <div className="tutorial-modal-video">
               <iframe
-                src={activeTutorial?.embedUrl}
+                src={(() => {
+                  // اعتبارسنجی scheme — فقط https و یوتیوب/آپارات مجازن
+                  const url = activeTutorial?.embedUrl || "";
+                  try {
+                    const u = new URL(url);
+                    const allowed = ["www.aparat.com", "aparat.com", "www.youtube.com", "youtube.com", "youtu.be", "player.vimeo.com"];
+                    if ((u.protocol === "https:" || u.protocol === "http:") && allowed.includes(u.hostname)) {
+                      return url;
+                    }
+                  } catch {
+                    // اگه URL معتبر نبود، fallback به درج آپارات با embed کد
+                  }
+                  return "about:blank";
+                })()}
                 title={activeTutorial?.title[lang]}
                 allowFullScreen
                 allow="autoplay; fullscreen; picture-in-picture"

@@ -27,10 +27,30 @@ export default function ContentManager({ lang }: { lang: string }) {
     setLoading(true);
     try {
       const endpoint = activeType === "equipment" ? "equipment" : "content";
-      const res = await fetch(`/api/admin/${endpoint}?password=&type=${activeType}`);
+      const res = await fetch(`/api/admin/${endpoint}`, { credentials: "include" });
       const data = await res.json();
-      if (data.ok) setItems(data.items || []);
-    } catch {}
+      if (data.ok) {
+        // API برمی‌گردونه: { books, articles, tutorials, skills, aiInstructions }
+        // برای equipment: { items: [...] }
+        if (activeType === "equipment") {
+          setItems(data.items || []);
+        } else {
+          const keyMap: Record<string, string> = {
+            book: "books",
+            article: "articles",
+            tutorial: "tutorials",
+            skill: "skills",
+            aiInstruction: "aiInstructions",
+          };
+          const arrKey = keyMap[activeType] || "";
+          setItems(data[arrKey] || []);
+        }
+      } else {
+        setItems([]);
+      }
+    } catch {
+      setItems([]);
+    }
     setLoading(false);
   };
 

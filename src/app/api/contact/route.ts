@@ -65,29 +65,56 @@ export async function POST(req: Request) {
     const name = String(body.name || "").trim().slice(0, 100);
     const email = String(body.email || "").trim().slice(0, 200);
     const message = String(body.message || "").trim().slice(0, 5000);
+    // honeypot — فیلد مخفی که بات‌ها پر می‌کنن، انسان‌ها نباید
+    const website = String(body.website || "").trim();
+    if (website) {
+      // بات این فیلد رو پر کرده — رد کن بدون اینکه بهش بگیم چرا
+      await logSecurityEvent("honeypot_triggered", ip, `Bot honeypot filled: ${website.slice(0, 50)}`);
+      // به ظاهر موفق برگردون تا بات نفهمه
+      return NextResponse.json({ ok: true });
+    }
+    // time-trap — اگه فرم خیلی سریع submit شده (کمتر از ۲ ثانیه)، احتمالاً بات
+    const submittedAt = Number(body._t || 0);
+    if (submittedAt && Date.now() - submittedAt < 2000) {
+      await logSecurityEvent("time_trap_triggered", ip, "Form submitted too fast");
+      return NextResponse.json({ ok: false, error: "too_fast" }, { status: 400 });
+    }
 
-    // === reCAPTCHA VERIFICATION ===
+    // === reCAPTCHA VERIFICATION — mandatory + fail-closed ===
+    // توکن reCAPTCHA اجباریه. اگه نباشه یا نامعتبر باشه، رد می‌شه.
+    // در صورت خطای شبکه، هم رد می‌شه (fail-closed).
     const recaptchaToken = body.recaptchaToken;
-    if (recaptchaToken) {
-      try {
-        const verifyRes = await fetch("https://www.google.com/recaptcha/api/siteverify", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: `secret=${process.env.RECAPTCHA_SECRET || ""}&response=${recaptchaToken}`,
-        });
-        const verifyData = await verifyRes.json();
-        if (!verifyData.success) {
-          await logSecurityEvent("captcha_failed", ip, "reCAPTCHA verification failed");
-          return NextResponse.json(
-            { ok: false, error: "captcha_failed" },
-            { status: 400 }
-          );
-        }
-      } catch {
-        // If reCAPTCHA verification fails (network error), allow the message
-        // but log it
-        await logSecurityEvent("captcha_failed", ip, "reCAPTCHA network error - allowing");
+    if (!recaptchaToken || typeof recaptchaToken !== "string" || recaptchaToken.length < 10) {
+      await logSecurityEvent("captcha_missing", ip, "reCAPTCHA token missing");
+      return NextResponse.json(
+        { ok: false, error: "captcha_required" },
+        { status: 400 }
+      );
+    }
+    let captchaOk = false;
+    try {
+      const verifyRes = await fetch("https://www.google.com/recaptcha/api/siteverify", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          secret: process.env.RECAPTCHA_SECRET || "",
+          response: recaptchaToken,
+        }).toString(),
+      });
+      const verifyData = await verifyRes.json();
+      captchaOk = !!verifyData.success;
+      if (!captchaOk) {
+        await logSecurityEvent("captcha_failed", ip, `reCAPTCHA verification failed: ${JSON.stringify(verifyData["error-codes"] || [])}`);
       }
+    } catch (e) {
+      await logSecurityEvent("captcha_failed", ip, `reCAPTCHA network error: ${String(e).slice(0, 100)}`);
+      // fail-closed: در صورت خطای شبکه، پیام رد می‌شه
+    }
+    if (!captchaOk) {
+      return NextResponse.json(
+        { ok: false, error: "captcha_failed" },
+        { status: 400 }
+      );
     }
 
     const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
