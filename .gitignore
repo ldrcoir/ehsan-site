@@ -55,3 +55,5 @@ server.log
 node_modules/
 package-lock.json
 tool-results/
+download/*.zip
+public/*.zip
