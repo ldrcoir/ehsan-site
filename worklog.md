@@ -5430,3 +5430,105 @@ STATUS
 End of AUDIT-16.
 
 ---
+
+---
+Task ID: V17.1-FINAL
+Agent: Super Z (main agent)
+Task: بازنویسی کامل پنل ادمین + رفع ۲۰ ممیزی امنیتی + ساخت V17.1
+
+Work Log:
+- ۲۰ worker parallel audit (AUDIT-1 تا AUDIT-20) اجرا شد
+  - AUDIT-1: auth bypass
+  - AUDIT-2: XSS
+  - AUDIT-3: SQL/injection
+  - AUDIT-4: rate limit
+  - AUDIT-5: secrets
+  - AUDIT-6: panel UI
+  - AUDIT-7: completeness
+  - AUDIT-8: TypeScript
+  - AUDIT-9: Next config
+  - AUDIT-10: session
+  - AUDIT-11: data validation
+  - AUDIT-12: user mgmt
+  - AUDIT-13: CSRF
+  - AUDIT-14: headers
+  - AUDIT-15: settings
+  - AUDIT-16: chat/messages
+  - AUDIT-17: install scripts
+  - AUDIT-18: i18n
+  - AUDIT-19: prisma
+  - AUDIT-20: full integration
+
+- رفع بحران‌های امنیتی (CRITICAL):
+  ✅ Authentication bypass (passwordOk=true) — رفع
+  ✅ Hardcoded admin123 — حذف از src/
+  ✅ SESSION_SECRET قوی + entropy check
+  ✅ reCAPTCHA mandatory + fail-closed
+  ✅ Honeypot + time-trap در contact
+  ✅ timingSafeEqual در همه webhook
+  ✅ middleware.ts با CSRF protection (Origin check)
+  ✅ Rate limit در middleware
+  ✅ CSP header اضافه شد
+  ✅ XSS fix: nav href + tutorial embedUrl + book/article link
+  ✅ حذف zip های قدیمی دارای secret از public/
+
+- رفع باگ‌های پنل ادمین:
+  ✅ SettingsPanel بازنویسی کامل (شامل AI Provider, Telegram, Bale, Email, Password, Name×3, Handle)
+  ✅ ContentManager shape mismatch با API (رفع شد)
+  ✅ TextEditor field name mismatch (valueEn/valueFa/valueDe)
+  ✅ MessagesPanel refresh بعد از reply + error handling
+  ✅ حذف ?password= از همه fetch ها
+  ✅ Language switcher واقعی (fa/en/de + RTL)
+  ✅ Font selector کار می‌کنه
+  ✅ Beautiful CSS classes (بدون inline style)
+  ✅ Accessibility (aria-label, focus-visible, role)
+  ✅ Responsive design
+
+- بهینه‌سازی build:
+  ✅ حذف sharp (37MB — استفاده نشده)
+  ✅ حذف prisma engines غیر sqlite (44MB)
+  ✅ standalone package: 23MB (از 138MB)
+
+- نصب امن:
+  ✅ systemd با user غیر root (ehsansite)
+  ✅ .env با chmod 600
+  ✅ db با chmod 600
+  ✅ NoNewPrivileges + ProtectSystem در systemd
+
+- تست نهایی:
+  ✅ TypeScript: 0 error
+  ✅ Build: موفق
+  ✅ Push به GitHub: موفق (commit 2a6acd2)
+  ✅ zip قابل دانلود از GitHub
+
+Stage Summary:
+- نسخه: V16.0 → V17.1
+- تاریخ: 2026-09-25
+- ۲۰ worker audit انجام شد
+- فایل‌های تغییر یافته:
+  - src/middleware.ts (جدید — server-side admin protection)
+  - src/components/SettingsPanel.tsx (بازنویسی کامل)
+  - src/app/user-dashboard/page.tsx (بازنویسی کامل با CSS classes)
+  - src/app/personal.css (CSS اضافه شد — 700+ خط)
+  - src/components/ContentManager.tsx (رفع shape mismatch)
+  - src/components/TextEditor.tsx (رفع field mismatch)
+  - src/components/NavMenuManager.tsx (حذف ?password=)
+  - src/components/ThemeBuilder.tsx (حذف ?password=)
+  - src/components/ArchiveGrid.tsx (XSS fix)
+  - src/app/page.tsx (XSS fix: nav href + tutorial embedUrl)
+  - src/app/api/admin/settings/route.ts (Telegram config support)
+  - src/app/api/admin/security/route.ts (change_tagline action + lang validation)
+  - src/app/api/bale/webhook/route.ts (timingSafeEqual)
+  - src/app/api/telegram/webhook/route.ts (timingSafeEqual)
+  - src/app/api/contact/route.ts (reCAPTCHA mandatory + honeypot + time-trap)
+  - src/lib/access-auth.ts (SESSION_SECRET entropy check)
+  - next.config.ts (poweredByHeader: false + X-XSS-Protection)
+  - tsconfig.json (noImplicitAny: true)
+  - install.sh (systemd user + chmod 600 + webhook secrets)
+  - VERSION.txt (آپدیت به V17.1)
+  - public/install-v17.1.zip (23MB — pre-built standalone)
+- وضعیت: قابل نصب با یک دستور از GitHub
+- پیش‌فرض امنیتی: admin/admin123 — حتماً از پنل عوض بشه
+- دانلود: https://github.com/ldrcoir/ehsan-site-private/raw/main/public/install-v17.1.zip
+
+---
