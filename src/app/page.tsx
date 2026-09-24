@@ -64,27 +64,11 @@ export default function Home() {
   const [utcTime, setUtcTime] = useState("");
   const [localTime, setLocalTime] = useState(""); // for Shamsi/FA
   const [activeTutorial, setActiveTutorial] = useState<typeof TUTORIALS[number] | null>(null);
-  const [adminOpen, setAdminOpen] = useState(false);
-  const [adminPwd, setAdminPwd] = useState("");
-  const [adminUser, setAdminUser] = useState("");
   const [captcha, setCaptcha] = useState({ q: "1 + 1", a: 2 });
-  const [adminMsgs, setAdminMsgs] = useState<MessageRow[] | null>(null);
-  const [adminChats, setAdminChats] = useState<ChatSessionRow[] | null>(null);
-  const [adminStats, setAdminStats] = useState<{ contactMessages: number; chatMessages: number; chatSessions: number } | null>(null);
-  const [adminErr, setAdminErr] = useState("");
-  const [adminTab, setAdminTab] = useState<"messages" | "chats" | "content" | "text" | "nav" | "themes" | "settings" | "users">("messages");
-  const [adminSettings, setAdminSettings] = useState<Record<string, string> | null>(null);
-  const [replyingTo, setReplyingTo] = useState<string | null>(null);
-  const [replyText, setReplyText] = useState("");
-  const [replyStatus, setReplyStatus] = useState<{ id: string; text: string; ok: boolean } | null>(null);
-  const [chatReplyingTo, setChatReplyingTo] = useState<string | null>(null);
-  const [chatReplyText, setChatReplyText] = useState("");
-  const [chatReplyStatus, setChatReplyStatus] = useState<{ id: string; text: string; ok: boolean } | null>(null);
 
   // theme + anti-theft
   const [theme, setTheme] = useState<"terminal" | "clean" | "midnight" | "amber" | "cyan" | "purple" | "solar">("terminal");
   const [antiTheftWarning, setAntiTheftWarning] = useState(false);
-  const [adminSearch, setAdminSearch] = useState("");
   // reCAPTCHA only renders after client mount — the grecaptcha script injects
   // an iframe + div into the .g-recaptcha container at runtime, which would
   // cause a hydration mismatch (server HTML has no iframe, client does).
@@ -214,34 +198,6 @@ export default function Home() {
     };
   }, []);
 
-  // hash change → open admin
-  useEffect(() => {
-    const onHash = () => {
-      if (window.location.hash === "#admin") {
-        setAdminOpen(true);
-      } else {
-        setAdminOpen(false);
-      }
-    };
-    onHash();
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
-  }, []);
-
-  // keyboard shortcut: Ctrl+Shift+A → admin
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && (e.key === "A" || e.key === "a")) {
-        e.preventDefault();
-        setAdminOpen(true);
-        if (window.location.hash !== "#admin") {
-          window.location.hash = "admin";
-        }
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
 
   // scroll listener
   useEffect(() => {
@@ -328,15 +284,14 @@ export default function Home() {
 
   // lock body when menu/modal open
   useEffect(() => {
-    const locked = menuOpen || activeTutorial || adminOpen;
+    const locked = menuOpen || activeTutorial;
     document.body.style.overflow = locked ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
-  }, [menuOpen, activeTutorial, adminOpen]);
+  }, [menuOpen, activeTutorial]);
 
   const closeMenu = () => setMenuOpen(false);
 
   const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
-    if (href.startsWith("#") && href.length > 1 && href !== "#admin") {
+    if (href.startsWith("#") && href.length > 1 ) {
       const target = document.querySelector(href);
       if (target) {
         e.preventDefault();
@@ -352,17 +307,11 @@ export default function Home() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (activeTutorial) setActiveTutorial(null);
-        if (adminOpen) {
-          setAdminOpen(false);
-          if (window.location.hash === "#admin") {
-            history.replaceState(null, "", window.location.pathname);
-          }
-        }
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [activeTutorial, adminOpen]);
+  }, [activeTutorial]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -439,135 +388,9 @@ export default function Home() {
     }
   };
 
-  const adminUnlock = async (e: FormEvent) => {
-    e.preventDefault();
-    setAdminErr("");
-
-    // ورود ادمین: اول از دیتابیس چک می‌کنیم، بعد از PERSONAL
-    // اینطوری اگه رمز از پنل عوض بشه، دیگه مشکل پیش نمیاد
-    try {
-      // fetch messages, chats, and settings in parallel
-      const [msgRes, chatRes, settingsRes] = await Promise.all([
-        fetch(`/api/messages?password=${encodeURIComponent(adminPwd)}`),
-        fetch(`/api/chat?password=${encodeURIComponent(adminPwd)}`),
-        fetch(`/api/admin/settings?password=${encodeURIComponent(adminPwd)}`),
-      ]);
-      const msgData = await msgRes.json();
-      const chatData = await chatRes.json();
-      const settingsData = await settingsRes.json();
-      if (msgRes.ok && msgData.ok) {
-        setAdminMsgs(msgData.messages);
-        setAdminStats(msgData.stats);
-      } else {
-        setAdminErr(tt.admin.wrong);
-        return;
-      }
-      if (chatRes.ok && chatData.ok) {
-        setAdminChats(chatData.sessions);
-      } else {
-        setAdminChats([]);
-      }
-      if (settingsRes.ok && settingsData.ok) {
-        setAdminSettings(settingsData.settings);
-      }
-    } catch {
-      setAdminErr(tt.admin.wrong);
-    }
-  };
 
   // Reply to a contact message
-  const submitReply = async (messageId: string) => {
-    if (!replyText.trim()) return;
-    setReplyStatus({ id: messageId, text: "...", ok: true });
-    try {
-      const res = await fetch("/api/admin/reply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: adminPwd, messageId, reply: replyText }),
-      });
-      const data = await res.json();
-      if (res.ok && data.ok) {
-        setReplyStatus({ id: messageId, text: "✓ reply saved", ok: true });
-        setReplyText("");
-        setReplyingTo(null);
-      } else {
-        setReplyStatus({ id: messageId, text: "✗ error", ok: false });
-      }
-    } catch {
-      setReplyStatus({ id: messageId, text: "✗ error", ok: false });
-    }
-  };
 
-  // Reply to an AI chat session
-  const submitChatReply = async (sessionId: string) => {
-    if (!chatReplyText.trim()) return;
-    setChatReplyStatus({ id: sessionId, text: "...", ok: true });
-    try {
-      const res = await fetch("/api/admin/chat-reply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: adminPwd, sessionId, reply: chatReplyText }),
-      });
-      const data = await res.json();
-      if (res.ok && data.ok) {
-        setChatReplyStatus({ id: sessionId, text: "✓ reply injected", ok: true });
-        setChatReplyText("");
-        setChatReplyingTo(null);
-        // Update local state to show the new message
-        setAdminChats((prev) =>
-          prev?.map((s) =>
-            s.id === sessionId
-              ? {
-                  ...s,
-                  messages: [
-                    ...s.messages,
-                    {
-                      id: data.messageId,
-                      role: "assistant",
-                      content: chatReplyText,
-                      createdAt: data.savedAt,
-                    },
-                  ],
-                }
-              : s
-          ) || null
-        );
-      } else {
-        setChatReplyStatus({ id: sessionId, text: "✗ error", ok: false });
-      }
-    } catch {
-      setChatReplyStatus({ id: sessionId, text: "✗ error", ok: false });
-    }
-  };
-
-  // Save site settings
-  const saveSettings = async (newSettings: Record<string, string>) => {
-    try {
-      const res = await fetch("/api/admin/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: adminPwd, settings: newSettings }),
-      });
-      const data = await res.json();
-      if (res.ok && data.ok) {
-        setAdminSettings((prev) => ({ ...prev, ...newSettings }));
-        return true;
-      }
-    } catch {}
-    return false;
-  };
-
-  const closeAdmin = () => {
-    setAdminOpen(false);
-    setAdminMsgs(null);
-    setAdminChats(null);
-    setAdminStats(null);
-    setAdminPwd("");
-    setAdminErr("");
-    if (window.location.hash === "#admin") {
-      history.replaceState(null, "", window.location.pathname);
-    }
-  };
 
   const reveal = (id: string) => (revealed.has(id) ? "reveal visible" : "reveal");
 
@@ -632,7 +455,7 @@ export default function Home() {
       <header className={`navbar ${scrolled ? "scrolled" : ""}`}>
         <div className="container nav-inner">
           <a href="#hero" className="brand" onClick={(e) => handleNavClick(e, "#hero")}>
-            <span className="brand-name">{PERSONAL.handle}</span>
+            <span className="brand-name">{tx("admin.handle", PERSONAL.handle)}</span>
           </a>
           <nav className={`nav-links ${menuOpen ? "open" : ""}`}>
             {siteContent.navItems.length > 0 ? (
@@ -701,7 +524,7 @@ export default function Home() {
         <div className="container hero-grid">
           <div className={`hero-text ${reveal("hero-text")}`} data-reveal="hero-text">
             <p className="hero-greeting">{tx("hero.greeting", tt.hero.greeting)}</p>
-            <h1 className="hero-title">{PERSONAL.fullName[lang]}</h1>
+            <h1 className="hero-title">{tx("admin.name_" + lang, PERSONAL.fullName[lang])}</h1>
             <p className="hero-subtitle">{PERSONAL.tagline[lang]}</p>
             <div className="hero-cta">
               <a href="#articles" className="btn btn-primary" onClick={(e) => handleNavClick(e, "#articles")}>{tx("hero.cta1", tt.hero.cta)}</a>
@@ -956,7 +779,7 @@ export default function Home() {
       {/* FOOTER */}
       <footer className="footer">
         <div className="container footer-inner">
-          <p>© {year ?? ""} {PERSONAL.fullName[lang]}. {tt.footer.built}</p>
+          <p>© {year ?? ""} {tx("admin.name_" + lang, PERSONAL.fullName[lang])}. {tt.footer.built}</p>
           <ul className="footer-links">
             <li><a href="#about" onClick={(e) => handleNavClick(e, "#about")}>{tt.nav.about}</a></li>
             <li><a href="#books" onClick={(e) => handleNavClick(e, "#books")}>{tt.nav.books}</a></li>
@@ -965,9 +788,7 @@ export default function Home() {
             <li><a href="#contact" onClick={(e) => handleNavClick(e, "#contact")}>{tt.nav.contact}</a></li>
             <li>
               <a
-                href="#admin"
                 className="footer-admin"
-                onClick={(e) => { e.preventDefault(); setAdminOpen(true); window.location.hash = "admin"; }}
                 title="Ctrl+Shift+A"
               >
                 [{tt.footer.admin}]
@@ -991,7 +812,7 @@ export default function Home() {
           <div className="tutorial-modal-inner" onClick={(e) => e.stopPropagation()}>
             <div className="tutorial-modal-bar">
               <span className="tutorial-modal-bar-title">
-                {activeTutorial.title[lang]} · {activeTutorial.duration} · {activeTutorial.level[lang]}
+                {activeTutorial?.title[lang]} · {activeTutorial?.duration} · {activeTutorial?.level[lang]}
               </span>
               <button className="tutorial-modal-close" onClick={() => setActiveTutorial(null)}>
                 {tt.tutorials.close}
@@ -999,8 +820,8 @@ export default function Home() {
             </div>
             <div className="tutorial-modal-video">
               <iframe
-                src={activeTutorial.embedUrl}
-                title={activeTutorial.title[lang]}
+                src={activeTutorial?.embedUrl}
+                title={activeTutorial?.title[lang]}
                 allowFullScreen
                 allow="autoplay; fullscreen; picture-in-picture"
               />
@@ -1009,665 +830,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* ADMIN MODAL */}
-      {adminOpen && (
-        <div className="admin-modal" onClick={closeAdmin}>
-          <div className="admin-modal-inner" onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-bar">
-              <span className="admin-modal-bar-title">{tt.admin.title}</span>
-              <button className="tutorial-modal-close" onClick={closeAdmin}>×</button>
-            </div>
-            <div className="admin-modal-body">
-              {!adminMsgs ? (
-                <form className="admin-login" onSubmit={adminUnlock}>
-                  <div className="field">
-                    <label htmlFor="admin-user">{lang === "fa" ? "نام کاربری" : "Username"}</label>
-                    <input
-                      id="admin-user"
-                      type="text"
-                      value={adminUser}
-                      onChange={(e) => setAdminUser(e.target.value)}
-                      placeholder={lang === "fa" ? "نام کاربری" : "username"}
-                      autoFocus
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="admin-pwd">{tt.admin.passwordLabel}</label>
-                    <input
-                      id="admin-pwd"
-                      type="password"
-                      value={adminPwd}
-                      onChange={(e) => setAdminPwd(e.target.value)}
-                      placeholder={tt.admin.passwordPh}
-                    />
-                  </div>
-                  <button type="submit" className="btn btn-primary btn-block">{tt.admin.unlock}</button>
-                  {adminErr && <p className="form-status error" style={{ marginTop: 10 }}>{adminErr}</p>}
-                  <p style={{ marginTop: 16, fontSize: "0.72rem", color: "var(--text-faint)" }}>
-                    {tt.admin.subtitle}
-                  </p>
-                </form>
-              ) : (
-                <>
-                  {adminStats && (
-                    <div className="admin-stats">
-                      <div className="admin-stat"><strong>{adminStats.contactMessages}</strong>contact msgs</div>
-                      <div className="admin-stat"><strong>{adminStats.chatSessions}</strong>chat sessions</div>
-                      <div className="admin-stat"><strong>{adminStats.chatMessages}</strong>chat msgs</div>
-                      <div className="admin-stat"><strong>{adminSettings?.visitorCount || 0}</strong>visitors</div>
-                    </div>
-                  )}
-                  <div className="admin-tabs">
-                    <button
-                      className={`admin-tab ${adminTab === "messages" ? "active" : ""}`}
-                      onClick={() => setAdminTab("messages")}
-                    >
-                      contact messages ({adminMsgs.length})
-                    </button>
-                    <button
-                      className={`admin-tab ${adminTab === "chats" ? "active" : ""}`}
-                      onClick={() => setAdminTab("chats")}
-                    >
-                      AI chat logs ({adminChats?.length || 0})
-                    </button>
-                    <button
-                      className={`admin-tab ${adminTab === "content" ? "active" : ""}`}
-                      onClick={() => setAdminTab("content")}
-                    >
-                      {lang === "fa" ? "محتوا" : "content"}
-                    </button>
-                    <button
-                      className={`admin-tab ${adminTab === "text" ? "active" : ""}`}
-                      onClick={() => setAdminTab("text")}
-                    >
-                      {lang === "fa" ? "متن‌ها" : "texts"}
-                    </button>
-                    <button
-                      className={`admin-tab ${adminTab === "nav" ? "active" : ""}`}
-                      onClick={() => setAdminTab("nav")}
-                    >
-                      {lang === "fa" ? "منو" : "menu"}
-                    </button>
-                    <button
-                      className={`admin-tab ${adminTab === "themes" ? "active" : ""}`}
-                      onClick={() => setAdminTab("themes")}
-                    >
-                      {lang === "fa" ? "تم‌ساز" : "themes"}
-                    </button>
-                    <button
-                      className={`admin-tab ${adminTab === "settings" ? "active" : ""}`}
-                      onClick={() => setAdminTab("settings")}
-                    >
-                      settings
-                    </button>
-                    <button
-                      className={`admin-tab ${adminTab === "users" ? "active" : ""}`}
-                      onClick={() => setAdminTab("users")}
-                    >
-                      {lang === "fa" ? "کاربران" : "users"}
-                    </button>
-                  </div>
-
-                  {/* CONTENT TAB */}
-                  {adminTab === "content" && (
-                    <ContentManager password={adminPwd} lang={lang} />
-                  )}
-
-                  {/* TEXT EDITOR TAB — edit ALL site text */}
-                  {adminTab === "text" && (
-                    <TextEditor password={adminPwd} lang={lang} />
-                  )}
-
-                  {/* NAV MENU TAB — manage navigation menu */}
-                  {adminTab === "nav" && (
-                    <NavMenuManager password={adminPwd} lang={lang} />
-                  )}
-
-                  {/* THEMES TAB — Theme Builder */}
-                  {adminTab === "themes" && (
-                    <ThemeBuilder password={adminPwd} lang={lang} />
-                  )}
-
-                  {/* USERS TAB — AccessUser management (با ساعت دسترسی) */}
-                  {adminTab === "users" && (
-                    <AccessUserManager />
-                  )}
-
-                  {/* CONTACT MESSAGES TAB with reply */}
-                  {adminTab === "messages" && (
-                    adminMsgs.length === 0 ? (
-                      <p style={{ color: "var(--text-dim)", textAlign: "center", padding: 20 }}>{tt.admin.empty}</p>
-                    ) : (
-                      <>
-                        <input
-                          type="text"
-                          className="admin-search"
-                          placeholder="search by name, email, or message..."
-                          value={adminSearch}
-                          onChange={(e) => setAdminSearch(e.target.value)}
-                        />
-                        <button
-                          className="btn btn-ghost btn-sm admin-export-btn"
-                          onClick={() => {
-                            const csv = adminMsgs
-                              .filter((m) => {
-                                const s = adminSearch.toLowerCase();
-                                return !s || m.name.toLowerCase().includes(s) || m.email.toLowerCase().includes(s) || m.message.toLowerCase().includes(s);
-                              })
-                              .map((m) => `"${m.name}","${m.email}","${m.message.replace(/"/g, '""')}","${new Date(m.createdAt).toISOString()}"`)
-                              .join("\n");
-                            const blob = new Blob(["Name,Email,Message,Date\n" + csv], { type: "text/csv" });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement("a");
-                            a.href = url;
-                            a.download = "messages.csv";
-                            a.click();
-                          }}
-                        >
-                          export CSV
-                        </button>
-                        <div className="admin-messages">
-                          {adminMsgs
-                            .filter((m) => {
-                              const s = adminSearch.toLowerCase();
-                              return !s || m.name.toLowerCase().includes(s) || m.email.toLowerCase().includes(s) || m.message.toLowerCase().includes(s);
-                            })
-                            .map((m) => (
-                          <div key={m.id} className="admin-message">
-                            <div className="admin-message-head">
-                              <span>
-                                {tt.admin.from}: <span className="admin-message-from">{m.name}</span> &lt;{m.email}&gt;
-                              </span>
-                              <span>{tt.admin.at}: {new Date(m.createdAt).toLocaleString()}</span>
-                            </div>
-                            <div className="admin-message-text">{m.message}</div>
-                            <div className="admin-reply-box">
-                              {replyingTo === m.id ? (
-                                <>
-                                  <label>reply to {m.name}:</label>
-                                  <textarea
-                                    value={replyText}
-                                    onChange={(e) => setReplyText(e.target.value)}
-                                    placeholder="type your reply..."
-                                    rows={3}
-                                  />
-                                  <div className="admin-reply-actions">
-                                    <button className="btn btn-primary btn-sm" onClick={() => submitReply(m.id)}>
-                                      save reply
-                                    </button>
-                                    <button className="btn btn-ghost btn-sm" onClick={() => { setReplyingTo(null); setReplyText(""); }}>
-                                      cancel
-                                    </button>
-                                    {replyStatus?.id === m.id && (
-                                      <span className={`admin-reply-status ${replyStatus.ok ? "" : "error"}`}>{replyStatus.text}</span>
-                                    )}
-                                  </div>
-                                </>
-                              ) : (
-                                <button className="btn btn-ghost btn-sm" onClick={() => { setReplyingTo(m.id); setReplyText(""); setReplyStatus(null); }}>
-                                  reply
-                                </button>
-                              )}
-                              <button
-                                className="btn btn-ghost btn-sm"
-                                style={{ color: "var(--red)", borderColor: "var(--red)" }}
-                                onClick={async () => {
-                                  if (!confirm("Delete this message?")) return;
-                                  await fetch("/api/admin/clear", {
-                                    method: "POST", headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({ password: adminPwd, target: "message", id: m.id }),
-                                  });
-                                  setAdminMsgs(prev => prev ? prev.filter(x => x.id !== m.id) : prev);
-                                }}
-                              >
-                                delete
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                        </div>
-                      </>
-                    )
-                  )}
-
-                  {/* AI CHAT LOGS TAB with inject reply */}
-                  {adminTab === "chats" && (
-                    !adminChats || adminChats.length === 0 ? (
-                      <p style={{ color: "var(--text-dim)", textAlign: "center", padding: 20 }}>
-                        {lang === "fa" ? "هنوز چتی نیست." : lang === "de" ? "Noch keine Chats." : "No chats yet."}
-                      </p>
-                    ) : (
-                      <div className="admin-messages">
-                        {adminChats.map((s) => (
-                          <div key={s.id} className="admin-session">
-                            <div className="admin-session-head">
-                              <span>session: {s.visitorId} ({s.ip || "—"})</span>
-                              <span>{new Date(s.updatedAt).toLocaleString()}</span>
-                            </div>
-                            <div className="admin-session-msgs">
-                              {s.messages.map((m) => (
-                                <div
-                                  key={m.id}
-                                  className={`admin-session-msg ${m.role}`}
-                                  data-role={m.role === "user" ? ">" : "<"}
-                                >
-                                  {m.content}
-                                </div>
-                              ))}
-                            </div>
-                            <div className="admin-reply-box">
-                              {chatReplyingTo === s.id ? (
-                                <>
-                                  <label>inject reply as AI:</label>
-                                  <textarea
-                                    value={chatReplyText}
-                                    onChange={(e) => setChatReplyText(e.target.value)}
-                                    placeholder="type your reply (visitor will see it as AI response)..."
-                                    rows={3}
-                                  />
-                                  <div className="admin-reply-actions">
-                                    <button className="btn btn-primary btn-sm" onClick={() => submitChatReply(s.id)}>
-                                      inject reply
-                                    </button>
-                                    <button className="btn btn-ghost btn-sm" onClick={() => { setChatReplyingTo(null); setChatReplyText(""); }}>
-                                      cancel
-                                    </button>
-                                    {chatReplyStatus?.id === s.id && (
-                                      <span className={`admin-reply-status ${chatReplyStatus.ok ? "" : "error"}`}>{chatReplyStatus.text}</span>
-                                    )}
-                                  </div>
-                                </>
-                              ) : (
-                                <button className="btn btn-ghost btn-sm" onClick={() => { setChatReplyingTo(s.id); setChatReplyText(""); setChatReplyStatus(null); }}>
-                                  reply as AI
-                                </button>
-                              )}
-                              <button
-                                className="btn btn-ghost btn-sm"
-                                style={{ color: "var(--red)", borderColor: "var(--red)" }}
-                                onClick={async () => {
-                                  if (!confirm("Delete this chat session?")) return;
-                                  await fetch("/api/admin/clear", {
-                                    method: "POST", headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({ password: adminPwd, target: "chat_session", id: s.id }),
-                                  });
-                                  setAdminChats(prev => (prev || []).filter(x => x.id !== s.id));
-                                }}
-                              >
-                                delete
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )
-                  )}
-
-                  {/* SETTINGS TAB — kill switch, Bale config, content editing */}
-                  {adminTab === "settings" && adminSettings && (
-                    <div>
-                      {/* API Kill Switch */}
-                      <div className="admin-settings-section">
-                        <h4>AI Chat API</h4>
-                        <div className="admin-setting-row">
-                          <span className="admin-setting-label">
-                            {adminSettings.apiEnabled === "true"
-                              ? (lang === "fa" ? "چت هوش مصنوعی فعال است" : "AI chat is currently ENABLED")
-                              : (lang === "fa" ? "چت هوش مصنوعی غیرفعال است" : "AI chat is currently DISABLED")}
-                          </span>
-                          <div
-                            className={`admin-toggle ${adminSettings.apiEnabled === "true" ? "on" : ""}`}
-                            onClick={() => {
-                              const newVal = adminSettings.apiEnabled === "true" ? "false" : "true";
-                              saveSettings({ apiEnabled: newVal });
-                            }}
-                            role="button"
-                            tabIndex={0}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Content Editing */}
-                      <div className="admin-settings-section">
-                        <h4>Display Name (overrides content.ts)</h4>
-                        <div className="admin-setting-row">
-                          <span className="admin-setting-label">EN name</span>
-                          <input
-                            className="admin-setting-input"
-                            value={adminSettings.adminDisplayName || ""}
-                            onChange={(e) => setAdminSettings({ ...adminSettings, adminDisplayName: e.target.value })}
-                            placeholder="Your Name"
-                          />
-                        </div>
-                        <div className="admin-setting-row">
-                          <span className="admin-setting-label">Tagline</span>
-                          <input
-                            className="admin-setting-input"
-                            value={adminSettings.adminTagline || ""}
-                            onChange={(e) => setAdminSettings({ ...adminSettings, adminTagline: e.target.value })}
-                            placeholder="RF/Microwave Researcher · ..."
-                          />
-                        </div>
-                        <div className="admin-setting-row">
-                          <span className="admin-setting-label">Status message</span>
-                          <input
-                            className="admin-setting-input"
-                            value={adminSettings.adminStatus || ""}
-                            onChange={(e) => setAdminSettings({ ...adminSettings, adminStatus: e.target.value })}
-                            placeholder="e.g. working on antenna array..."
-                          />
-                        </div>
-                        <button
-                          className="btn btn-primary btn-sm admin-save-btn"
-                          onClick={() => saveSettings({
-                            adminDisplayName: adminSettings.adminDisplayName || "",
-                            adminTagline: adminSettings.adminTagline || "",
-                            adminStatus: adminSettings.adminStatus || "",
-                          })}
-                        >
-                          save content
-                        </button>
-                      </div>
-
-                      {/* Bale Messenger Integration */}
-                      <div className="admin-settings-section">
-                        <h4>Bale Messenger Integration</h4>
-                        <div className="admin-setting-row">
-                          <span className="admin-setting-label">Enable Bale notifications</span>
-                          <div
-                            className={`admin-toggle ${adminSettings.baleEnabled === "true" ? "on" : ""}`}
-                            onClick={() => {
-                              const newVal = adminSettings.baleEnabled === "true" ? "false" : "true";
-                              saveSettings({ baleEnabled: newVal });
-                            }}
-                            role="button"
-                            tabIndex={0}
-                          />
-                        </div>
-                        <div className="admin-setting-row">
-                          <span className="admin-setting-label">Bale Bot Token</span>
-                          <input
-                            className="admin-setting-input"
-                            type="password"
-                            value={adminSettings.baleBotToken || ""}
-                            onChange={(e) => setAdminSettings({ ...adminSettings, baleBotToken: e.target.value })}
-                            placeholder="123456789:ABCdef..."
-                          />
-                        </div>
-                        <div className="admin-setting-row">
-                          <span className="admin-setting-label">Bale Chat ID</span>
-                          <input
-                            className="admin-setting-input"
-                            value={adminSettings.baleChatId || ""}
-                            onChange={(e) => setAdminSettings({ ...adminSettings, baleChatId: e.target.value })}
-                            placeholder="123456789"
-                          />
-                        </div>
-                        <button
-                          className="btn btn-primary btn-sm admin-save-btn"
-                          onClick={() => saveSettings({
-                            baleBotToken: adminSettings.baleBotToken || "",
-                            baleChatId: adminSettings.baleChatId || "",
-                          })}
-                        >
-                          save Bale config
-                        </button>
-                        <div className="admin-bale-status">
-                          <strong>Status:</strong> {adminSettings.baleEnabled === "true" && adminSettings.baleBotToken && adminSettings.baleChatId
-                            ? "✓ configured — notifications will be sent"
-                            : "⚠ not configured — see API_SETUP.md for instructions"}
-                          <br/><br/>
-                          <strong>Webhook URL:</strong> <code>https://your-domain.com/api/bale/webhook</code>
-                          <br/><br/>
-                          <strong>Commands admin can send to bot:</strong>
-                          <br/>/list · /reply {`{id}`} {`{text}`} · /chat {`{sessionId}`} {`{text}`}
-                          <br/>/disable · /enable · /stats · /help
-                        </div>
-                      </div>
-
-                      {/* Security — Change Password & Handle */}
-                      <div className="admin-settings-section">
-                        <h4>Security — Password & Handle</h4>
-                        <div className="admin-setting-row">
-                          <span className="admin-setting-label">New password (min 6 chars)</span>
-                          <div style={{ display: "flex", gap: 4 }}>
-                            <input
-                              className="admin-setting-input"
-                              type="password"
-                              id="newPassword"
-                              placeholder="new password..."
-                              style={{ flex: 1 }}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const el = document.getElementById("newPassword") as HTMLInputElement;
-                                el.type = el.type === "password" ? "text" : "password";
-                              }}
-                              style={{ padding: "0 8px", fontSize: 11, cursor: "pointer", background: "var(--bg)", border: "1px solid var(--border)", color: "var(--green-dim)", borderRadius: 4 }}
-                            >👁</button>
-                          </div>
-                        </div>
-                        <button
-                          className="btn btn-primary btn-sm admin-save-btn"
-                          onClick={async () => {
-                            const el = document.getElementById("newPassword") as HTMLInputElement;
-                            const newPwd = el.value;
-                            if (!newPwd || newPwd.length < 6) {
-                              alert("Password must be at least 6 characters");
-                              return;
-                            }
-                            const res = await fetch("/api/admin/security", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ password: adminPwd, action: "change_password", newPassword: newPwd }),
-                            });
-                            const data = await res.json();
-                            if (data.ok) {
-                              alert("✓ رمز با موفقیت عوض شد! دفعه بعد از رمز جدید استفاده کن.");
-                              setAdminPwd(newPwd);
-                              el.value = "";
-                            } else {
-                              alert("Error: " + (data.error || "unknown"));
-                            }
-                          }}
-                        >
-                          change password
-                        </button>
-                        <div className="admin-setting-row" style={{ marginTop: 12 }}>
-                          <span className="admin-setting-label">New handle (username)</span>
-                          <input
-                            className="admin-setting-input"
-                            type="text"
-                            id="newHandle"
-                            placeholder="new_handle"
-                          />
-                        </div>
-                        <button
-                          className="btn btn-primary btn-sm admin-save-btn"
-                          onClick={async () => {
-                            const el = document.getElementById("newHandle") as HTMLInputElement;
-                            const newH = el.value;
-                            if (!newH) return;
-                            const res = await fetch("/api/admin/security", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ password: adminPwd, action: "change_handle", newHandle: newH }),
-                            });
-                            const data = await res.json();
-                            if (data.ok) {
-                              alert("✓ Handle changed to: " + newH + ". Reload to see changes.");
-                              el.value = "";
-                            } else {
-                              alert("Error: " + (data.error || "unknown"));
-                            }
-                          }}
-                        >
-                          change handle
-                        </button>
-                      </div>
-
-                      {/* AI Providers — API Key Management */}
-                      <div className="admin-settings-section">
-                        <h4>AI Providers — API Keys</h4>
-                        <p style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginBottom: 10 }}>
-                          Configure which AI providers to use. Lower priority = tried first.
-                          If one fails, the next is tried (fallback chain).
-                        </p>
-                        <div id="aiProvidersList" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                          <p style={{ color: "var(--text-dim)", fontSize: "0.78rem" }}>Loading providers...</p>
-                        </div>
-                        <button
-                          className="btn btn-ghost btn-sm"
-                          style={{ marginTop: 10 }}
-                          onClick={async () => {
-                            const res = await fetch(`/api/admin/providers?password=${adminPwd}`);
-                            const data = await res.json();
-                            if (data.ok) {
-                              const container = document.getElementById("aiProvidersList");
-                              if (container) {
-                                // XSS-safe: استفاده از textContent و createElement به‌جای innerHTML
-                                container.innerHTML = "";
-                                data.providers.forEach((p: any) => {
-                                  const div = document.createElement("div");
-                                  div.style.cssText = "border:1px solid var(--border);padding:10px;display:flex;flex-direction:column;gap:6px;";
-                                  
-                                  const header = document.createElement("div");
-                                  header.style.cssText = "display:flex;justify-content:space-between;align-items:center;";
-                                  
-                                  const label = document.createElement("strong");
-                                  label.style.cssText = "color:var(--green-bright);font-size:0.85rem;";
-                                  label.textContent = p.label;
-                                  
-                                  const status = document.createElement("span");
-                                  status.style.cssText = `font-size:0.7rem;color:${p.enabled ? 'var(--green)' : 'var(--text-dim)'};`;
-                                  status.textContent = p.enabled ? "● enabled" : "○ disabled";
-                                  
-                                  header.appendChild(label);
-                                  header.appendChild(status);
-                                  div.appendChild(header);
-                                  
-                                  const info = document.createElement("div");
-                                  info.style.cssText = "font-size:0.72rem;color:var(--text-dim);";
-                                  info.textContent = `Model: ${p.model} · Priority: ${p.priority}`;
-                                  div.appendChild(info);
-                                  
-                                  const keyInput = document.createElement("input");
-                                  keyInput.type = "password";
-                                  keyInput.placeholder = `API Key: ${p.apiKey ? '••••' : 'not set'}`;
-                                  keyInput.id = `key_${p.id}`;
-                                  keyInput.style.cssText = "background:var(--bg);border:1px solid var(--border);color:var(--green-bright);font-family:var(--font-mono);font-size:0.75rem;padding:4px;";
-                                  div.appendChild(keyInput);
-                                  
-                                  const modelInput = document.createElement("input");
-                                  modelInput.type = "text";
-                                  modelInput.placeholder = "Model name";
-                                  modelInput.value = p.model;
-                                  modelInput.id = `model_${p.id}`;
-                                  modelInput.style.cssText = "background:var(--bg);border:1px solid var(--border);color:var(--green-bright);font-family:var(--font-mono);font-size:0.75rem;padding:4px;";
-                                  div.appendChild(modelInput);
-                                  
-                                  const btnDiv = document.createElement("div");
-                                  btnDiv.style.cssText = "display:flex;gap:4px;";
-                                  
-                                  const saveBtn = document.createElement("button");
-                                  saveBtn.textContent = "save";
-                                  saveBtn.style.cssText = "background:var(--green);color:#000;border:0;padding:4px 8px;font-size:0.7rem;cursor:pointer;font-family:var(--font-mono);";
-                                  saveBtn.onclick = () => (window as any).__updateProvider(p.id, p.id);
-                                  btnDiv.appendChild(saveBtn);
-                                  
-                                  const toggleBtn = document.createElement("button");
-                                  toggleBtn.textContent = p.enabled ? "disable" : "enable";
-                                  toggleBtn.style.cssText = "background:var(--bg-panel-2);border:1px solid var(--border);color:var(--green);padding:4px 8px;font-size:0.7rem;cursor:pointer;font-family:var(--font-mono);";
-                                  toggleBtn.onclick = () => (window as any).__toggleProvider(p.id);
-                                  btnDiv.appendChild(toggleBtn);
-                                  
-                                  div.appendChild(btnDiv);
-                                  container.appendChild(div);
-                                });
-                              }
-                            }
-                          }}
-                        >
-                          refresh providers
-                        </button>
-                      </div>
-
-                      {/* Simple Email Forwarding — just one field */}
-                      <div className="admin-settings-section">
-                        <h4>Email Forwarding</h4>
-                        <p style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginBottom: 10 }}>
-                          Enter your email. All contact form messages will be forwarded there automatically.
-                          No SMTP needed — uses a free service (formsubmit.co).
-                          First time: you'll get a confirmation email from formsubmit.co to activate.
-                        </p>
-                        <div className="admin-setting-row">
-                          <span className="admin-setting-label">Your email</span>
-                          <input className="admin-setting-input" type="email" id="forwardEmail" placeholder="your@gmail.com" />
-                        </div>
-                        <button
-                          className="btn btn-primary btn-sm admin-save-btn"
-                          onClick={async () => {
-                            const email = (document.getElementById("forwardEmail") as HTMLInputElement).value;
-                            const res = await fetch("/api/admin/email", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ password: adminPwd, action: "set_email", email }),
-                            });
-                            const data = await res.json();
-                            if (data.ok) alert("✓ Email saved! First message will trigger a confirmation email from formsubmit.co.");
-                            else alert("Error: " + (data.error || "invalid email"));
-                          }}
-                        >
-                          save email
-                        </button>
-                      </div>
-
-                      {/* Danger Zone — Clear Data */}
-                      <div className="admin-settings-section">
-                        <h4 style={{ color: "var(--red)" }}>⚠ Danger Zone — Clear Data</h4>
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                          <button
-                            className="btn btn-ghost btn-sm"
-                            style={{ borderColor: "var(--red)", color: "var(--red)" }}
-                            onClick={async () => {
-                              if (!confirm("Delete ALL chat sessions and messages? This cannot be undone.")) return;
-                              await fetch("/api/admin/clear", {
-                                method: "POST", headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ password: adminPwd, target: "chat_all" }),
-                              });
-                              alert("✓ All chats cleared");
-                              // Reload admin data
-                              setAdminChats([]);
-                            }}
-                          >
-                            clear all chats
-                          </button>
-                          <button
-                            className="btn btn-ghost btn-sm"
-                            style={{ borderColor: "var(--red)", color: "var(--red)" }}
-                            onClick={async () => {
-                              if (!confirm("Delete ALL contact messages? This cannot be undone.")) return;
-                              await fetch("/api/admin/clear", {
-                                method: "POST", headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ password: adminPwd, target: "message_all" }),
-                              });
-                              alert("✓ All messages cleared");
-                              setAdminMsgs([]);
-                            }}
-                          >
-                            clear all messages
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      
     </div>
   );
 }
