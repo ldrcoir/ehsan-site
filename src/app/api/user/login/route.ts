@@ -100,10 +100,12 @@ export async function POST(request: NextRequest) {
         role: user.role,
       },
     });
-    // ست کردن cookie — httpOnly برای جلوگیری از XSS، secure در production
+    // ست کردن cookie — httpOnly برای جلوگیری از XSS، secure بر اساس NODE_ENV
+    // در production فقط secure:true (روی HTTP نمیشه ست کرد)
+    // در development (NODE_ENV !== production) secure:false تا روی localhost کار کنه
     response.cookies.set("access_session", token, {
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
       path: "/",
       maxAge: 60 * 60 * 24, // 24 ساعت

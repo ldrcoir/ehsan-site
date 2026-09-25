@@ -26,8 +26,9 @@ const nextConfig: NextConfig = {
     ];
   },
   // فایل‌های ضروری برای standalone build
+  // توجه: db/custom.db و .env به‌صورت خودکار کپی نمی‌شن — install.sh اون‌ها رو می‌سازه
   outputFileTracingIncludes: {
-    "/": ["./prisma/schema.prisma", "./db/custom.db"],
+    "/": ["./prisma/schema.prisma"],
   },
 };
 

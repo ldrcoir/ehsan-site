@@ -16,25 +16,31 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { db } from "./db";
 
-const SESSION_SECRET = process.env.SESSION_SECRET;
-if (!SESSION_SECRET) {
-  throw new Error("SESSION_SECRET env var is required (use: openssl rand -hex 32)");
+// SESSION_SECRET — به‌صورت lazy بارگذاری می‌شه تا build fail نشه (در زمان build env موجود نیست)
+let _SECRET: string | null = null;
+function getSecret(): string {
+  if (_SECRET) return _SECRET;
+  const s = process.env.SESSION_SECRET;
+  if (!s) {
+    throw new Error("SESSION_SECRET env var is required (use: openssl rand -hex 32)");
+  }
+  // جلوگیری از placeholder ضعیف
+  const KNOWN_BAD_SECRETS = new Set([
+    "build-placeholder",
+    "change-me",
+    "secret",
+    "your-secret-here",
+    "changeme",
+    "",
+  ]);
+  if (KNOWN_BAD_SECRETS.has(s) || s.length < 32) {
+    throw new Error(
+      "SESSION_SECRET is too weak or placeholder. Generate a strong one with: openssl rand -hex 32"
+    );
+  }
+  _SECRET = s;
+  return _SECRET;
 }
-// جلوگیری از placeholder ضعیف
-const KNOWN_BAD_SECRETS = new Set([
-  "build-placeholder",
-  "change-me",
-  "secret",
-  "your-secret-here",
-  "changeme",
-  "",
-]);
-if (KNOWN_BAD_SECRETS.has(SESSION_SECRET) || SESSION_SECRET.length < 32) {
-  throw new Error(
-    "SESSION_SECRET is too weak or placeholder. Generate a strong one with: openssl rand -hex 32"
-  );
-}
-const SECRET = SESSION_SECRET;
 const SESSION_DURATION_HOURS = 24;
 
 // ----------------------------------------------------------------------------
@@ -198,5 +204,5 @@ export function getSessionFromRequest(request: Request): { userId: string; expir
 // hmac — ساخت HMAC امضا با SHA-256
 // ----------------------------------------------------------------------------
 function hmac(message: string): string {
-  return crypto.createHmac("sha256", SECRET).update(message).digest("hex");
+  return crypto.createHmac("sha256", getSecret()).update(message).digest("hex");
 }

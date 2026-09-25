@@ -77,12 +77,14 @@ export async function POST(req: Request) {
           return NextResponse.json({ ok: false, error: "missing_id" }, { status: 400 });
         }
         const updateData: any = {};
+        if (data.name !== undefined) updateData.name = String(data.name);
         if (data.label !== undefined) updateData.label = String(data.label);
         if (data.model !== undefined) updateData.model = String(data.model);
         if (data.baseUrl !== undefined) updateData.baseUrl = data.baseUrl ? String(data.baseUrl) : null;
         if (data.priority !== undefined) updateData.priority = Number(data.priority);
+        if (data.enabled !== undefined) updateData.enabled = Boolean(data.enabled);
         // Only update apiKey if provided (not the masked value)
-        if (data.apiKey && !data.apiKey.startsWith("••••")) {
+        if (data.apiKey && !String(data.apiKey).startsWith("••••")) {
           updateData.apiKey = String(data.apiKey);
         }
         const updated = await db.aiProvider.update({

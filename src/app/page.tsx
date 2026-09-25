@@ -354,7 +354,16 @@ export default function Home() {
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, message, recaptchaToken: recaptchaResponse }),
+        body: JSON.stringify({
+          name,
+          email,
+          message,
+          recaptchaToken: recaptchaResponse,
+          // honeypot — فیلد مخفی که بات‌ها پر می‌کنن (انسان‌ها نباید)
+          website: (e.target as HTMLFormElement).website?.value || "",
+          // time-trap — زمان نمایش فرم (اگه زیر ۲ ثانیه submit شد، باته)
+          _t: (e.target as HTMLFormElement)._t?.value || Date.now(),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.ok) {
@@ -751,6 +760,17 @@ export default function Home() {
               </div>
             </div>
             <form className={`contact-form ${reveal("contact-form")}`} data-reveal="contact-form" onSubmit={handleSubmit} noValidate>
+              {/* Honeypot — فیلد مخفی برای بات‌ها (با CSS مخفی می‌شه) */}
+              <input
+                type="text"
+                name="website"
+                tabIndex={-1}
+                autoComplete="off"
+                style={{ position: "absolute", left: "-9999px", top: "auto", width: 1, height: 1, overflow: "hidden" }}
+                aria-hidden="true"
+              />
+              {/* Time-trap — زمان نمایش فرم */}
+              <input type="hidden" name="_t" value={mounted ? Date.now() : 0} />
               <div className="field">
                 <label htmlFor="name">{tt.contact.form.name}</label>
                 <input type="text" id="name" name="name" placeholder={tt.contact.form.namePh} required maxLength={100} />

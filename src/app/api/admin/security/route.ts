@@ -55,21 +55,45 @@ export async function POST(req: Request) {
     switch (action) {
       case "change_password": {
         const newPassword = String(body.newPassword || "").trim();
+        const currentPassword = String(body.currentPassword || "");
         if (newPassword.length < 6) {
           return NextResponse.json({ ok: false, error: "password_too_short" }, { status: 400 });
         }
+        if (!currentPassword) {
+          return NextResponse.json({ ok: false, error: "current_password_required" }, { status: 400 });
+        }
 
-        // عوض‌کردن رمز فقط تو دیتابیس (هش bcrypt)
+        // پیدا کردن کاربر ادمین
         const adminUser = await db.accessUser.findFirst({
           where: { role: "admin", active: true },
         });
 
-        if (adminUser) {
-          const newHash = await hashPassword(newPassword);
-          await db.accessUser.update({
-            where: { id: adminUser.id },
-            data: { passwordHash: newHash },
-          });
+        if (!adminUser) {
+          return NextResponse.json({ ok: false, error: "no_admin_user" }, { status: 404 });
+        }
+
+        // بررسی رمز فعلی (verify current password)
+        const currentOk = await verifyPassword(currentPassword, adminUser.passwordHash);
+        if (!currentOk) {
+          // ثبت لاگ امنیتی برای تلاش ناموفق
+          const ip = getClientIp(req);
+          if (ip && authCheck.userId) {
+            await logAccess(authCheck.userId, "password_change_failed", ip, req.headers.get("user-agent"), "Wrong current password");
+          }
+          return NextResponse.json({ ok: false, error: "wrong_current_password" }, { status: 403 });
+        }
+
+        // تغییر رمز
+        const newHash = await hashPassword(newPassword);
+        await db.accessUser.update({
+          where: { id: adminUser.id },
+          data: { passwordHash: newHash },
+        });
+
+        // ثبت لاگ موفقیت
+        const ip = getClientIp(req);
+        if (ip && authCheck.userId) {
+          await logAccess(authCheck.userId, "password_changed", ip, req.headers.get("user-agent"), "Password changed successfully");
         }
 
         return NextResponse.json({ ok: true, message: "Password changed." });

@@ -1,16 +1,16 @@
 ================================================================
   PERSONAL SITE — VERSION HISTORY & DEPLOYMENT GUIDE
-  آخرین نسخه: V17.1 — 2026-09-25
+  آخرین نسخه: V17.2 — ۲۰۲۶-۰۹-۲۵
 ================================================================
 
-## 📌 نسخه فعلی: V17.1 (از V16.0 بازنویسی کامل)
+## 📌 نسخه فعلی: V17.2
 
 ================================================================
   نصب سریع (یک دستور)
 ================================================================
 
-wget https://github.com/ldrcoir/ehsan-site/raw/main/public/install-v17.1.zip
-unzip install-v17.1.zip
+wget https://github.com/ldrcoir/ehsan-site-private/raw/main/public/install-v17.2.zip
+unzip install-v17.2.zip
 cd personal-site
 sudo ./install.sh
 
@@ -21,79 +21,62 @@ sudo ./install.sh
   ⚠️ حتماً از پنل → تنظیمات → تغییر رمز عوض کن!
 
 ================================================================
+  آمار ممیزی V17.2
+================================================================
+
+✅ ۲۰ worker parallel audit اجرا شد (AUDIT-1 تا AUDIT-20)
+✅ ۱۹ worker report داد — ۱ fail
+✅ همه CRITICAL و HIGH blockers رفع شد
+
+================================================================
   تاریخچه نسخه‌ها
 ================================================================
 
-V17.1 (2026-09-25) — بازنویسی کامل پنل ادمین + ۲۰ ممیزی امنیتی
-  ──────── ۲۰ worker audit انجام شد ────────
+V17.2 (2026-09-25) — ۲۰ ممیزی parallel + رفع بحران‌ها
   
-  رفع بحران‌های امنیتی:
-  ✅ Authentication Bypass (passwordOk=true) — رفع شد
-  ✅ حذف کامل admin123 fallback از همه فایل‌ها
-  ✅ SESSION_SECRET قوی اجباری (openssl rand -hex 32)
-  ✅ Entropy check در access-auth.ts
-  ✅ reCAPTCHA اجباری + fail-closed (نه اختیاری)
-  ✅ Honeypot + time-trap در contact form
-  ✅ timingSafeEqual برای همه webhook secret comparisons
-  ✅ Cookie secure:true + sameSite:strict + httpOnly
-  ✅ CSP header (CSP middleware)
-  ✅ Security headers: X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy
-  ✅ X-XSS-Protection: 0 (modern)
-  ✅ X-Powered-By مخفی
-  ✅ sanitize-embed.ts برای جلوگیری از XSS در کلیپ آپارات
-  ✅ Rate limit برای login (۵/۱۵دقیقه)، contact و chat (۸/۱۵دقیقه)
-  ✅ Rate limit global در middleware
-  ✅ CSRF protection با Origin header check در middleware
-  ✅ middleware.ts: محافظت server-side از /user-dashboard و /api/admin/*
-  ✅ Webhook secrets اجباری (BALE_WEBHOOK_SECRET، TELEGRAM_WEBHOOK_SECRET)
-  ✅ No plain-text password storage
-  ✅ XSS fix: nav href scheme validation
-  ✅ XSS fix: tutorial embedUrl scheme validation
-  ✅ XSS fix: book/article link scheme validation
-  ✅ حذف zip های قدیمی (دارای secret) از public/
+  رفع بحران‌های V17.1:
+  ✅ Honeypot + time-trap در فرم تماس (قبلاً dead code بود)
+  ✅ CSP frame-src شامل google.com (reCAPTCHA کار می‌کنه)
+  ✅ install.sh: HTTPS با certbot + RECAPTCHA placeholder
+  ✅ .env از git tracking حذف شد (.secret دیگر در repo نیست)
+  ✅ db/custom.db از standalone package حذف شد
+  ✅ change_password به currentPassword نیاز داره
+  ✅ /api/messages از PUBLIC_API_PREFIXES حذف شد (CSRF protection فعال)
+  ✅ Body size limit 1MB در middleware
+  ✅ HSTS header روی HTTPS
+  ✅ /api/admin/providers update فیلدهای name + enabled رو قبول می‌کنه
+  ✅ SettingsPanel: name + tagline از API لود می‌شه
+  ✅ SettingsPanel: تگ adminTagline/adminStatus inputs اضافه شد
+  ✅ global-error.tsx + error.tsx + not-found.tsx + loading.tsx اضافه شد
+  ✅ Cookie secure بر اساس NODE_ENV (نه همیشه true)
+  ✅ SESSION_SECRET lazy-loaded (build بدون env کار می‌کنه)
+  ✅ outputFileTracingIncludes بدون db/custom.db
+  
+  ویژگی‌های جدید:
+  ✅ Tagline editable در ۳ زبان (fa/en/de)
+  ✅ تگ adminTagline و adminStatus در SettingsPanel
+  ✅ آموزش کامل V17.2 (TUTORIAL_FA_V17.2.docx — ۴۷KB)
+  ✅ README.md در پکیج
 
-  رفع باگ‌های پنل ادمین:
-  ✅ SettingsPanel بازنویسی کامل (شامل همه قابلیت‌ها)
-  ✅ ContentManager shape mismatch با API (رفع شد)
-  ✅ SettingsPanel save/load shape mismatch (رفع شد)
-  ✅ حذف ?password= از همه fetch ها (session-based)
-  ✅ TextEditor field mismatch با API (valueEn/valueFa/valueDe)
-  ✅ MessagesPanel refresh بعد از reply
-  ✅ MessagesPanel error handling
-  ✅ Language switcher واقعاً کار می‌کنه (fa/en/de + RTL)
-  ✅ Font selector کار می‌کنه (۵ فونت)
-  ✅ AI Provider config UI (OpenAI/Anthropic/Ollama/Groq)
+V17.1 (2026-09-25) — بازنویسی کامل پنل ادمین
+  ✅ middleware.ts با CSRF + rate limit + CSP
+  ✅ SettingsPanel بازنویسی کامل
+  ✅ ContentManager shape mismatch با API رفع
+  ✅ حذف ?password= از همه fetch ها
+  ✅ Language switcher واقعی (fa/en/de + RTL)
+  ✅ AI Provider config UI
   ✅ Telegram bot config UI
-  ✅ Bale bot config UI
-  ✅ Email forwarding config (formsubmit.co)
-  ✅ تغییر رمز با show/hide
-  ✅ تغییر نام با ۳ زبان (fa/en/de)
-  ✅ تغییر handle
+  ✅ Beautiful CSS classes
+  ✅ Accessibility (aria-labels, focus-visible)
+  ✅ Responsive design
 
-  پنل ادمین زیبا:
-  ✅ حذف inline style ها (CSS classes)
-  ✅ responsive design
-  ✅ loading states
-  ✅ error states + toast notifications
-  ✅ accessibility (aria-label، focus-visible، role)
-  ✅ RTL support برای Persian
-  ✅ reduced-motion support
-  ✅ سرعت‌بخشی به TypeScript (noImplicitAny: true)
-  ✅ ۰ خطای TypeScript
-  
-  بهینه‌سازی build:
-  ✅ حذف sharp (37MB) — استفاده نشده
-  ✅ حذف prisma engines غیر sqlite (44MB)
-  ✅ حذف source maps و *.d.ts
-  ✅ standalone package: 23MB (از 138MB)
-
-V16.0 (2026-09-24) — ممیزی امنیتی کامل
+V16.0 (2026-09-24) — ممیزی امنیتی اولیه
 V15.0 (2026-09-19) — حذف admin123 fallback
 V14.0 (2026-09-18) — امنیت + دسترسی بخش‌بندی
 V13.0 (2026-09-17) — کلیپ آپارات + ریست رمز + SEO
 V12.0 (2026-09-16) — دسترسی بخش‌بندی + دکمه رمز
 V11.0 (2026-09-16) — پیام‌ها + HelpBox
-V10.0 (2026-09-15) — نصب مستقیم (بدون Docker)
+V10.0 (2026-09-15) — نصب مستقیم
 V9.0 (2026-09-15) — کلیپ آپارات
 V8.0 (2026-09-16) — SEO + clean seed
 V7.0 (2026-09-16) — پنل ادمین جدید + FontSelector
@@ -108,8 +91,8 @@ V1.0 (2026-08-10) — ساخت اولیه
   نصب
 ================================================================
 
-wget https://github.com/ldrcoir/ehsan-site/raw/main/public/install-v17.1.zip
-unzip install-v17.1.zip
+wget https://github.com/ldrcoir/ehsan-site-private/raw/main/public/install-v17.2.zip
+unzip install-v17.2.zip
 cd personal-site
 sudo ./install.sh
 
@@ -119,6 +102,12 @@ sudo ./install.sh
   password: admin123
   ⚠️ حتماً از پنل → تنظیمات → تغییر رمز عوض کن!
 
+⚠️ مهم — تنظیم reCAPTCHA بعد از نصب:
+  1. https://www.google.com/recaptcha/admin برو
+  2. سایت v2 ثبت کن
+  3. Site Key و Secret رو در .env بذار
+  4. sudo systemctl restart personal-site
+
 ================================================================
   ریست رمز ادمین (اگه فراموش کردی)
 ================================================================
@@ -127,22 +116,25 @@ cd /home/ehsan/personal-site
 sudo bash scripts/reset-admin-password.sh
 
 ================================================================
-  امنیت (V17.1)
+  امنیت (V17.2)
 ================================================================
 
 ✅ Authentication Bypass — رفع شد
-✅ Hardcoded admin123 — حذف از src/ (فقط در seed برای setup اولیه)
-✅ SESSION_SECRET — قوی + entropy check
-✅ reCAPTCHA — اجباری + fail-closed
+✅ Hardcoded admin123 — حذف از src/
+✅ SESSION_SECRET — قوی + entropy check + lazy-load
+✅ reCAPTCHA — اجباری + fail-closed + honeypot + time-trap
 ✅ timingSafeEqual — همه webhook و session
 ✅ XSS prevention — sanitize-embed + scheme validation
-✅ Rate limit — login (۵/۱۵د) + contact/chat (۸/۱۵د) + middleware
-✅ CSRF protection — Origin check در middleware
+✅ Rate limit — login (5/15د)، contact/chat (8/15د)، body 1MB
+✅ CSRF protection — Origin check در middleware + /api/messages هم شامل شد
 ✅ Webhook secrets — اجباری + HMAC-safe comparison
-✅ Cookie secure:true + sameSite:strict + httpOnly
-✅ Security headers — کامل (CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy)
-✅ No plain-text password storage
+✅ Cookie secure:true (production) + sameSite:strict + httpOnly
+✅ Security headers: CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, HSTS
 ✅ middleware.ts: server-side admin protection
+✅ Global error pages (error.tsx, global-error.tsx, not-found.tsx, loading.tsx)
+✅ change_password به currentPassword نیاز داره
+✅ .env از git tracking حذف شد
+✅ db/custom.db از standalone حذف شد
 ✅ ignoreBuildErrors: false
 ✅ reactStrictMode: true
 ✅ poweredByHeader: false
@@ -152,7 +144,7 @@ sudo bash scripts/reset-admin-password.sh
 ✅ db با chmod 600
 
 ================================================================
-  قابلیت‌ها (V17.1)
+  قابلیت‌ها (V17.2)
 ================================================================
 
 📊 ۱۰ تب پنل ادمین:
@@ -165,7 +157,17 @@ sudo bash scripts/reset-admin-password.sh
   - کاربران (access control + permissions + hours/days)
   - کلیپ‌ها (Aparat)
   - فونت (۵ فونت)
-  - تنظیمات (Password, Handle, Name×3, Email, Bale, Telegram, AI Providers)
+  - تنظیمات کامل:
+    - Password (با current password)
+    - Handle
+    - Name × ۳ زبان
+    - Tagline × ۳ زبان
+    - Email forwarding
+    - Bale bot
+    - Telegram bot
+    - AI Providers
+    - Font selector
+    - Panel language selector
 
 🧠 AI Chat:
   - ۴ provider (OpenAI, Anthropic, Ollama, Groq)
@@ -190,12 +192,14 @@ sudo bash scripts/reset-admin-password.sh
   - rate limiting everywhere
   - honeypot + time-trap on contact form
   - CSP + security headers
+  - middleware.ts server-side protection
+  - Body size limit 1MB
+  - HSTS on HTTPS
 
-================================================================
-  آموزش
-================================================================
-
-فایل TUTORIAL_FA_V16.docx — ۸ فصل کامل
-فایل OLLAMA_GUIDE_FA.md — راهنمای هوش مصنوعی محلی
+📚 آموزش:
+  - TUTORIAL_FA_V17.2.docx — ۱۲ فصل کامل (فارسی)
+  - VERSION.txt — تاریخچه نسخه‌ها
+  - README.md — راهنمای سریع
+  - OLLAMA_GUIDE_FA.md — راهنمای هوش مصنوعی محلی
 
 ================================================================

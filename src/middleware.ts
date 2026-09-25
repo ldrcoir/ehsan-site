@@ -25,7 +25,6 @@ const PUBLIC_API_PREFIXES = [
   "/api/content",
   "/api/clips",
   "/api/track",
-  "/api/messages",
   "/api/user/login",
   "/api/user/verify",
   "/api/user/logout",
@@ -119,16 +118,18 @@ const CSP = [
   "font-src 'self' data: https://fonts.gstatic.com",
   // img-src — تصاویر عمومی + data URLs
   "img-src 'self' data: blob: https:",
-  // frame-src — فقط آپارات و یوتیوب و vimeo
-  "frame-src 'self' https://www.aparat.com https://aparat.com https://www.youtube.com https://youtube.com https://youtu.be https://player.vimeo.com",
+  // frame-src — reCAPTCHA + آپارات + یوتیوب + vimeo
+  "frame-src 'self' https://www.google.com https://www.gstatic.com https://www.aparat.com https://aparat.com https://www.youtube.com https://youtube.com https://youtu.be https://player.vimeo.com",
   // connect-src — API های خودمون + reCAPTCHA + LLM providers
   "connect-src 'self' https://www.google.com https://www.gstatic.com",
   // object-src — هیچ پلاگینی
   "object-src 'none'",
   // base-uri — جلوگیری از hijack
   "base-uri 'self'",
-  // form-action — فقط به خودمون
+  // form-action — فقط به خودمون + formsubmit.co
   "form-action 'self' https://formsubmit.co",
+  // frame-ancestors — جلوگیری از clickjacking
+  "frame-ancestors 'none'",
 ].join("; ");
 
 // ===========================================================================
@@ -183,17 +184,33 @@ export function middleware(req: NextRequest) {
     }
   }
 
-  // --- 4. محافظت از /api/admin/* — نیاز به session ---
-  if (pathname.startsWith(ADMIN_API_PREFIX)) {
+  // --- 4. محافظت از /api/admin/* و /api/messages — نیاز به session ---
+  if (pathname.startsWith(ADMIN_API_PREFIX) || pathname === "/api/messages") {
     if (!hasValidSession(cookieHeader)) {
       const res = NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
       return addSecurityHeaders(res);
     }
   }
 
-  // --- 5. ادامه با security headers ---
+  // --- 5. محدودیت حجم body برای جلوگیری از DoS ---
+  if (method === "POST" || method === "PUT" || method === "PATCH") {
+    const contentLength = parseInt(req.headers.get("content-length") || "0", 10);
+    if (contentLength > 1024 * 1024) { // 1MB limit
+      const res = NextResponse.json(
+        { ok: false, error: "payload_too_large" },
+        { status: 413 }
+      );
+      return addSecurityHeaders(res);
+    }
+  }
+
+  // --- 6. ادامه با security headers ---
   const res = NextResponse.next();
   res.headers.set("Content-Security-Policy", CSP);
+  // HSTS — فقط روی HTTPS (روی HTTP ست نکن — اگه سایت پشت CDN بدون HTTPS باشه مشکل ایجاد می‌کنه)
+  if (req.url.startsWith("https://")) {
+    res.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
+  }
   return addSecurityHeaders(res);
 }
 

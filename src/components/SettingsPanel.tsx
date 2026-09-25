@@ -253,12 +253,16 @@ export default function SettingsPanel() {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [newHandle, setNewHandle] = useState("");
   const [nameFa, setNameFa] = useState("");
   const [nameEn, setNameEn] = useState("");
   const [nameDe, setNameDe] = useState("");
+  const [taglineFa, setTaglineFa] = useState("");
+  const [taglineEn, setTaglineEn] = useState("");
+  const [taglineDe, setTaglineDe] = useState("");
   const [currentFont, setCurrentFont] = useState("vazirmatn");
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
 
@@ -294,13 +298,15 @@ export default function SettingsPanel() {
 
   async function loadSettings() {
     try {
-      // Load main settings
-      const [settingsRes, emailRes] = await Promise.all([
+      // Load main settings + content settings (for name and tagline)
+      const [settingsRes, emailRes, contentRes] = await Promise.all([
         fetch("/api/admin/settings", { credentials: "include" }),
         fetch("/api/admin/email", { credentials: "include" }),
+        fetch("/api/content", { credentials: "include" }),
       ]);
       const settingsData = await settingsRes.json();
       const emailData = await emailRes.json();
+      const contentData = await contentRes.json();
 
       if (settingsData.ok) {
         const s = settingsData.settings || {};
@@ -313,30 +319,25 @@ export default function SettingsPanel() {
           adminTagline: s.adminTagline || "",
           adminStatus: s.adminStatus || "",
           apiEnabled: s.apiEnabled || "true",
+          telegramBotToken: s.telegramBotToken || "",
+          telegramChatId: s.telegramChatId || "",
+          telegramEnabled: s.telegramEnabled || "false",
         }));
       }
       if (emailData.ok) {
         setSettings(prev => ({ ...prev, forwardEmail: emailData.email || "" }));
       }
-
-      // Load Telegram config
-      try {
-        const tgRes = await fetch("/api/admin/settings", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ action: "get_telegram" }),
-        });
-        const tgData = await tgRes.json();
-        if (tgData.ok) {
-          setSettings(prev => ({
-            ...prev,
-            telegramBotToken: tgData.telegramBotToken || "",
-            telegramChatId: tgData.telegramChatId || "",
-            telegramEnabled: tgData.telegramEnabled || "false",
-          }));
-        }
-      } catch {}
+      // Load name and tagline from content settings (returned by /api/content)
+      if (contentData.ok && contentData.settings) {
+        const cs = contentData.settings;
+        setNameFa(cs.name_fa || "");
+        setNameEn(cs.name_en || "");
+        setNameDe(cs.name_de || "");
+        setTaglineFa(cs.tagline_fa || "");
+        setTaglineEn(cs.tagline_en || "");
+        setTaglineDe(cs.tagline_de || "");
+        setNewHandle(cs.handle || "");
+      }
     } catch {
       // ignore
     } finally {
@@ -374,19 +375,35 @@ export default function SettingsPanel() {
 
   // --- change password ---
   async function changePassword() {
+    if (!currentPassword) {
+      showMessage(t.error + ": " + (panelLang === "fa" ? "رمز فعلی الزامی" : "Current password required"), true);
+      return;
+    }
     if (newPassword.length < 6) {
-      showMessage(t.error + ": " + (panelLang === "fa" ? "رمز حداقل ۶ کاراکتر" : "Password min 6 chars"), true);
+      showMessage(t.error + ": " + (panelLang === "fa" ? "رمز جدید حداقل ۶ کاراکتر" : "New password min 6 chars"), true);
+      return;
+    }
+    if (currentPassword === newPassword) {
+      showMessage(t.error + ": " + (panelLang === "fa" ? "رمز جدید باید متفاوت باشد" : "New password must differ"), true);
       return;
     }
     const result = await postJSON("/api/admin/security", {
       action: "change_password",
+      currentPassword,
       newPassword,
     });
     if (result.ok) {
       showMessage(t.saved);
+      setCurrentPassword("");
       setNewPassword("");
     } else {
-      showMessage(t.error + ": " + (result.error || ""), true);
+      const errMap: Record<string, { fa: string; en: string; de: string }> = {
+        wrong_current_password: { fa: "رمز فعلی اشتباه", en: "Wrong current password", de: "Falsches aktuelles Passwort" },
+        current_password_required: { fa: "رمز فعلی الزامی", en: "Current password required", de: "Aktuelles Passwort erforderlich" },
+        password_too_short: { fa: "رمز جدید کوتاه است", en: "Password too short", de: "Passwort zu kurz" },
+      };
+      const errMsg = errMap[result.error || ""]?.[panelLang] || result.error || "";
+      showMessage(t.error + ": " + errMsg, true);
     }
   }
 
@@ -415,6 +432,20 @@ export default function SettingsPanel() {
     });
     if (result.ok) {
       showMessage(panelLang === "fa" ? "✅ نام ذخیره شد." : "✅ Name saved.");
+    } else {
+      showMessage(t.error + ": " + (result.error || ""), true);
+    }
+  }
+
+  // --- change tagline (multi-lang) ---
+  async function changeTagline(lang: Lang, value: string) {
+    const result = await postJSON("/api/admin/security", {
+      action: "change_tagline",
+      newTagline: value,
+      lang,
+    });
+    if (result.ok) {
+      showMessage(panelLang === "fa" ? "✅ شعار ذخیره شد." : "✅ Tagline saved.");
     } else {
       showMessage(t.error + ": " + (result.error || ""), true);
     }
@@ -624,18 +655,64 @@ export default function SettingsPanel() {
         </div>
       </div>
 
+      {/* Tagline section */}
+      <div className="settings-card">
+        <h4 className="settings-card-title">{panelLang === "fa" ? "💭 شعار (Tagline)" : panelLang === "de" ? "💭 Tagline" : "💭 Tagline"}</h4>
+        <div className="settings-row">
+          <div className="settings-field">
+            <label className="settings-label">{t.nameFa}</label>
+            <input
+              type="text"
+              value={taglineFa}
+              onChange={e => setTaglineFa(e.target.value)}
+              placeholder={panelLang === "fa" ? "شعار فارسی" : "Persian tagline"}
+              className="settings-input"
+              dir="rtl"
+            />
+            <button onClick={() => changeTagline("fa", taglineFa)} className="settings-btn-small">{t.save}</button>
+          </div>
+          <div className="settings-field">
+            <label className="settings-label">{t.nameEn}</label>
+            <input
+              type="text"
+              value={taglineEn}
+              onChange={e => setTaglineEn(e.target.value)}
+              placeholder="English tagline"
+              className="settings-input"
+              dir="ltr"
+            />
+            <button onClick={() => changeTagline("en", taglineEn)} className="settings-btn-small">{t.save}</button>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div className="settings-field">
+            <label className="settings-label">{t.nameDe}</label>
+            <input
+              type="text"
+              value={taglineDe}
+              onChange={e => setTaglineDe(e.target.value)}
+              placeholder="Deutsche Tagline"
+              className="settings-input"
+              dir="ltr"
+            />
+            <button onClick={() => changeTagline("de", taglineDe)} className="settings-btn-small">{t.save}</button>
+          </div>
+        </div>
+      </div>
+
       {/* Password section */}
       <div className="settings-card">
         <h4 className="settings-card-title">{t.passwordSection}</h4>
-        <label className="settings-label">{t.newPassword}</label>
+        <label className="settings-label">{panelLang === "fa" ? "رمز فعلی" : panelLang === "de" ? "Aktuelles Passwort" : "Current password"}</label>
         <div className="settings-input-row">
           <input
             type={showPassword ? "text" : "password"}
-            value={newPassword}
-            onChange={e => setNewPassword(e.target.value)}
+            value={currentPassword}
+            onChange={e => setCurrentPassword(e.target.value)}
             placeholder="••••••••"
             className="settings-input"
             dir="ltr"
+            autoComplete="current-password"
           />
           <button
             type="button"
@@ -646,6 +723,16 @@ export default function SettingsPanel() {
             {showPassword ? "🙈" : "👁"}
           </button>
         </div>
+        <label className="settings-label">{t.newPassword}</label>
+        <input
+          type={showPassword ? "text" : "password"}
+          value={newPassword}
+          onChange={e => setNewPassword(e.target.value)}
+          placeholder="••••••••"
+          className="settings-input"
+          dir="ltr"
+          autoComplete="new-password"
+        />
         <button onClick={changePassword} className="settings-btn">{t.changePassword}</button>
       </div>
 
