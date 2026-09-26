@@ -93909,3 +93909,64 @@ Cross-references:
   (NOTE-11). The API-layer checkAdminAuth compensates.
 
 --- end Task ID: V17.5-SEC-05 ---
+
+---
+Task ID: V17.5-FINAL
+Agent: Super Z (main agent)
+Task: ۴۰ ممیزی parallel + رفع بحران‌های واقعی V17.5
+
+Work Log:
+- ۴۰ worker parallel audit اجرا شد:
+  - ۲۰ worker امنیتی (V17.5-SEC-01 تا V17.5-SEC-20)
+  - ۲۰ worker قابلیت پنل (V17.5-PANEL-01 تا V17.5-PANEL-20)
+- خودم همه گزارش‌ها رو بررسی کردم
+- بحران‌های واقعی (نه false positive) رو پیدا کردم و رفع کردم
+
+- رفع CRITICAL blockers:
+  ✅ Bot token round-trip corruption fix شد
+     (POST /api/admin/settings قبلاً masked token رو ذخیره می‌کرد و DB خراب می‌شد)
+  ✅ POST get_telegram action حالا token رو mask می‌کنه
+     (قبلاً plaintext برمی‌گردوند)
+  ✅ Webhook GET handler دیگه bot token رو تو webhookUrl leaks نمی‌کنه
+     (webhookUrl قبلاً شامل توکن plaintext بود)
+
+- رفع HIGH blockers:
+  ✅ FontSelector روی mount data-font رو اعمال می‌کنه
+     (قبلاً فونت بعد از reload به default برمی‌گشت)
+  ✅ /api/user/logout حالا try/catch داره + به AccessLog لاگ می‌شه
+  ✅ /api/user/verify حالا try/catch داره
+     (قبلاً روی DB error با HTML 500 crash می‌کرد)
+  ✅ sitemap.xml از NEXT_PUBLIC_SITE_URL استفاده می‌کنه
+     (قبلاً "your-domain.com" hardcoded بود)
+  ✅ rss.xml از NEXT_PUBLIC_SITE_URL استفاده می‌کنه
+  ✅ sitemap.xml صفحه /clips رو اضافه کرد
+
+- تست نهایی واقعی:
+  ✅ apply_schema.py: 29 tables
+  ✅ seed_access_users.py: admin created
+  ✅ seed_texts.py: 13 texts created
+  ✅ /api/content: HTTP 200
+  ✅ /sitemap.xml: shows ehsanmorad.ir (نه your-domain.com)
+  ✅ Login: HTTP 200
+  ✅ /api/admin/settings: bot tokens empty/masked
+  ✅ POST get_telegram: token masked
+
+Stage Summary:
+- نسخه: V17.4 → V17.5
+- تاریخ: 2026-09-26
+- ۴۰ ممیزی parallel
+- فایل‌های تغییر یافته:
+  - src/app/api/admin/settings/route.ts (masked token round-trip + get_telegram fix)
+  - src/app/api/bale/webhook/route.ts (webhookUrl no longer leaks token)
+  - src/app/api/user/logout/route.ts (try/catch + AccessLog)
+  - src/app/api/user/verify/route.ts (try/catch)
+  - src/app/sitemap.xml/route.ts (NEXT_PUBLIC_SITE_URL + /clips)
+  - src/app/rss.xml/route.ts (NEXT_PUBLIC_SITE_URL)
+  - src/components/FontSelector.tsx (data-font on mount)
+  - install.sh (V17.5 version)
+  - VERSION.txt (V17.5)
+  - public/install-v17.5.zip (23MB)
+- وضعیت: قابل نصب با یک دستور از GitHub
+- دانلود: https://github.com/ldrcoir/ehsan-site/raw/main/public/install-v17.5.zip
+
+---
