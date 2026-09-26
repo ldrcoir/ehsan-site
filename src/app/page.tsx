@@ -63,7 +63,7 @@ export default function Home() {
   const [formStatus, setFormStatus] = useState<FormStatus>({ text: "", kind: "" });
   const [utcTime, setUtcTime] = useState("");
   const [localTime, setLocalTime] = useState(""); // for Shamsi/FA
-  const [activeTutorial, setActiveTutorial] = useState<typeof TUTORIALS[number] | null>(null);
+  const [activeTutorial, setActiveTutorial] = useState<any>(null);
   const [captcha, setCaptcha] = useState({ q: "1 + 1", a: 2 });
 
   // theme + anti-theft
@@ -75,9 +75,13 @@ export default function Home() {
   // By gating render on `mounted`, the server and the first client render
   // both produce an empty container, then the script loads and fills it.
   const [mounted, setMounted] = useState(false);
+  // V17.4: زمان نمایش فرم — یکبار روی mount ست می‌شه (نه روی هر render)
+  // این fix می‌کنه time-trap bug که فرم تماس رو reject می‌کرد
+  const [formLoadTime, setFormLoadTime] = useState(0);
   const [aparatClips, setAparatClips] = useState<any[]>([]);
   useEffect(() => {
     setMounted(true);
+    setFormLoadTime(Date.now()); // V17.4: یکبار ست می‌شه — نه روی هر render
     // Load reCAPTCHA script only on client, after mount
     if (!document.getElementById("recaptcha-api-script")) {
       const s = document.createElement("script");
@@ -769,8 +773,8 @@ export default function Home() {
                 style={{ position: "absolute", left: "-9999px", top: "auto", width: 1, height: 1, overflow: "hidden" }}
                 aria-hidden="true"
               />
-              {/* Time-trap — زمان نمایش فرم */}
-              <input type="hidden" name="_t" value={mounted ? Date.now() : 0} />
+              {/* Time-trap — زمان نمایش فرم (یکبار ست می‌شه، نه روی هر render) */}
+              <input type="hidden" name="_t" value={formLoadTime} />
               <div className="field">
                 <label htmlFor="name">{tt.contact.form.name}</label>
                 <input type="text" id="name" name="name" placeholder={tt.contact.form.namePh} required maxLength={100} />
@@ -842,7 +846,7 @@ export default function Home() {
           <div className="tutorial-modal-inner" onClick={(e) => e.stopPropagation()}>
             <div className="tutorial-modal-bar">
               <span className="tutorial-modal-bar-title">
-                {activeTutorial?.title[lang]} · {activeTutorial?.duration} · {activeTutorial?.level[lang]}
+                {(activeTutorial as any)?.[`title${lang.charAt(0).toUpperCase() + lang.slice(1)}`] || activeTutorial?.titleEn} · {activeTutorial?.duration} · {(activeTutorial as any)?.[`level${lang.charAt(0).toUpperCase() + lang.slice(1)}`] || activeTutorial?.levelEn}
               </span>
               <button className="tutorial-modal-close" onClick={() => setActiveTutorial(null)}>
                 {tt.tutorials.close}
@@ -864,7 +868,7 @@ export default function Home() {
                   }
                   return "about:blank";
                 })()}
-                title={activeTutorial?.title[lang]}
+                title={(activeTutorial as any)?.[`title${lang.charAt(0).toUpperCase() + lang.slice(1)}`] || activeTutorial?.titleEn || "Tutorial"}
                 allowFullScreen
                 allow="autoplay; fullscreen; picture-in-picture"
               />

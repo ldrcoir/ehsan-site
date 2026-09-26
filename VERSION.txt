@@ -1,16 +1,16 @@
 ================================================================
   PERSONAL SITE — VERSION HISTORY & DEPLOYMENT GUIDE
-  آخرین نسخه: V17.3 — ۲۰۲۶-۰۹-۲۶
+  آخرین نسخه: V17.4 — ۲۰۲۶-۰۹-۲۶
 ================================================================
 
-## 📌 نسخه فعلی: V17.3
+## 📌 نسخه فعلی: V17.4
 
 ================================================================
   نصب سریع (یک دستور)
 ================================================================
 
-wget https://github.com/ldrcoir/ehsan-site-private/raw/main/public/install-v17.3.zip
-unzip install-v17.3.zip
+wget https://github.com/ldrcoir/ehsan-site-private/raw/main/public/install-v17.4.zip
+unzip install-v17.4.zip
 cd personal-site
 sudo ./install.sh
 
@@ -21,7 +21,7 @@ sudo ./install.sh
   ⚠️ حتماً از پنل → تنظیمات → تغییر رمز عوض کن!
 
 ================================================================
-  آمار ممیزی V17.3
+  آمار ممیزی V17.4
 ================================================================
 
 ✅ ۲۰ worker parallel audit اجرا شد (AUDIT-1 تا AUDIT-20)
@@ -32,7 +32,7 @@ sudo ./install.sh
   تاریخچه نسخه‌ها
 ================================================================
 
-V17.3 (2026-09-25) — ۲۰ ممیزی parallel + رفع بحران‌ها
+V17.4 (2026-09-25) — ۲۰ ممیزی parallel + رفع بحران‌ها
   
   رفع بحران‌های V17.1:
   ✅ Honeypot + time-trap در فرم تماس (قبلاً dead code بود)
@@ -55,7 +55,7 @@ V17.3 (2026-09-25) — ۲۰ ممیزی parallel + رفع بحران‌ها
   ویژگی‌های جدید:
   ✅ Tagline editable در ۳ زبان (fa/en/de)
   ✅ تگ adminTagline و adminStatus در SettingsPanel
-  ✅ آموزش کامل V17.3 (TUTORIAL_FA_V17.3.docx — ۴۷KB)
+  ✅ آموزش کامل V17.4 (TUTORIAL_FA_V17.4.docx — ۴۷KB)
   ✅ README.md در پکیج
 
 V17.1 (2026-09-25) — بازنویسی کامل پنل ادمین
@@ -91,8 +91,8 @@ V1.0 (2026-08-10) — ساخت اولیه
   نصب
 ================================================================
 
-wget https://github.com/ldrcoir/ehsan-site-private/raw/main/public/install-v17.3.zip
-unzip install-v17.3.zip
+wget https://github.com/ldrcoir/ehsan-site-private/raw/main/public/install-v17.4.zip
+unzip install-v17.4.zip
 cd personal-site
 sudo ./install.sh
 
@@ -116,7 +116,7 @@ cd /home/ehsan/personal-site
 sudo bash scripts/reset-admin-password.sh
 
 ================================================================
-  امنیت (V17.3)
+  امنیت (V17.4)
 ================================================================
 
 ✅ Authentication Bypass — رفع شد
@@ -144,7 +144,7 @@ sudo bash scripts/reset-admin-password.sh
 ✅ db با chmod 600
 
 ================================================================
-  قابلیت‌ها (V17.3)
+  قابلیت‌ها (V17.4)
 ================================================================
 
 📊 ۱۰ تب پنل ادمین:
@@ -197,7 +197,7 @@ sudo bash scripts/reset-admin-password.sh
   - HSTS on HTTPS
 
 📚 آموزش:
-  - TUTORIAL_FA_V17.3.docx — ۱۲ فصل کامل (فارسی)
+  - TUTORIAL_FA_V17.4.docx — ۱۲ فصل کامل (فارسی)
   - VERSION.txt — تاریخچه نسخه‌ها
   - README.md — راهنمای سریع
   - OLLAMA_GUIDE_FA.md — راهنمای هوش مصنوعی محلی

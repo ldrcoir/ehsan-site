@@ -125,6 +125,14 @@ export async function GET(req: Request) {
       const row = rows.find((r) => r.key === k);
       settings[k] = row ? row.value : "";
     }
+    // V17.4: bot tokens رو mask می‌کنیم (security) — ادمین فقط می‌بینه تنظیم شده یا نه
+    // اگه admin بخواد عوض کنه، باید مقدار جدید وارد کنه (نه مقدار فعلی رو ببینه)
+    if (settings.baleBotToken) {
+      settings.baleBotToken = "••••••••" + settings.baleBotToken.slice(-4);
+    }
+    if (settings.telegramBotToken) {
+      settings.telegramBotToken = "••••••••" + settings.telegramBotToken.slice(-4);
+    }
 
     return NextResponse.json({ ok: true, settings });
   } catch (err) {

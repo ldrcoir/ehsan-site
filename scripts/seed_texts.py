@@ -29,12 +29,14 @@ essential_texts = [
 ]
 
 count = 0
+import datetime
+now = datetime.datetime.utcnow().isoformat() + "Z"
 for key, en, de, fa in essential_texts:
     cur.execute("SELECT key FROM SiteText WHERE key = ?", (key,))
     if not cur.fetchone():
         cur.execute(
-            "INSERT INTO SiteText (key, valueEn, valueDe, valueFa) VALUES (?, ?, ?, ?)",
-            (key, en, de, fa)
+            "INSERT INTO SiteText (key, valueEn, valueDe, valueFa, updatedAt) VALUES (?, ?, ?, ?, ?)",
+            (key, en, de, fa, now)
         )
         count += 1
 

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Vazirmatn } from "next/font/google";
 import "./globals.css";
+import "./personal.css"; // V17.4: import globally so admin pages also get styles
 import { Inter, Lora, Fira_Code } from "next/font/google";
 
 // ============================================================================

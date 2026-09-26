@@ -8,6 +8,18 @@ const RATE_WINDOW_MS = 60 * 1000; // 1 min
 const RATE_MAX = 8;
 const hits = new Map<string, number[]>();
 
+// V17.4: پاکسازی دوره‌ای Map برای جلوگیری از memory leak
+if (typeof setInterval !== "undefined") {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [k, arr] of hits) {
+      const fresh = arr.filter(t => now - t < RATE_WINDOW_MS);
+      if (fresh.length === 0) hits.delete(k);
+      else hits.set(k, fresh);
+    }
+  }, 5 * 60 * 1000).unref?.();
+}
+
 function rateLimit(ip: string): boolean {
   if (process.env.NODE_ENV !== "production" && (ip === "::1" || ip === "127.0.0.1" || ip === "unknown")) {
     return true;

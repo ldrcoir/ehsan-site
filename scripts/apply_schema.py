@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS User (
     email TEXT NOT NULL UNIQUE,
     name TEXT,
     createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updatedAt DATETIME NOT NULL
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS Post (
@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS Post (
     published BOOLEAN NOT NULL DEFAULT 0,
     authorId TEXT NOT NULL,
     createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updatedAt DATETIME NOT NULL
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ============================================================================
@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS ContactMessage (
     userAgent TEXT,
     status TEXT NOT NULL DEFAULT 'new',
     createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updatedAt DATETIME NOT NULL
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_contactmsg_createdAt ON ContactMessage(createdAt);
 CREATE INDEX IF NOT EXISTS idx_contactmsg_email ON ContactMessage(email);
@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS ChatSession (
     ip TEXT,
     userAgent TEXT,
     createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updatedAt DATETIME NOT NULL
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_chatsession_createdAt ON ChatSession(createdAt);
 CREATE INDEX IF NOT EXISTS idx_chatsession_visitorId ON ChatSession(visitorId);
@@ -117,7 +117,7 @@ CREATE INDEX IF NOT EXISTS idx_chatmsg_createdAt ON ChatMessage(createdAt);
 CREATE TABLE IF NOT EXISTS SiteSetting (
     key TEXT PRIMARY KEY NOT NULL,
     value TEXT NOT NULL DEFAULT '',
-    updatedAt DATETIME NOT NULL
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ============================================================================
@@ -133,7 +133,7 @@ CREATE TABLE IF NOT EXISTS AiProvider (
     enabled BOOLEAN NOT NULL DEFAULT 0,
     priority INTEGER NOT NULL DEFAULT 0,
     createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updatedAt DATETIME NOT NULL
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_aiprovider_enabled_priority ON AiProvider(enabled, priority);
 
@@ -151,7 +151,7 @@ CREATE TABLE IF NOT EXISTS LabEquipment (
     "order" INTEGER NOT NULL DEFAULT 0,
     visible BOOLEAN NOT NULL DEFAULT 1,
     createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updatedAt DATETIME NOT NULL
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_labequipment_visible_order ON LabEquipment(visible, "order");
 CREATE INDEX IF NOT EXISTS idx_labequipment_category ON LabEquipment(category);
@@ -203,7 +203,7 @@ CREATE TABLE IF NOT EXISTS Book (
     "order" INTEGER NOT NULL DEFAULT 0,
     visible BOOLEAN NOT NULL DEFAULT 1,
     createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updatedAt DATETIME NOT NULL
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_book_visible_order ON Book(visible, "order");
 
@@ -229,7 +229,7 @@ CREATE TABLE IF NOT EXISTS Article (
     "order" INTEGER NOT NULL DEFAULT 0,
     visible BOOLEAN NOT NULL DEFAULT 1,
     createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updatedAt DATETIME NOT NULL
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_article_visible_order ON Article(visible, "order");
 
@@ -254,7 +254,7 @@ CREATE TABLE IF NOT EXISTS Tutorial (
     "order" INTEGER NOT NULL DEFAULT 0,
     visible BOOLEAN NOT NULL DEFAULT 1,
     createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updatedAt DATETIME NOT NULL
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_tutorial_visible_order ON Tutorial(visible, "order");
 CREATE INDEX IF NOT EXISTS idx_tutorial_playlist ON Tutorial(playlist);
@@ -271,7 +271,7 @@ CREATE TABLE IF NOT EXISTS Skill (
     "order" INTEGER NOT NULL DEFAULT 0,
     visible BOOLEAN NOT NULL DEFAULT 1,
     createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updatedAt DATETIME NOT NULL
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_skill_visible_order ON Skill(visible, "order");
 
@@ -285,7 +285,7 @@ CREATE TABLE IF NOT EXISTS AiInstruction (
     enabled BOOLEAN NOT NULL DEFAULT 1,
     "order" INTEGER NOT NULL DEFAULT 0,
     createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updatedAt DATETIME NOT NULL
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_aiinstruction_enabled_order ON AiInstruction(enabled, "order");
 
@@ -301,7 +301,7 @@ CREATE TABLE IF NOT EXISTS EmailConfig (
     fromEmail TEXT,
     fromName TEXT,
     enabled BOOLEAN NOT NULL DEFAULT 0,
-    updatedAt DATETIME NOT NULL
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ============================================================================
@@ -312,7 +312,7 @@ CREATE TABLE IF NOT EXISTS TelegramConfig (
     botToken TEXT,
     chatId TEXT,
     enabled BOOLEAN NOT NULL DEFAULT 0,
-    updatedAt DATETIME NOT NULL
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ============================================================================
@@ -340,7 +340,7 @@ CREATE TABLE IF NOT EXISTS CustomTheme (
     visible BOOLEAN NOT NULL DEFAULT 1,
     "order" INTEGER NOT NULL DEFAULT 0,
     createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updatedAt DATETIME NOT NULL
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_customtheme_visible_order ON CustomTheme(visible, "order");
 
@@ -352,7 +352,7 @@ CREATE TABLE IF NOT EXISTS SiteText (
     valueEn TEXT NOT NULL DEFAULT '',
     valueFa TEXT NOT NULL DEFAULT '',
     valueDe TEXT NOT NULL DEFAULT '',
-    updatedAt DATETIME NOT NULL
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ============================================================================
@@ -368,7 +368,7 @@ CREATE TABLE IF NOT EXISTS NavItem (
     visible BOOLEAN NOT NULL DEFAULT 1,
     "order" INTEGER NOT NULL DEFAULT 0,
     createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updatedAt DATETIME NOT NULL
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_navitem_visible_order ON NavItem(visible, "order");
 
@@ -391,7 +391,7 @@ CREATE TABLE IF NOT EXISTS AccessUser (
     lastLoginAt DATETIME,
     deactivatedReason TEXT NOT NULL DEFAULT '',
     createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updatedAt DATETIME NOT NULL
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_accessuser_username ON AccessUser(username);
 CREATE INDEX IF NOT EXISTS idx_accessuser_active ON AccessUser(active);
@@ -420,7 +420,7 @@ CREATE TABLE IF NOT EXISTS BlockedIp (
     attempts INTEGER NOT NULL DEFAULT 0,
     expiresAt DATETIME,
     createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updatedAt DATETIME NOT NULL
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS SecurityLog (
@@ -446,7 +446,7 @@ CREATE TABLE IF NOT EXISTS AparatClip (
     visible BOOLEAN NOT NULL DEFAULT 1,
     "order" INTEGER NOT NULL DEFAULT 0,
     createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updatedAt DATETIME NOT NULL
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_aparatclip_visible_order ON AparatClip(visible, "order");
 """

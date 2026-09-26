@@ -21,6 +21,16 @@ const RATE_LIMIT_WINDOW = 15 * 60 * 1000;
 const RATE_LIMIT_MAX = 5;
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
 
+// V17.4: پاکسازی دوره‌ای Map برای جلوگیری از memory leak
+if (typeof setInterval !== "undefined") {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [k, v] of loginAttempts) {
+      if (v.resetAt < now) loginAttempts.delete(k);
+    }
+  }, 5 * 60 * 1000).unref?.();
+}
+
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
   const record = loginAttempts.get(ip);

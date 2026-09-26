@@ -17,7 +17,7 @@ set -e
 SITE_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SITE_DIR"
 
-VERSION="V17.3"
+VERSION="V17.4"
 echo "=========================================="
 echo "  نصب سایت شخصی $VERSION (Pre-built)"
 echo "=========================================="
