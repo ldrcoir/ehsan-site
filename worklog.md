@@ -14694,3 +14694,48 @@ Final verdict:
   F-NEW-5 + F-5 + F-7. These 7 fixes close 80% of the attack surface.
 
 --- end V17.2-FINAL-AUDIT-1 ---
+
+---
+Task ID: V17.2.1-FINAL
+Agent: Super Z (main agent)
+Task: رفع بحران‌های پیدا شده در ۳ ممیزی final
+
+Work Log:
+- ۳ final audit worker اجرا شد:
+  - V17.2-FINAL-AUDIT-1: admin auth chain
+  - V17.2-FINAL-AUDIT-2: panel functionality
+  - V17.2-FINAL-AUDIT-3: install.sh
+
+- رفع CRITICAL blockers:
+  ✅ استاندالون package شامل .next/server/ شد (قبلاً missing بود — server crash می‌کرد)
+  ✅ bcryptjs به node_modules اضافه شد (seed script کار می‌کنه)
+  ✅ prisma CLI به node_modules اضافه شد (db push کار می‌کنه)
+  ✅ install.sh: prisma db push قبل از seed اجرا می‌شه
+  ✅ install.sh: چک می‌کنه اگه admin وجود داره، skip می‌شه
+  ✅ install.sh: خطاهای seed نمایش داده می‌شن (نه swallow)
+  ✅ install.sh: webhook URLs درست وقتی domain نباشه
+  ✅ seed_access_users.py: مسیر relative برای bcryptjs (نه hardcoded dev path)
+  ✅ admin-auth.ts: حذف password fallback backdoor (session-only)
+  ✅ AccessUserManager: ۴ fetch call با credentials: "include"
+
+- تست نهایی:
+  ✅ TypeScript: 0 error
+  ✅ Build: موفق
+  ✅ استاندالون package: 37MB (با .next/server کامل)
+  ✅ Push به GitHub: موفق (هر دو repo)
+  ✅ Download links کار می‌کنن (تست شده با curl واقعی)
+
+Stage Summary:
+- نسخه: V17.2 → V17.2.1
+- تاریخ: 2026-09-26
+- ۳ final audit اجرا شد
+- فایل‌های تغییر یافته:
+  - install.sh (prisma db push + admin check + error handling + webhook URLs)
+  - scripts/seed_access_users.py (relative bcryptjs path + auto db push)
+  - src/lib/admin-auth.ts (حذف password fallback — session-only)
+  - src/components/AccessUserManager.tsx (credentials: include)
+  - public/install-v17.2.zip (با .next/server + bcryptjs + prisma CLI)
+- وضعیت: قابل نصب با یک دستور از GitHub
+- دانلود: https://github.com/ldrcoir/ehsan-site/raw/main/public/install-v17.2.zip
+
+---
