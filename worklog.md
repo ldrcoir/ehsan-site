@@ -35650,3 +35650,62 @@ Final verdict:
       conditional may break behind TLS-terminating proxy)
 
 --- end Task ID: SEC-02 ---
+
+---
+Task ID: V17.3-FINAL
+Agent: Super Z (main agent)
+Task: ۴۰ ممیزی parallel + رفع بحران‌های بحرانی + تست واقعی
+
+Work Log:
+- ۴۰ worker parallel audit اجرا شد:
+  - ۲۰ worker امنیتی (SEC-01 تا SEC-20)
+  - ۲۰ worker قابلیت/زیبایی (FEAT-01 تا FEAT-20)
+- همه گزارش‌ها در worklog.md ذخیره شد
+- ۵۰۰+ یافته شناسایی شد
+
+- رفع CRITICAL blockers:
+  ✅ db/custom.db از git tracking حذف شد (آدرس‌ها و هش‌ها لو می‌رفت)
+  ✅ .gitignore: الگوهای /db/ و *.db اضافه شد
+  ✅ install.sh: idempotent (SESSION_SECRET + webhook secrets رو نگه می‌داره)
+  ✅ install.sh: دیگر secretها رو به stdout چاپ نمی‌کنه
+  ✅ install.sh: openssl check اضافه شد
+  ✅ install.sh: chmod 600 روی standalone .env + db
+  ✅ install.sh: cp .env .env no-op bug رفع شد
+  ✅ apply_schema.py نوشته شد — جایگزین prisma db push (بدون نیاز به @prisma/engines)
+  ✅ ۲۹ جدول SQL دقیقاً مطابق schema.prisma
+  ✅ "primary" column در کوتیشن (SQL reserved word)
+  ✅ CSS: --font-vazir → --font-vazirmatn (font rendering fix)
+  ✅ CSS: --primary, --primary-bright, --bg-panel2 aliases اضافه شد
+  ✅ equipment bulk_import action اضافه شد
+  ✅ JSON.parse safe در equipment + content routes
+
+- تست نهایی واقعی (curl + node server.js):
+  ✅ apply_schema.py: 29 tables created
+  ✅ seed_access_users.py: admin user created
+  ✅ Login (admin/admin123): موفق
+  ✅ /api/content: HTTP 200
+  ✅ /api/admin/settings: HTTP 200
+  ✅ /api/admin/users: HTTP 200 (1 user)
+  ✅ /api/admin/clips: HTTP 200 (0 clips)
+  ✅ /api/messages: HTTP 200 (0 messages)
+  ✅ /api/admin/users without cookie: HTTP 401 (middleware blocks)
+  ✅ /user-dashboard without cookie: HTTP 307 redirect to /user-login
+
+Stage Summary:
+- نسخه: V17.2 → V17.3.1
+- تاریخ: 2026-09-26
+- ۴۰ ممیزی parallel اجرا شد
+- فایل‌های تغییر یافته:
+  - .gitignore (الگوهای /db/ و *.db)
+  - install.sh (idempotent + openssl + chmod 600 + no secret leak)
+  - scripts/apply_schema.py (جدید — 29 جدول)
+  - scripts/seed_access_users.py (relative bcryptjs path)
+  - src/app/api/admin/equipment/route.ts (bulk_import + safe JSON)
+  - src/app/api/content/route.ts (safe JSON parse)
+  - src/app/personal.css (font + primary vars)
+  - public/install-v17.3.zip (23MB — با apply_schema.py، بدون prisma CLI)
+- وضعیت: قابل نصب با یک دستور از GitHub
+- دانلود: https://github.com/ldrcoir/ehsan-site/raw/main/public/install-v17.3.zip
+- آموزش: https://github.com/ldrcoir/ehsan-site/raw/main/public/TUTORIAL_FA_V17.2.docx
+
+---
