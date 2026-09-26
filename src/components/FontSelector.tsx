@@ -23,6 +23,8 @@ export default function FontSelector() {
   useEffect(() => {
     const saved = localStorage.getItem("site_font") || "vazirmatn";
     setCurrentFont(saved);
+    // V17.5: data-font رو روی mount هم اعمال کن (قبلاً فقط روی click اعمال می‌شد)
+    document.documentElement.setAttribute("data-font", saved);
   }, []);
 
   function selectFont(fontId: string) {

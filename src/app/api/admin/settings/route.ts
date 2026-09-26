@@ -32,9 +32,11 @@ export async function POST(req: Request) {
         getSetting("telegramChatId"),
         getSetting("telegramEnabled"),
       ]);
+      // V17.5: token رو mask می‌کنیم (security)
+      const maskedToken = token ? "••••••••" + token.slice(-4) : "";
       return NextResponse.json({
         ok: true,
-        telegramBotToken: token,
+        telegramBotToken: maskedToken,
         telegramChatId: chatId,
         telegramEnabled: enabled,
       });
@@ -75,7 +77,14 @@ export async function POST(req: Request) {
     const updates: Promise<void>[] = [];
     for (const [key, value] of Object.entries(settings)) {
       if (allowedKeys.includes(key)) {
-        updates.push(setSetting(key, String(value)));
+        const strValue = String(value);
+        // V17.5: اگه bot token masked شده (مثل ••••••••1234) بود، ذخیره نکن
+        // این از round-trip corruption جلوگیری می‌کنه (V17.4 bug fix)
+        if ((key === "baleBotToken" || key === "telegramBotToken") && strValue.startsWith("••••••••")) {
+          // skip — ادمین می‌خواد مقدار فعلی رو نگه داره
+          continue;
+        }
+        updates.push(setSetting(key, strValue));
       }
     }
     await Promise.all(updates);

@@ -64,14 +64,14 @@ export async function GET(req: Request) {
     getSetting("baleEnabled"),
   ]);
 
+  // V17.5: token رو mask می‌کنیم — webhookUrl قبلاً توکن رو plaintext برمی‌گردوند
   return NextResponse.json({
     ok: true,
     configured: !!token && !!chatId,
     enabled: enabled === "true",
     hasToken: !!token,
     hasChatId: !!chatId,
-    webhookUrl: token
-      ? `https://api.bale.ai/v1/bots${token}/setWebhook`
-      : null,
+    maskedToken: token ? "••••••••" + token.slice(-4) : null,
+    webhookUrl: token ? "https://api.bale.ai/v1/bots<token>/setWebhook" : null,
   });
 }

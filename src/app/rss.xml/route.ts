@@ -7,15 +7,17 @@ import { PERSONAL } from "@/lib/content";
  * RSS feed for articles.
  */
 export async function GET() {
-  const articles = await db.article.findMany({
-    where: { visible: true },
-    orderBy: { date: "desc" },
-    take: 20,
-  });
+  try {
+    const articles = await db.article.findMany({
+      where: { visible: true },
+      orderBy: { date: "desc" },
+      take: 20,
+    });
 
-  const siteUrl = PERSONAL.handle ? `https://your-domain.com` : "https://localhost:3000";
+    // V17.5: siteUrl از env (نه placeholder)
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ehsanmorad.ir";
 
-  const items = articles.map(a => `    <item>
+    const items = articles.map(a => `    <item>
       <title>${escapeXml(a.titleEn)}</title>
       <link>${siteUrl}/#articles</link>
       <description>${escapeXml(a.summaryEn || "")}</description>
@@ -24,7 +26,7 @@ export async function GET() {
       <guid>${a.id}</guid>
     </item>`).join("\n");
 
-  const rss = `<?xml version="1.0" encoding="UTF-8"?>
+    const rss = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
   <channel>
     <title>${escapeXml(PERSONAL.fullName.en)} — Articles</title>
@@ -35,9 +37,13 @@ ${items}
   </channel>
 </rss>`;
 
-  return new NextResponse(rss, {
-    headers: { "Content-Type": "application/xml; charset=utf-8" },
-  });
+    return new NextResponse(rss, {
+      headers: { "Content-Type": "application/xml; charset=utf-8" },
+    });
+  } catch (err) {
+    console.error("[/rss.xml] error:", err);
+    return new NextResponse("<!-- rss error -->", { status: 500 });
+  }
 }
 
 function escapeXml(s: string): string {
