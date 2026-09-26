@@ -124,21 +124,32 @@ echo "  ✅ Webhook secrets تولید شد"
 # ============================================================================
 echo ""
 echo "[6/10] دیتابیس..."
+mkdir -p db
+chmod 700 db
 touch db/custom.db
 chmod 600 db/custom.db
 rm -f db/custom.db-journal db/custom.db-wal db/custom.db-shm
 
-# چک کن اگه جداول هست، skip
+# اجرای prisma db push برای ساخت جداول (اگه نباشن)
 TABLES=$(sqlite3 db/custom.db "SELECT count(*) FROM sqlite_master WHERE type='table';" 2>/dev/null || echo "0")
 if [ "$TABLES" = "0" ] || [ -z "$TABLES" ]; then
+    echo "  ساخت جداول با prisma db push..."
+    node node_modules/prisma/build/index.js db push --accept-data-loss 2>&1 | tail -3
+    TABLES=$(sqlite3 db/custom.db "SELECT count(*) FROM sqlite_master WHERE type='table';" 2>/dev/null || echo "0")
+    echo "  ✅ $TABLES جدول ساخته شد"
+fi
+
+# seeding اگه جداول خالی هستن
+ADMIN_EXISTS=$(sqlite3 db/custom.db "SELECT count(*) FROM AccessUser WHERE username='admin';" 2>/dev/null || echo "0")
+if [ "$ADMIN_EXISTS" = "0" ] || [ -z "$ADMIN_EXISTS" ]; then
     echo "  seeding..."
-    python3 scripts/seed_content.py 2>&1 | tail -1 || true
-    python3 scripts/seed_equipment.py 2>&1 | tail -1 || true
-    python3 scripts/seed_texts.py 2>&1 | tail -1 || true
-    python3 scripts/seed_access_users.py 2>&1 | tail -1 || true
+    python3 scripts/seed_content.py 2>&1 | tail -2 || echo "  ⚠ seed_content failed"
+    python3 scripts/seed_equipment.py 2>&1 | tail -2 || echo "  ⚠ seed_equipment failed"
+    python3 scripts/seed_texts.py 2>&1 | tail -2 || echo "  ⚠ seed_texts failed"
+    python3 scripts/seed_access_users.py 2>&1 | tail -2 || echo "  ⚠ seed_access_users failed"
     echo "  ✅ دیتابیس seed شد"
 else
-    echo "  ✅ دیتابیس آماده ($TABLES جدول)"
+    echo "  ✅ دیتابیس آماده (admin user exists)"
 fi
 
 # ============================================================================
@@ -287,8 +298,14 @@ echo ""
 echo "  ⚠️ بدون reCAPTCHA، فرم تماس کار نمی‌کنه!"
 echo ""
 echo "  Webhook URLs (برای Bale/Telegram):"
-echo "    Bale:    https://$DOMAIN_FOUND/api/bale/webhook?secret=$BALE_SECRET"
-echo "    Telegram: https://$DOMAIN_FOUND/api/telegram/webhook?secret=$TG_SECRET"
+if [ -n "$DOMAIN_FOUND" ]; then
+    echo "    Bale:     https://$DOMAIN_FOUND/api/bale/webhook?secret=$BALE_SECRET"
+    echo "    Telegram: https://$DOMAIN_FOUND/api/telegram/webhook?secret=$TG_SECRET"
+else
+    echo "    Bale:     http://YOUR_IP:3000/api/bale/webhook?secret=$BALE_SECRET"
+    echo "    Telegram: http://YOUR_IP:3000/api/telegram/webhook?secret=$TG_SECRET"
+    echo "    (بعد از تنظیم HTTPS، آدرس رو آپدیت کن)"
+fi
 echo ""
 echo "  دستورات:"
 echo "    systemctl status personal-site"

