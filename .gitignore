@@ -57,3 +57,14 @@ package-lock.json
 tool-results/
 download/*.zip
 public/*.zip
+
+# Database (V17.3 — critical: contains hashes + admin credentials)
+/db/*.db
+/db/*.db-journal
+/db/*.db-wal
+/db/*.db-shm
+/db/
+
+# Backups
+*.bak
+*.bak.*

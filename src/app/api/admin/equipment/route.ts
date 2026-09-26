@@ -19,10 +19,15 @@ export async function GET(req: Request) {
     const equipment = await db.labEquipment.findMany({ orderBy: { order: "asc" } });
     return NextResponse.json({
       ok: true,
-      items: equipment.map(e => ({
-        ...e,
-        specs: e.specs ? JSON.parse(e.specs) : null,
-      })),
+      items: equipment.map(e => {
+        // Safe JSON parse — اگر specs خراب باشه، null برمی‌گردونه
+        let specs: any = null;
+        if (e.specs) {
+          try { specs = JSON.parse(e.specs); }
+          catch { specs = null; /* در صورت خرابی، null بده نه 500 */ }
+        }
+        return { ...e, specs };
+      }),
     });
   } catch (err) {
     console.error("[/api/admin/equipment GET] error:", err);
@@ -82,6 +87,39 @@ export async function POST(req: Request) {
           data: { visible: !current.visible },
         });
         return NextResponse.json({ ok: true, item: updated });
+      }
+      case "bulk_import": {
+        const items = Array.isArray(body.items) ? body.items : [];
+        let created = 0;
+        let failed = 0;
+        const errors: string[] = [];
+        for (const item of items) {
+          try {
+            const data: any = {
+              nameFa: String(item.nameFa || ""),
+              nameEn: String(item.nameEn || ""),
+              nameDe: String(item.nameDe || ""),
+              brand: String(item.brand || ""),
+              model: String(item.model || ""),
+              visible: Boolean(item.visible ?? true),
+              order: Number(item.order) || 0,
+            };
+            // specs — اگه object هست stringify کن
+            if (item.specs && typeof item.specs === "object") {
+              data.specs = JSON.stringify(item.specs);
+            } else if (item.specs && typeof item.specs === "string") {
+              // اعتبارسنجی JSON
+              try { JSON.parse(item.specs); data.specs = item.specs; }
+              catch { failed++; errors.push(`invalid specs JSON for ${data.nameFa || data.nameEn}`); continue; }
+            }
+            await db.labEquipment.create({ data });
+            created++;
+          } catch (e: any) {
+            failed++;
+            errors.push(e?.message || "unknown");
+          }
+        }
+        return NextResponse.json({ ok: true, created, failed, total: items.length, errors: errors.slice(0, 10) });
       }
       default:
         return NextResponse.json({ ok: false, error: "invalid_action" }, { status: 400 });

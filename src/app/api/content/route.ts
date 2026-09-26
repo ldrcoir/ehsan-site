@@ -45,7 +45,12 @@ export async function GET() {
       aiInstructions: instructions,
       equipment: equipment.map(e => ({
         ...e,
-        specs: e.specs ? (typeof e.specs === "string" ? JSON.parse(e.specs) : e.specs) : null,
+        specs: (() => {
+          if (!e.specs) return null;
+          if (typeof e.specs !== "string") return e.specs;
+          try { return JSON.parse(e.specs); }
+          catch { return null; /* در صورت خرابی، null بده نه 500 */ }
+        })(),
       })),
       navItems,
       texts: textsByLang,
