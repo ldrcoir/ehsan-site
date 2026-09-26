@@ -63041,3 +63041,65 @@ Final verdict:
           injection + admin-panel XSS surface)
 
 --- end Task ID: V17.4-SEC-12 ---
+
+---
+Task ID: V17.4-FINAL
+Agent: Super Z (main agent)
+Task: ۴۰ ممیزی parallel + رفع بحران‌های واقعی
+
+Work Log:
+- ۴۰ worker parallel audit اجرا شد:
+  - ۲۰ worker امنیتی (SEC-01 تا SEC-20)
+  - ۲۰ worker قابلیت پنل (PANEL-01 تا PANEL-20)
+- خودم همه گزارش‌ها رو بررسی کردم
+- بحران‌های واقعی (نه false positive) رو پیدا کردم و رفع کردم
+
+- رفع CRITICAL blockers:
+  ✅ personal.css در layout.tsx import شد
+     (admin panel روی بازدید مستقیم UNSTYLED بود!)
+  ✅ time-trap با useState fix شد
+     (تمام submissionهای legit فرم تماس reject می‌شد!)
+  ✅ seed_texts.py با updatedAt fix شد
+     (crash می‌کرد روی NOT NULL constraint)
+  ✅ apply_schema.py: تمام updatedAt ها DEFAULT CURRENT_TIMESTAMP دارن
+  ✅ tutorial modal crash fix شد
+     (title[lang] به titleLangKey تغییر کرد)
+  ✅ color contrast بهبود یافت
+     (--text-dim: 4.6:1, --text-faint: 3.2:1 — قبلا WCAG AA fail می‌کرد)
+
+- رفع HIGH blockers:
+  ✅ bot tokens در /api/admin/settings mask می‌شن
+     (قبلا plaintext برمی‌گشت!)
+  ✅ ۳ rate-limit Map حالا cleanup دوره‌ای دارن
+     (login, contact, chat — memory leak بود)
+
+- تست نهایی واقعی:
+  ✅ apply_schema.py: 29 tables
+  ✅ seed_access_users.py: admin created
+  ✅ seed_texts.py: 13 texts created (قبلا crash می‌کرد!)
+  ✅ /api/content: HTTP 200 (1210 bytes, 13 texts)
+  ✅ Login: HTTP 200
+  ✅ /api/admin/settings: HTTP 200 (bot tokens masked)
+  ✅ /api/messages: HTTP 200
+
+Stage Summary:
+- نسخه: V17.3 → V17.4
+- تاریخ: 2026-09-26
+- ۴۰ ممیزی parallel
+- فایل‌های تغییر یافته:
+  - src/app/layout.tsx (import personal.css)
+  - src/app/page.tsx (time-trap useState + tutorial modal fix)
+  - src/app/personal.css (color contrast)
+  - src/app/api/admin/settings/route.ts (bot token masking)
+  - src/app/api/user/login/route.ts (rate limit cleanup)
+  - src/app/api/contact/route.ts (rate limit cleanup)
+  - src/app/api/chat/route.ts (rate limit cleanup)
+  - scripts/apply_schema.py (DEFAULT CURRENT_TIMESTAMP)
+  - scripts/seed_texts.py (updatedAt)
+  - install.sh (V17.4 version)
+  - VERSION.txt (V17.4)
+  - public/install-v17.4.zip (23MB)
+- وضعیت: قابل نصب با یک دستور از GitHub
+- دانلود: https://github.com/ldrcoir/ehsan-site/raw/main/public/install-v17.4.zip
+
+---
