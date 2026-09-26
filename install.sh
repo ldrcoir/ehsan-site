@@ -162,8 +162,8 @@ rm -f db/custom.db-journal db/custom.db-wal db/custom.db-shm
 # اجرای prisma db push برای ساخت جداول (اگه نباشن)
 TABLES=$(sqlite3 db/custom.db "SELECT count(*) FROM sqlite_master WHERE type='table';" 2>/dev/null || echo "0")
 if [ "$TABLES" = "0" ] || [ -z "$TABLES" ]; then
-    echo "  ساخت جداول با prisma db push..."
-    node node_modules/prisma/build/index.js db push --accept-data-loss 2>&1 | tail -3
+    echo "  ساخت جداول با apply_schema.py (بدون نیاز به prisma CLI)..."
+    python3 scripts/apply_schema.py 2>&1 | tail -3
     TABLES=$(sqlite3 db/custom.db "SELECT count(*) FROM sqlite_master WHERE type='table';" 2>/dev/null || echo "0")
     echo "  ✅ $TABLES جدول ساخته شد"
 fi
