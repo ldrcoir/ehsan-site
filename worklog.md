@@ -117806,3 +117806,51 @@ CROSS-REFERENCES
   primary CSRF defense; the Origin check is defense-in-depth.
 
 --- end Task ID: V17.6-SEC-04 ---
+
+---
+Task ID: V17.6-FINAL
+Agent: Super Z (main agent)
+Task: ۴۰ ممیزی وسواس‌گر parallel + رفع بحران‌های واقعی V17.6
+
+Work Log:
+- ۴۰ worker parallel audit اجرا شد:
+  - ۲۰ worker امنیتی (V17.6-SEC-01 تا V17.6-SEC-20)
+  - ۲۰ worker قابلیت پنل (V17.6-PANEL-01 تا V17.6-PANEL-20)
+- خودم همه گزارش‌ها رو با وسواس بررسی کردم
+- بحران‌های واقعی (نه false positive) رو پیدا کردم و رفع کردم
+
+- رفع CRITICAL blockers:
+  ✅ Equipment bulk_import فیلدهای اشتباه استفاده می‌کرد
+     (nameFa/nameEn/nameDe/brand وجود نداشتن → Prisma error → 0 items created)
+     حالا از فیلدهای صحیح (name, model, category, status, description) استفاده می‌کنه
+  ✅ Content GET فیلد aiInstructions رو حذف می‌کرد
+     (was: results['aiInstructions'] = results['aiInstructions']; delete results['aiInstructions'])
+     حالا فقط alias اضافه می‌کنه و فیلد اصلی رو نگه می‌داره
+
+- رفع HIGH blockers:
+  ✅ AI provider POST responses apiKey رو plaintext برمی‌گردوند
+     حالا mask می‌شه (مثل GET)
+  ✅ Contact time-trap با _t:0 bypass می‌شد
+     (was: `if (submittedAt)` — روی 0 از کار می‌افتاد)
+     حالا با typeof check + NaN check قابل bypass نیست
+  ✅ /api/admin/users GET و POST بدون try/catch بودن
+     (روی DB error با HTML 500 crash می‌کردن)
+     حالا try/catch دارن
+
+Stage Summary:
+- نسخه: V17.5 → V17.6
+- تاریخ: 2026-09-26
+- ۴۰ ممیزی parallel
+- فایل‌های تغییر یافته:
+  - src/app/api/admin/equipment/route.ts (bulk_import field fix)
+  - src/app/api/admin/content/route.ts (aiInstructions delete fix)
+  - src/app/api/admin/providers/route.ts (apiKey masking in POST + helper)
+  - src/app/api/admin/users/route.ts (try/catch on GET + POST)
+  - src/app/api/contact/route.ts (time-trap truthiness fix)
+  - install.sh (V17.6 version)
+  - VERSION.txt (V17.6)
+  - public/install-v17.6.zip (23MB)
+- وضعیت: قابل نصب با یک دستور از GitHub
+- دانلود: https://github.com/ldrcoir/ehsan-site/raw/main/public/install-v17.6.zip
+
+---
