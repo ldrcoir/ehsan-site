@@ -95,12 +95,13 @@ export async function POST(req: Request) {
         const errors: string[] = [];
         for (const item of items) {
           try {
+            // V17.6: فیلدها مطابق schema.prisma (LabEquipment مدل)
             const data: any = {
-              nameFa: String(item.nameFa || ""),
-              nameEn: String(item.nameEn || ""),
-              nameDe: String(item.nameDe || ""),
-              brand: String(item.brand || ""),
+              name: String(item.name || ""),
               model: String(item.model || ""),
+              category: String(item.category || "general"),
+              status: String(item.status || "online"),
+              description: String(item.description || ""),
               visible: Boolean(item.visible ?? true),
               order: Number(item.order) || 0,
             };
@@ -110,7 +111,7 @@ export async function POST(req: Request) {
             } else if (item.specs && typeof item.specs === "string") {
               // اعتبارسنجی JSON
               try { JSON.parse(item.specs); data.specs = item.specs; }
-              catch { failed++; errors.push(`invalid specs JSON for ${data.nameFa || data.nameEn}`); continue; }
+              catch { failed++; errors.push(`invalid specs JSON for ${data.name}`); continue; }
             }
             await db.labEquipment.create({ data });
             created++;

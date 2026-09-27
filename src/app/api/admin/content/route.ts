@@ -37,8 +37,9 @@ export async function GET(req: Request) {
         }));
       }
       if (name === "aiInstruction") {
+        // V17.6: قبلاً `delete results[name + "s"]` فیلد رو پاک می‌کرد چون "aiInstruction"+"s" === "aiInstructions"
+        // حالا فقط alias اضافه می‌کنیم و فیلد اصلی رو نگه می‌داریم
         results["aiInstructions"] = results[name + "s"];
-        delete results[name + "s"];
       }
     }
     return NextResponse.json({ ok: true, ...results });

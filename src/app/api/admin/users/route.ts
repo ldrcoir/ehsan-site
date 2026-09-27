@@ -31,17 +31,18 @@ async function checkAdmin(request: NextRequest) {
 // GET /api/admin/users — لیست کاربران
 // ----------------------------------------------------------------------------
 export async function GET(request: NextRequest) {
-  const admin = await checkAdmin(request);
-  if (!admin) {
-    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-  }
-  const users = await db.accessUser.findMany({
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      username: true,
-      displayName: true,
-      role: true,
+  try {
+    const admin = await checkAdmin(request);
+    if (!admin) {
+      return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+    }
+    const users = await db.accessUser.findMany({
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        role: true,
       allowedHourStart: true,
       allowedHourEnd: true,
       allowedDays: true,
@@ -57,18 +58,23 @@ export async function GET(request: NextRequest) {
     },
   });
   return NextResponse.json({ ok: true, users });
+  } catch (err) {
+    console.error("[/api/admin/users GET] error:", err);
+    return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });
+  }
 }
 
 // ----------------------------------------------------------------------------
 // POST /api/admin/users — ساخت کاربر جدید
 // ----------------------------------------------------------------------------
 export async function POST(request: NextRequest) {
-  const admin = await checkAdmin(request);
-  if (!admin) {
-    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-  }
+  try {
+    const admin = await checkAdmin(request);
+    if (!admin) {
+      return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+    }
 
-  const body = await request.json().catch(() => ({}));
+    const body = await request.json().catch(() => ({}));
   const username: string = (body.username || "").trim().toLowerCase();
   const password: string = body.password || "";
   const displayName: string = (body.displayName || "").trim();
@@ -132,4 +138,8 @@ export async function POST(request: NextRequest) {
   });
 
   return NextResponse.json({ ok: true, user });
+  } catch (err) {
+    console.error("[/api/admin/users POST] error:", err);
+    return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });
+  }
 }

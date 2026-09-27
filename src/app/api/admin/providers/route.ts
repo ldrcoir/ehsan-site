@@ -68,7 +68,8 @@ export async function POST(req: Request) {
             priority: Number(data.priority) || 99,
           },
         });
-        return NextResponse.json({ ok: true, provider: created });
+        // V17.6: apiKey رو mask کن (مثل GET)
+        return NextResponse.json({ ok: true, provider: maskApiKey(created) });
       }
 
       case "update": {
@@ -91,7 +92,8 @@ export async function POST(req: Request) {
           where: { id },
           data: updateData,
         });
-        return NextResponse.json({ ok: true, provider: updated });
+        // V17.6: apiKey رو mask کن
+        return NextResponse.json({ ok: true, provider: maskApiKey(updated) });
       }
 
       case "delete": {
@@ -116,7 +118,8 @@ export async function POST(req: Request) {
           where: { id },
           data: { enabled: !current.enabled },
         });
-        return NextResponse.json({ ok: true, provider: updated });
+        // V17.6: apiKey رو mask کن
+        return NextResponse.json({ ok: true, provider: maskApiKey(updated) });
       }
 
       default:
@@ -126,4 +129,13 @@ export async function POST(req: Request) {
     console.error("[/api/admin/providers POST] error:", err);
     return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });
   }
+}
+
+// V17.6: helper برای mask کردن apiKey در پاسخ‌ها
+function maskApiKey(provider: any): any {
+  if (!provider) return provider;
+  return {
+    ...provider,
+    apiKey: provider.apiKey ? "••••••••" + String(provider.apiKey).slice(-4) : null,
+  };
 }
