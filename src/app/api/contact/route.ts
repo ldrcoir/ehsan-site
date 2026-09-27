@@ -86,15 +86,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true });
     }
     // time-trap — اگه فرم خیلی سریع submit شده (کمتر از ۲ ثانیه)، احتمالاً بات
-    // V17.6: fix truthiness bypass — قبلاً `if (submittedAt)` روی _t:0 از کار می‌افتاد
+    // V17.7: FAIL-CLOSED — اگه _t نامعتبر، صفر، یا نباشه، رد کن (نه اجازه بده)
     const submittedAtRaw = body._t;
-    const submittedAt = typeof submittedAtRaw === "number" && submittedAtRaw > 0
-      ? submittedAtRaw
-      : typeof submittedAtRaw === "string" && /^\d+$/.test(submittedAtRaw)
-        ? parseInt(submittedAtRaw, 10)
-        : NaN;
-    if (!isNaN(submittedAt) && submittedAt > 0 && Date.now() - submittedAt < 2000) {
-      await logSecurityEvent("time_trap_triggered", ip, "Form submitted too fast");
+    let submittedAt: number;
+    if (typeof submittedAtRaw === "number" && submittedAtRaw > 0) {
+      submittedAt = submittedAtRaw;
+    } else if (typeof submittedAtRaw === "string" && /^\d+$/.test(submittedAtRaw) && parseInt(submittedAtRaw, 10) > 0) {
+      submittedAt = parseInt(submittedAtRaw, 10);
+    } else {
+      // _t نامعتبر یا غایب — fail-closed
+      await logSecurityEvent("time_trap_triggered", ip, `Invalid or missing _t: ${String(submittedAtRaw).slice(0, 30)}`);
+      return NextResponse.json({ ok: false, error: "too_fast" }, { status: 400 });
+    }
+    // اگه کمتر از ۲ ثانیه از نمایش فرم گذشته، رد کن
+    const elapsed = Date.now() - submittedAt;
+    if (elapsed < 2000) {
+      await logSecurityEvent("time_trap_triggered", ip, `Form submitted too fast: ${elapsed}ms`);
       return NextResponse.json({ ok: false, error: "too_fast" }, { status: 400 });
     }
 

@@ -54,7 +54,21 @@ export async function GET() {
       })),
       navItems,
       texts: textsByLang,
-      settings: Object.fromEntries(settings.map(s => [s.key, s.value])),
+      // V17.7: فقط کلیدهای عمومی و امن رو برگردون (bot tokens و sensitive data رو فیلتر کن)
+      // قبلاً همه SiteSetting ها (شامل baleBotToken, telegramBotToken, forwardEmail) لو می‌رفت!
+      settings: Object.fromEntries(
+        settings
+          .filter(s => {
+            const PUBLIC_KEYS = new Set([
+              "apiEnabled", "adminDisplayName", "adminTagline", "adminStatus",
+              "handle", "name_fa", "name_en", "name_de",
+              "tagline_fa", "tagline_en", "tagline_de",
+              "visitorCount",
+            ]);
+            return PUBLIC_KEYS.has(s.key);
+          })
+          .map(s => [s.key, s.value])
+      ),
     });
   } catch (err) {
     console.error("[/api/content] error:", err);

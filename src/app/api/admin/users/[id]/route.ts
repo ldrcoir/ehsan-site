@@ -28,13 +28,14 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const admin = await checkAdmin(request);
-  if (!admin) {
-    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-  }
+  try {
+    const admin = await checkAdmin(request);
+    if (!admin) {
+      return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+    }
 
-  const { id } = await params;
-  const body = await request.json().catch(() => ({}));
+    const { id } = await params;
+    const body = await request.json().catch(() => ({}));
 
   // بررسی وجود کاربر
   const existing = await db.accessUser.findUnique({ where: { id } });
@@ -92,6 +93,10 @@ export async function PUT(
   });
 
   return NextResponse.json({ ok: true, user: updated });
+  } catch (err) {
+    console.error("[/api/admin/users/[id] PUT] error:", err);
+    return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -101,10 +106,11 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const admin = await checkAdmin(request);
-  if (!admin) {
-    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-  }
+  try {
+    const admin = await checkAdmin(request);
+    if (!admin) {
+      return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+    }
 
   const { id } = await params;
 
@@ -123,4 +129,8 @@ export async function DELETE(
   await db.accessUser.delete({ where: { id } });
 
   return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[/api/admin/users/[id] DELETE] error:", err);
+    return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });
+  }
 }

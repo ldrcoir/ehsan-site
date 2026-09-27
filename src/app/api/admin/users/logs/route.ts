@@ -19,30 +19,35 @@ async function checkAdmin(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  const admin = await checkAdmin(request);
-  if (!admin) {
-    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-  }
+  try {
+    const admin = await checkAdmin(request);
+    if (!admin) {
+      return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+    }
 
-  const { searchParams } = new URL(request.url);
-  const userId = searchParams.get("userId");
-  const limit = Math.min(parseInt(searchParams.get("limit") || "100", 10), 500);
-  const offset = parseInt(searchParams.get("offset") || "0", 10);
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get("userId");
+    const limit = Math.min(parseInt(searchParams.get("limit") || "100", 10), 500);
+    const offset = parseInt(searchParams.get("offset") || "0", 10);
 
-  const where = userId ? { userId } : {};
-  const logs = await db.accessLog.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    take: limit,
-    skip: offset,
-    include: {
-      user: {
-        select: { username: true, displayName: true },
+    const where = userId ? { userId } : {};
+    const logs = await db.accessLog.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      skip: offset,
+      include: {
+        user: {
+          select: { username: true, displayName: true },
+        },
       },
-    },
-  });
+    });
 
-  const total = await db.accessLog.count({ where });
+    const total = await db.accessLog.count({ where });
 
-  return NextResponse.json({ ok: true, logs, total });
+    return NextResponse.json({ ok: true, logs, total });
+  } catch (err) {
+    console.error("[/api/admin/users/logs] error:", err);
+    return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });
+  }
 }
