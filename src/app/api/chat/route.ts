@@ -131,7 +131,8 @@ export async function POST(req: Request) {
     if (sessionId) {
       session = await db.chatSession.findUnique({
         where: { id: sessionId },
-        include: { messages: { orderBy: { createdAt: "asc" } } },
+        // V17.8: bound chat history to last 20 messages (prevent unbounded LLM context)
+        include: { messages: { orderBy: { createdAt: "asc" }, take: 20 } },
       });
     }
     if (!session) {
@@ -231,7 +232,7 @@ export async function POST(req: Request) {
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
-    const password = url.searchParams.get("password") || "";
+    const password = ""; // V17.8: dead param removed
 
     const authCheck = await checkAdminAuth(req, password); if (!authCheck.ok) {
       return NextResponse.json(

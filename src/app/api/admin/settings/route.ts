@@ -108,7 +108,7 @@ export async function POST(req: Request) {
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
-    const password = url.searchParams.get("password") || "";
+    const password = ""; // V17.8: dead param removed (checkAdminAuth ignores it)
 
     const authCheck = await checkAdminAuth(req, password);
     if (!authCheck.ok) {

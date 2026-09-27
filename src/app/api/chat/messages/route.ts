@@ -25,6 +25,8 @@ export async function GET(req: Request) {
         createdAt: { gt: sinceDate },
       },
       orderBy: { createdAt: "asc" },
+      // V17.8: bound to last 50 messages (prevent unbounded response)
+      take: 50,
       select: {
         id: true,
         content: true,

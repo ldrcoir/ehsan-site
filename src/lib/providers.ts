@@ -97,7 +97,7 @@ async function callProvider(
 /** OpenAI-compatible API (also works for Azure, Together, etc.) */
 async function callOpenAI(provider: ProviderConfig, messages: any[]): Promise<string> {
   const baseUrl = provider.baseUrl || "https://api.openai.com/v1";
-  const res = await fetch(`${baseUrl}/chat/completions`, {
+  const res = await fetch(`${baseUrl}/chat/completions`, {signal: AbortSignal.timeout(30000), // V17.8: 30s timeout
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -124,7 +124,7 @@ async function callAnthropic(provider: ProviderConfig, messages: any[]): Promise
   const systemMsg = messages.find(m => m.role === "system")?.content || "";
   const convMsgs = messages.filter(m => m.role !== "system");
 
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {signal: AbortSignal.timeout(30000), // V17.8: 30s timeout
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -149,7 +149,7 @@ async function callAnthropic(provider: ProviderConfig, messages: any[]): Promise
 /** Ollama (local, no API key needed) */
 async function callOllama(provider: ProviderConfig, messages: any[]): Promise<string> {
   const baseUrl = provider.baseUrl || "http://localhost:11434";
-  const res = await fetch(`${baseUrl}/api/chat`, {
+  const res = await fetch(`${baseUrl}/api/chat`, {signal: AbortSignal.timeout(30000), // V17.8: 30s timeout
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -169,7 +169,7 @@ async function callOllama(provider: ProviderConfig, messages: any[]): Promise<st
 /** Groq — ultra-fast inference (Llama, Mixtral) */
 async function callGroq(provider: ProviderConfig, messages: any[]): Promise<string> {
   const baseUrl = provider.baseUrl || "https://api.groq.com/openai/v1";
-  const res = await fetch(`${baseUrl}/chat/completions`, {
+  const res = await fetch(`${baseUrl}/chat/completions`, {signal: AbortSignal.timeout(30000), // V17.8: 30s timeout
     method: "POST",
     headers: {
       "Content-Type": "application/json",

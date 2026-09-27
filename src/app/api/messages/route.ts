@@ -9,7 +9,7 @@ import { checkAdminAuth } from "@/lib/admin-auth";
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
-    const password = url.searchParams.get("password") || "";
+    const password = ""; // V17.8: dead param removed
 
     const authCheck = await checkAdminAuth(req, password);
     if (!authCheck.ok) {

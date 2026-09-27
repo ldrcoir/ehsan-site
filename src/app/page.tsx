@@ -9,13 +9,8 @@ import Oscilloscope from "@/components/Oscilloscope";
 import SignalLab from "@/components/SignalLab";
 import SignalBars from "@/components/SignalBars";
 import ChatSection from "@/components/ChatSection";
-import ContentManager from "@/components/ContentManager";
 import LabEquipmentRack from "@/components/LabEquipmentRack";
 import ArchiveGrid from "@/components/ArchiveGrid";
-import ThemeBuilder from "@/components/ThemeBuilder";
-import TextEditor from "@/components/TextEditor";
-import NavMenuManager from "@/components/NavMenuManager";
-import AccessUserManager from "@/components/AccessUserManager";
 import {
   UI, PERSONAL, SOCIALS, TUTORIALS,
   type Lang, DEFAULT_LANG, LANGS,

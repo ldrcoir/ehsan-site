@@ -156,7 +156,8 @@ export function middleware(req: NextRequest) {
 
   // --- 2. CSRF protection برای POST/PUT/DELETE به مسیرهای non-public ---
   const isPublicApi = PUBLIC_API_PREFIXES.some(p => pathname === p || pathname.startsWith(p + "/"));
-  if ((method === "POST" || method === "PUT" || method === "DELETE") && !isPublicApi) {
+  // V17.8: PATCH هم اضافه شد (قبلاً missing بود)
+  if ((method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE") && !isPublicApi) {
     const origin = req.headers.get("origin");
     const host = req.headers.get("host");
     // Origin باید مطابق host باشه (همان-origin)
@@ -193,7 +194,8 @@ export function middleware(req: NextRequest) {
   }
 
   // --- 5. محدودیت حجم body برای جلوگیری از DoS ---
-  if (method === "POST" || method === "PUT" || method === "PATCH") {
+  // V17.8: DELETE هم اضافه شد (قبلاً missing بود)
+  if (method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE") {
     const contentLength = parseInt(req.headers.get("content-length") || "0", 10);
     if (contentLength > 1024 * 1024) { // 1MB limit
       const res = NextResponse.json(
@@ -208,7 +210,9 @@ export function middleware(req: NextRequest) {
   const res = NextResponse.next();
   res.headers.set("Content-Security-Policy", CSP);
   // HSTS — فقط روی HTTPS (روی HTTP ست نکن — اگه سایت پشت CDN بدون HTTPS باشه مشکل ایجاد می‌کنه)
-  if (req.url.startsWith("https://")) {
+  // V17.8: HSTS — روی HTTPS واقعی یا پشت TLS-terminating proxy (x-forwarded-proto)
+  const isHttps = req.url.startsWith("https://") || req.headers.get("x-forwarded-proto") === "https";
+  if (isHttps) {
     res.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
   }
   return addSecurityHeaders(res);

@@ -10,7 +10,7 @@ import { seedDefaultProviders } from "@/lib/providers";
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
-    const password = url.searchParams.get("password") || "";
+    const password = ""; // V17.8: dead param removed (checkAdminAuth ignores it)
 
     const authCheck = await checkAdminAuth(req, password); if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
