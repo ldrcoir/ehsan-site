@@ -8,6 +8,45 @@ import { db } from "@/lib/db";
 
 export type ProviderType = "openai" | "anthropic" | "ollama" | "groq" | "openrouter" | "custom";
 
+// V17.9: SSRF protection — validate baseUrl before fetch
+function validateBaseUrl(baseUrl: string): { valid: boolean; sanitized: string } {
+  try {
+    const u = new URL(baseUrl);
+    // فقط http و https مجاز
+    if (u.protocol !== "https:" && u.protocol !== "http:") {
+      return { valid: false, sanitized: "" };
+    }
+    const host = u.hostname;
+    // بلاک private IPs (SSRF protection)
+    const privatePatterns = [
+      /^169\.254\./,        // link-local (AWS metadata)
+      /^10\./,              // private class A
+      /^172\.(1[6-9]|2[0-9]|3[01])\./, // private class B
+      /^192\.168\./,        // private class C
+      /^127\./,             // loopback
+      /^0\./,               // current network
+      /^::1$/,              // IPv6 loopback
+      /^fc00:/,             // IPv6 private
+      /^fe80:/,             // IPv6 link-local
+    ];
+    for (const p of privatePatterns) {
+      if (p.test(host)) {
+        return { valid: false, sanitized: "" };
+      }
+    }
+    // localhost بلاک (مگر برای Ollama که محلی هست)
+    if (host === "localhost" || host === "127.0.0.1" || host === "::1") {
+      // فقط پورت 11434 (Ollama default) مجاز
+      if (u.port !== "11434") {
+        return { valid: false, sanitized: "" };
+      }
+    }
+    return { valid: true, sanitized: baseUrl };
+  } catch {
+    return { valid: false, sanitized: "" };
+  }
+}
+
 interface ProviderConfig {
   id: string;
   type: ProviderType;
@@ -97,6 +136,9 @@ async function callProvider(
 /** OpenAI-compatible API (also works for Azure, Together, etc.) */
 async function callOpenAI(provider: ProviderConfig, messages: any[]): Promise<string> {
   const baseUrl = provider.baseUrl || "https://api.openai.com/v1";
+  // V17.9: SSRF protection
+  const baseUrlCheck = validateBaseUrl(baseUrl);
+  if (!baseUrlCheck.valid) throw new Error("Invalid or blocked baseUrl");
   const res = await fetch(`${baseUrl}/chat/completions`, {signal: AbortSignal.timeout(30000), // V17.8: 30s timeout
     method: "POST",
     headers: {
@@ -149,6 +191,9 @@ async function callAnthropic(provider: ProviderConfig, messages: any[]): Promise
 /** Ollama (local, no API key needed) */
 async function callOllama(provider: ProviderConfig, messages: any[]): Promise<string> {
   const baseUrl = provider.baseUrl || "http://localhost:11434";
+  // V17.9: SSRF protection (localhost:11434 is allowed for Ollama)
+  const baseUrlCheck = validateBaseUrl(baseUrl);
+  if (!baseUrlCheck.valid) throw new Error("Invalid or blocked baseUrl");
   const res = await fetch(`${baseUrl}/api/chat`, {signal: AbortSignal.timeout(30000), // V17.8: 30s timeout
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -169,6 +214,9 @@ async function callOllama(provider: ProviderConfig, messages: any[]): Promise<st
 /** Groq — ultra-fast inference (Llama, Mixtral) */
 async function callGroq(provider: ProviderConfig, messages: any[]): Promise<string> {
   const baseUrl = provider.baseUrl || "https://api.groq.com/openai/v1";
+  // V17.9: SSRF protection
+  const baseUrlCheck = validateBaseUrl(baseUrl);
+  if (!baseUrlCheck.valid) throw new Error("Invalid or blocked baseUrl");
   const res = await fetch(`${baseUrl}/chat/completions`, {signal: AbortSignal.timeout(30000), // V17.8: 30s timeout
     method: "POST",
     headers: {

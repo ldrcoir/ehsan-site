@@ -14,7 +14,7 @@
 const AUTHORIZED_DOMAINS = [
   "localhost",
   "127.0.0.1",
-  "31.70.76.10",          // VPS IP
+  // V17.9: VPS IP removed (info leak)
   "ehsanmorad.ir",        // دامنه ۱
   "www.ehsanmorad.ir",
   "ehsan-morad.ir",       // دامنه ۲

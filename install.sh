@@ -17,7 +17,7 @@ set -eo pipefail
 SITE_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SITE_DIR"
 
-VERSION="V17.8"
+VERSION="V17.9"
 echo "=========================================="
 echo "  نصب سایت شخصی $VERSION (Pre-built)"
 echo "=========================================="

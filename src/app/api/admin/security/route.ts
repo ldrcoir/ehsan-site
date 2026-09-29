@@ -63,12 +63,12 @@ export async function POST(req: Request) {
           return NextResponse.json({ ok: false, error: "current_password_required" }, { status: 400 });
         }
 
-        // پیدا کردن کاربر ادمین
-        const adminUser = await db.accessUser.findFirst({
-          where: { role: "admin", active: true },
+        // V17.9: از authCheck.userId استفاده کن (نه findFirst که ممکنه admin اشتباه رو پیدا کنه)
+        const adminUser = await db.accessUser.findUnique({
+          where: { id: authCheck.userId! },
         });
 
-        if (!adminUser) {
+        if (!adminUser || adminUser.role !== "admin") {
           return NextResponse.json({ ok: false, error: "no_admin_user" }, { status: 404 });
         }
 

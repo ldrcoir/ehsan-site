@@ -181,7 +181,9 @@ export function middleware(req: NextRequest) {
   if (ADMIN_PANEL_PATHS.some(p => pathname === p || pathname.startsWith(p + "/"))) {
     if (!hasValidSession(cookieHeader)) {
       const loginUrl = new URL("/user-login", req.url);
-      return NextResponse.redirect(loginUrl);
+      // V17.9: security headers روی redirect هم اعمال بشن
+      const redirectRes = NextResponse.redirect(loginUrl);
+      return addSecurityHeaders(redirectRes);
     }
   }
 

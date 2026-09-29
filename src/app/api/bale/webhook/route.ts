@@ -53,25 +53,30 @@ export async function POST(req: Request) {
  * Helper: returns Bale setup instructions and current config status.
  */
 export async function GET(req: Request) {
-  const authCheck = await checkAdminAuth(req, "");
-  if (!authCheck.ok) {
-    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  try {
+    const authCheck = await checkAdminAuth(req, "");
+    if (!authCheck.ok) {
+      return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+    }
+
+    const [token, chatId, enabled] = await Promise.all([
+      getSetting("baleBotToken"),
+      getSetting("baleChatId"),
+      getSetting("baleEnabled"),
+    ]);
+
+    // V17.5: token رو mask می‌کنیم — webhookUrl قبلاً توکن رو plaintext برمی‌گردوند
+    return NextResponse.json({
+      ok: true,
+      configured: !!token && !!chatId,
+      enabled: enabled === "true",
+      hasToken: !!token,
+      hasChatId: !!chatId,
+      maskedToken: token ? "••••••••" + token.slice(-4) : null,
+      webhookUrl: token ? "https://api.bale.ai/v1/bots<token>/setWebhook" : null,
+    });
+  } catch (err) {
+    console.error("[/api/bale/webhook GET] error:", err);
+    return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });
   }
-
-  const [token, chatId, enabled] = await Promise.all([
-    getSetting("baleBotToken"),
-    getSetting("baleChatId"),
-    getSetting("baleEnabled"),
-  ]);
-
-  // V17.5: token رو mask می‌کنیم — webhookUrl قبلاً توکن رو plaintext برمی‌گردوند
-  return NextResponse.json({
-    ok: true,
-    configured: !!token && !!chatId,
-    enabled: enabled === "true",
-    hasToken: !!token,
-    hasChatId: !!chatId,
-    maskedToken: token ? "••••••••" + token.slice(-4) : null,
-    webhookUrl: token ? "https://api.bale.ai/v1/bots<token>/setWebhook" : null,
-  });
 }

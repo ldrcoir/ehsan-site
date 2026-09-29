@@ -138,7 +138,8 @@ export default function UserDashboardPage() {
   function hasTabAccess(tabId: Tab): boolean {
     if (isAdmin) return true;
     if (tabId === "overview") return true;
-    if (tabId === "settings") return true;
+    // V17.9: Settings tab فقط برای ادمین (قبلاً برای همه باز بود)
+    if (tabId === "settings") return isAdmin;
     return userPermissions.includes(tabId);
   }
 
