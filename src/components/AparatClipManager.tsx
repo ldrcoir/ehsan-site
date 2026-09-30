@@ -88,15 +88,20 @@ export default function AparatClipManager() {
   async function handleDelete(id: string) {
     if (!confirm("حذف این کلیپ؟")) return;
     try {
-      await fetch("/api/admin/clips", {
+      const res = await fetch("/api/admin/clips", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ id }),
       });
-      fetchClips();
+      const data = await res.json();
+      if (data.ok) {
+        fetchClips();
+      } else {
+        alert("خطا در حذف: " + (data.error || "نامشخص"));
+      }
     } catch (e) {
-      alert("خطا در حذف");
+      alert("خطای شبکه");
     }
   }
 

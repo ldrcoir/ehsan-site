@@ -257,5 +257,6 @@ export async function seedDefaultProviders() {
   for (const p of defaults) {
     await db.aiProvider.create({ data: p });
   }
-  console.log("[providers] Seeded default AI providers");
+  // V18.3: console.log removed (was in production code)
+  if (process.env.NODE_ENV !== "production") console.log("[providers] Seeded default AI providers");
 }

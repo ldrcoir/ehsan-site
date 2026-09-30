@@ -17,7 +17,7 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const password = ""; // V17.8: dead param removed (checkAdminAuth ignores it)
 
-    const authCheck = await checkAdminAuth(req, password);
+    const authCheck = await checkAdminAuth(req, "");
     if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
@@ -41,9 +41,9 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => null);
     if (!body) return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
 
-    const password = String(body.password || "");
+    // V18.3: dead password param removed (checkAdminAuth ignores it)
 
-    const authCheck = await checkAdminAuth(req, password);
+    const authCheck = await checkAdminAuth(req, "");
     if (!authCheck.ok) {
       const ip = getClientIp(req as any);
       // skip log اگه کاربر وجود نداره (FK violation)

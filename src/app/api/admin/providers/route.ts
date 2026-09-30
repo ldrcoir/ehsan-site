@@ -13,7 +13,7 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const password = ""; // V17.8: dead param removed (checkAdminAuth ignores it)
 
-    const authCheck = await checkAdminAuth(req, password); if (!authCheck.ok) {
+    const authCheck = await checkAdminAuth(req, ""); if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 
@@ -48,8 +48,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
     }
 
-    const password = String(body.password || "");
-    const authCheck = await checkAdminAuth(req, password); if (!authCheck.ok) {
+    // V18.3: dead password param removed (checkAdminAuth ignores it)
+    const authCheck = await checkAdminAuth(req, ""); if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 

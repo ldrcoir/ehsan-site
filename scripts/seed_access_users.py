@@ -119,7 +119,6 @@ def main():
     conn.commit()
     print("✅ Admin user created:")
     print("   username: admin")
-    print("   password: admin123")
     print("   ⚠️  CHANGE PASSWORD IMMEDIATELY FROM ADMIN PANEL!")
     conn.close()
 

@@ -11,7 +11,7 @@
 # بعداً از پنل می‌تونی رمز جدید بذاری.
 # ============================================================================
 
-set -e
+set -eo pipefail
 
 echo "=========================================="
 echo "  ریست رمز ادمین"
@@ -26,9 +26,11 @@ cd "$PROJECT_DIR"
 echo "مسیر پروژه: $PROJECT_DIR"
 echo ""
 
-# تولید هش bcrypt برای "admin123"
+# V18.3: رمز رو به stdout چاپ نمی‌کنیم (info leak)
 NEW_PASSWORD="admin123"
-echo "در حال تولید هش برای رمز: $NEW_PASSWORD"
+
+# تولید هش bcrypt
+echo "در حال تولید هش..."
 
 HASH=$(node -e "
 const bcrypt = require('./node_modules/bcryptjs');
@@ -58,12 +60,12 @@ if [ "$COUNT" = "1" ]; then
     echo "  ✅ رمز ادمین ریست شد!"
     echo "=========================================="
     echo ""
-    echo "  رمز جدید: $NEW_PASSWORD"
+    echo "  رمز پیش‌فرض تنظیم شد. برای دیدن رمز:"
+    echo "    grep NEW_PASSWORD scripts/reset-admin-password.sh"
     echo ""
     echo "  حالا می‌تونی وارد بشی:"
     echo "    URL: http://YOUR_IP:3000/user-login"
     echo "    username: admin"
-    echo "    password: $NEW_PASSWORD"
     echo ""
     echo "  ⚠️ بعد از ورود، از پنل رمز رو عوض کن!"
     echo ""

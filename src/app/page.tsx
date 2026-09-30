@@ -543,7 +543,8 @@ export default function Home() {
           <div className={`hero-text ${reveal("hero-text")}`} data-reveal="hero-text">
             <p className="hero-greeting">{tx("hero.greeting", tt.hero.greeting)}</p>
             <h1 className="hero-title">{siteContent.settings?.["name_" + lang] || PERSONAL.fullName[lang]}</h1>
-            <p className="hero-subtitle">{PERSONAL.tagline[lang]}</p>
+            {/* V18.3: tagline از دیتابیس خونده می‌شه (قبلاً hardcoded بود) */}
+            <p className="hero-subtitle">{siteContent.settings?.[`tagline_${lang}`] || PERSONAL.tagline[lang]}</p>
             <div className="hero-cta">
               <a href="#articles" className="btn btn-primary" onClick={(e) => handleNavClick(e, "#articles")}>{tx("hero.cta1", tt.hero.cta)}</a>
               <a href="#contact" className="btn btn-ghost" onClick={(e) => handleNavClick(e, "#contact")}>{tx("hero.cta2", tt.hero.ctaContact)}</a>

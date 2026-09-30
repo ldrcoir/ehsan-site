@@ -6,7 +6,7 @@ export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
     const password = ""; // V17.8: dead param removed (checkAdminAuth ignores it)
-    const authCheck = await checkAdminAuth(req, password); if (!authCheck.ok) {
+    const authCheck = await checkAdminAuth(req, ""); if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
     const now = new Date();

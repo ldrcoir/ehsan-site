@@ -146,7 +146,8 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${vazirmatn.variable} ${inter.variable} ${lora.variable} ${firaCode.variable} antialiased bg-background text-foreground`}
         suppressHydrationWarning
       >
-        {children}
+        {/* V18.3: <main> landmark for WCAG 2.4.1 (Bypass Blocks) */}
+        <main id="main-content">{children}</main>
       </body>
     </html>
   );

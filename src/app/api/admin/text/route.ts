@@ -12,17 +12,11 @@ import { db } from "@/lib/db";
  */
 export async function GET(req: Request) {
   try {
-    const url = new URL(req.url);
-    const password = ""; // V17.8: dead param removed (checkAdminAuth ignores it)
-
-    const authCheck = await checkAdminAuth(req, password); if (!authCheck.ok) {
-      // Public — return only EN values for display
-      const texts = await db.siteText.findMany();
-      const result: Record<string, string> = {};
-      for (const t of texts) {
-        result[t.key] = t.valueEn || t.valueFa || t.valueDe || "";
-      }
-      return NextResponse.json({ ok: true, texts: result });
+    const authCheck = await checkAdminAuth(req, "");
+    if (!authCheck.ok) {
+      // V18.3: public branch removed — was returning data without proper auth
+      // Public text content is available via /api/content (which has PUBLIC_KEYS filter)
+      return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 
     // Admin — return all languages
@@ -34,7 +28,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: true, texts: result });
   } catch (err) {
     console.error("[/api/admin/text GET]", err);
-    return NextResponse.json({ ok: false, texts: {} });
+    return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });
   }
 }
 
@@ -43,8 +37,8 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => null);
     if (!body) return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
 
-    const password = String(body.password || "");
-    const authCheck = await checkAdminAuth(req, password); if (!authCheck.ok) {
+    // V18.3: dead password param removed (checkAdminAuth ignores it)
+    const authCheck = await checkAdminAuth(req, ""); if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 

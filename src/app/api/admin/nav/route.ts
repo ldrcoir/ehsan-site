@@ -7,7 +7,7 @@ export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
     const password = ""; // V17.8: dead param removed (checkAdminAuth ignores it)
-    const authCheck = await checkAdminAuth(req, password); const isAdmin = authCheck.ok;
+    const authCheck = await checkAdminAuth(req, ""); const isAdmin = authCheck.ok;
     const items = await db.navItem.findMany({
       where: isAdmin ? {} : { visible: true },
       orderBy: { order: "asc" },
@@ -23,8 +23,8 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => null);
     if (!body) return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
-    const password = String(body.password || "");
-    const authCheck = await checkAdminAuth(req, password); if (!authCheck.ok) {
+    // V18.3: dead password param removed (checkAdminAuth ignores it)
+    const authCheck = await checkAdminAuth(req, ""); if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
     const action = String(body.action || "");
