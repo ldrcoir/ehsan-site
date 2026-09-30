@@ -2,6 +2,7 @@ import { checkAdminAuth } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { seedDefaultProviders } from "@/lib/providers";
+import { validateBaseUrl } from "@/lib/ssrf";
 
 /**
  * GET /api/admin/providers?password=xxx
@@ -57,13 +58,21 @@ export async function POST(req: Request) {
 
     switch (action) {
       case "create": {
+        // V18.1: SSRF validation at store time (not just fetch time)
+        const rawBaseUrl = data.baseUrl ? String(data.baseUrl) : null;
+        if (rawBaseUrl) {
+          const check = validateBaseUrl(rawBaseUrl);
+          if (!check.valid) {
+            return NextResponse.json({ ok: false, error: "invalid_baseurl" }, { status: 400 });
+          }
+        }
         const created = await db.aiProvider.create({
           data: {
             name: String(data.name || "custom"),
             label: String(data.label || "New Provider"),
             model: String(data.model || ""),
             apiKey: data.apiKey ? String(data.apiKey) : null,
-            baseUrl: data.baseUrl ? String(data.baseUrl) : null,
+            baseUrl: rawBaseUrl,
             enabled: Boolean(data.enabled),
             priority: Number(data.priority) || 99,
           },
@@ -81,7 +90,17 @@ export async function POST(req: Request) {
         if (data.name !== undefined) updateData.name = String(data.name);
         if (data.label !== undefined) updateData.label = String(data.label);
         if (data.model !== undefined) updateData.model = String(data.model);
-        if (data.baseUrl !== undefined) updateData.baseUrl = data.baseUrl ? String(data.baseUrl) : null;
+        // V18.1: SSRF validation at update time too
+        if (data.baseUrl !== undefined) {
+          const rawUrl = data.baseUrl ? String(data.baseUrl) : null;
+          if (rawUrl) {
+            const check = validateBaseUrl(rawUrl);
+            if (!check.valid) {
+              return NextResponse.json({ ok: false, error: "invalid_baseurl" }, { status: 400 });
+            }
+          }
+          updateData.baseUrl = rawUrl;
+        }
         if (data.priority !== undefined) updateData.priority = Number(data.priority);
         if (data.enabled !== undefined) updateData.enabled = Boolean(data.enabled);
         // Only update apiKey if provided (not the masked value)

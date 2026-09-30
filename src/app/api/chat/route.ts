@@ -169,6 +169,18 @@ export async function POST(req: Request) {
       )
       .catch(() => {});
 
+    // V18.1: Send Telegram notification (was dead code — never called)
+    import("@/lib/telegram")
+      .then(({ notifyTelegramChat }) =>
+        notifyTelegramChat({
+          sessionId,
+          visitorId,
+          message,
+          isFirst: isFirstMessage,
+        })
+      )
+      .catch(() => {});
+
     // --- Build conversation for LLM ---
     const systemPrompt = buildSystemPrompt(lang);
     const history = [

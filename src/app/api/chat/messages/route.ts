@@ -34,7 +34,11 @@ export async function GET(req: Request) {
     }
 
     // V18.0: session ownership check — فقط پیام‌های session خودت رو می‌تونی بخونی
+    // V18.1: visitorId اجباری شد (قبلاً empty visitorId check رو bypass می‌کرد)
     const reqVisitorId = url.searchParams.get("visitorId") || "";
+    if (!reqVisitorId) {
+      return NextResponse.json({ ok: false, error: "missing_visitor_id" }, { status: 400 });
+    }
     const session = await db.chatSession.findUnique({
       where: { id: sessionId },
       select: { visitorId: true },
@@ -42,8 +46,8 @@ export async function GET(req: Request) {
     if (!session) {
       return NextResponse.json({ ok: false, error: "session_not_found" }, { status: 404 });
     }
-    // V18.0: ownership check — visitorId باید مطابق باشه
-    if (reqVisitorId && session.visitorId !== reqVisitorId) {
+    // V18.1: ownership check — visitorId باید مطابق باشه (fail-closed)
+    if (session.visitorId !== reqVisitorId) {
       return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
     }
 

@@ -164287,3 +164287,2788 @@ addressed. Estimated total effort: 4-6 hours of focused work.
 
 After applying V18.0-FIX-A through E, re-run this audit to verify
 all 5 CRITICAL tests (PART W FAIL section) flip to PASS.
+
+================================================================
+--- Task ID: V18.1-SEC-FULL ---
+================================================================
+DATE: 2026-09-30
+TYPE: Read-only security audit (NO code changes)
+SCOPE: Full src/ security audit verifying V18.0 fixes + regression sweep
+AUDITOR: general-purpose sub agent (V18.1-SEC-FULL)
+
+================================================================
+PART A — VERIFICATION MATRIX (V18.0 fixes from prior worklog)
+================================================================
+
+V18.0-FIX-A  tokenVersion (session revocation)        ❌ NOT APPLIED
+             schema.prisma:380-415 AccessUser has NO tokenVersion column
+             scripts/apply_schema.py:378-395 AccessUser CREATE TABLE
+               has NO tokenVersion column
+             src/lib/access-auth.ts:67-96 createSessionToken + 
+               verifySessionToken HMAC payload = `${userId}.${expiresAt}`
+               (no tokenVersion). NO DB lookup in verifySessionToken
+               so no way to compare against user.tokenVersion.
+             src/app/api/admin/security/route.ts:86-91 change_password
+               only updates passwordHash, does NOT increment any
+               tokenVersion field. Stolen cookie remains valid up
+               to 24h after password change.
+             src/app/api/admin/users/[id]/route.ts:61-70 PUT active=
+               false and DELETE both fail to invalidate sessions.
+             RESULT: Stolen admin cookie survives password change,
+                     user deactivation, user delete.
+
+V18.0-FIX-B  /api/chat/messages visitorId ownership   ⚠️ PARTIAL — BYPASSABLE
+             src/app/api/chat/messages/route.ts:36-48
+               Line 37: `const reqVisitorId = url.searchParams.get("visitorId") || "";`
+               Line 46: `if (reqVisitorId && session.visitorId !== reqVisitorId) {
+                          return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
+                        }`
+             PROBLEM: ownership check is conditional on reqVisitorId
+                      being truthy. Empty string is falsy → attacker
+                      who OMITS visitorId from URL bypasses the check
+                      entirely. IDOR still exploitable: GET
+                      /api/chat/messages?sessionId=<victim> (no
+                      visitorId param) returns the victim's messages.
+             Rate limit (V17.9): ✅ intact (lines 4-17, 50-59)
+             XFF still spoofable (line 51-52 — see V18.0-FIX-E).
+
+V18.0-FIX-C  SSRF hardening (validateBaseUrl)         ⚠️ PARTIAL — REMAINING BYPASSES
+             src/lib/providers.ts:12-86
+               Decimal IP blocked ✅ (lines 21-31 — 2130706433 → 127.0.0.1)
+               Hex IP blocked ✅ (lines 33-43 — 0x7f000001 → 127.0.0.1)
+               GCP metadata hostname blocked ✅ (line 47 — metadata.google.internal)
+               Azure metadata hostname blocked ✅ (line 50 — metadata.azure.com)
+               AWS/Azure metadata IP blocked ✅ (line 49 + regex /^169\.254\./)
+             REMAINING BYPASSES:
+               1. DNS rebinding — validateBaseUrl parses hostname
+                  string against regex only. No dns.lookup() call
+                  to resolve hostname to IP. Attacker sets up DNS
+                  that returns public IP at validation time (when
+                  validateBaseUrl runs in admin/providers POST) and
+                  returns 127.0.0.1 at fetch time. Bypass.
+               2. Octal IP — `0177.0.0.1` not matched by `/^\d+$/`
+                  regex (has dots) nor by `/^127\./` (starts with
+                  "0177"). Node URL parser may normalize to 127.0.0.1
+                  on connect. Bypass.
+               3. Hex IP without 0x prefix (e.g. `7f000001`) — not
+                  matched by `/^\d+$/` regex (has 'f'). Bypass.
+               4. IPv6-mapped IPv4 `[::ffff:127.0.0.1]` — not blocked
+                  by `/^::1$/` regex. Bypass.
+             CRITICAL GAP: baseUrl NOT validated at STORE time.
+               src/app/api/admin/providers/route.ts:60-69 (create)
+                 stores data.baseUrl without calling validateBaseUrl.
+               src/app/api/admin/providers/route.ts:84 (update)
+                 same — stores without validation.
+               validateBaseUrl is only called at FETCH time inside
+               callOpenAI/callOllama/callGroq (providers.ts:178,
+                 233, 256). Admin saves invalid baseUrl → silent
+                 fetch failure later. Recommended by V18.0-FIX-C
+                 to validate at STORE time — NOT DONE.
+
+V18.0-FIX-D  Chat session ownership (POST /api/chat)  ✅ APPLIED — VERIFIED
+             src/app/api/chat/route.ts:131-144
+               Line 138: `if (session && session.visitorId !== visitorId) {`
+               Line 140-143: returns `{ ok: false, error: "session_mismatch" }`
+                             with HTTP 403.
+             Confirmed: attacker POSTing to victim's sessionId with
+               attacker's visitorId → 403 session_mismatch. ✅
+
+V18.0-FIX-E  XFF spoofing (use x-real-ip first)       ❌ NOT APPLIED — STILL SPOOFABLE
+             All 7 sites STILL check `x-forwarded-for` FIRST then
+             fall back to `x-real-ip`. Attacker who sends XFF header
+             controls the IP used for rate limit, bypassing all
+             rate limits (login 5/15min, contact 3/10min, chat
+             8/min, chat messages 20/min).
+             Sites:
+               src/middleware.ts:146-147                  (login/contact/chat rate limit)
+               src/lib/access-auth.ts:176-181              (getClientIp helper)
+               src/app/api/contact/route.ts:49-51          (contact rate limit)
+               src/app/api/user/logout/route.ts:14-15      (logout logging)
+               src/app/api/track/route.ts:12              (visitor tracking)
+               src/app/api/chat/route.ts:79-81             (chat rate limit)
+               src/app/api/chat/messages/route.ts:51-52    (chat messages rate limit)
+
+V18.0-FIX-F  Logout CSRF (remove from PUBLIC_API_PREFIXES) ✅ APPLIED
+             src/middleware.ts:24-38 — PUBLIC_API_PREFIXES no longer
+               contains `/api/user/logout`. Comment at line 30-31
+               confirms: "V18.0: /api/user/logout از PUBLIC_API_PREFIXES
+               حذف شد (CSRF protection)".
+             RESULT: POST /api/user/logout now goes through CSRF
+               Origin check. ✅
+
+V18.0-FIX-G  middleware HMAC verification              ❌ NOT APPLIED
+             src/middleware.ts:71-94 hasValidSession still only
+               does STRUCTURAL check:
+                 - token base64-decodable
+                 - 3 parts
+                 - expiresAt is integer
+                 - not expired
+                 - userId non-empty
+             Line 88-89 comment explicitly states: "در middleware
+               نمی‌تونیم HMAC رو verify کنیم چون SESSION_SECRET بهش
+               دسترسی نداریم. فقط ساختار رو چک می‌کنیم — API route
+               اصلی خودش HMAC رو verify می‌کنه".
+             IMPACT: Forged cookie passes middleware → /user-dashboard
+               HTML loads → admin panel UI rendered to attacker.
+               API routes verify HMAC so data fetches fail with 401,
+               but UI structure leaks. Combined with V18.0-FIX-A
+               (no tokenVersion) → forged-cookie attacker has full
+               admin UI access until cookie expires.
+
+V18.0-FIX-H  VPS IP removed from install.sh           ✅ APPLIED
+             install.sh:294-295 — hardcoded `31.70.76.10` replaced
+               with `$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'YOUR_IP')`.
+             ✅ No hardcoded VPS IP in install.sh.
+
+V18.0-FIX-I  Random admin password on install          ❌ NOT APPLIED
+             install.sh:316-317 still prints:
+               echo "    username: admin"
+               echo "    password: admin123"
+             Combined with no tokenVersion (#A) and admin/admin123
+               default → any unpatched install is exploitable.
+
+V18.0-FIX-J  eslint + eslint-config-next in devDeps   ⚠️ NOT VERIFIED (low priority)
+V18.0-FIX-K  innerHTML → textContent in anti-theft     ⚠️ NOT VERIFIED (low priority)
+V18.0-FIX-L  Telegram webhook error consistency        ⚠️ NOT VERIFIED (low priority)
+V18.0-FIX-M  Webhook secret via header only            ⚠️ NOT VERIFIED (low priority)
+V18.0-FIX-N  Dead body.password vars removal           ❌ NOT APPLIED (harmless dead code)
+             src/app/api/admin/providers/route.ts:50  reads body.password
+             src/app/api/admin/security/route.ts:44  reads body.password
+             src/app/api/admin/chat-reply/route.ts (similar pattern)
+             src/lib/admin-auth.ts:17 `_password?: string` param ignored
+V18.0-FIX-O  Strip build paths from server.js          ⚠️ NOT VERIFIED (low priority)
+V18.0-FIX-P  Versioned DB migrations                   ❌ NOT APPLIED — BLOCKS V18.0-FIX-A
+             scripts/apply_schema.py uses only CREATE TABLE IF NOT
+               EXISTS. No schema_version table. No ALTER TABLE
+               statements. If V18.1-FIX-A adds tokenVersion column
+               to schema.prisma, existing V17.9/V18.0 DBs will NOT
+               get the new column — manual ALTER TABLE required.
+V18.0-FIX-Q  middleware → proxy convention              ❌ NOT APPLIED (deprecation warning)
+             next build warns: "The 'middleware' file convention is
+               deprecated. Please use 'proxy' instead." Will break
+               in a future Next.js major.
+
+================================================================
+PART B — V18.0 FIXES APPLIED (Telegram + others)
+================================================================
+
+✅ B-1  Telegram notifications wired in contact route
+        src/app/api/contact/route.ts:183-188
+          import("@/lib/telegram")
+            .then(({ notifyTelegramContactMessage }) =>
+              notifyTelegramContactMessage({ id, name, email, message })
+            )
+            .catch(() => {});
+        src/lib/telegram.ts:40-51 notifyTelegramContactMessage ✅ exists
+        V18.0 fix verified.
+
+⚠️ B-2  Telegram notifications NOT wired in chat route (chat → Bale only)
+        src/app/api/chat/route.ts:159-170 only imports Bale's
+          notifyNewChat. src/lib/telegram.ts:53 notifyTelegramChat
+          EXISTS but is never called.
+        Not a regression (V17.x behavior), but inconsistent with
+          contact route. Recommend wiring for symmetry.
+
+================================================================
+PART C — V17.x FIXES VERIFIED STILL INTACT
+================================================================
+
+✅ C-1   middleware CSRF includes PATCH (V17.8)  middleware.ts:161
+✅ C-2   middleware body size includes DELETE (V17.8)  middleware.ts:201
+✅ C-3   HSTS honors x-forwarded-proto (V17.8)  middleware.ts:217
+✅ C-4   Security headers on redirect (V17.9)  middleware.ts:186-187
+✅ C-5   password fallback removed (V17.2)  admin-auth.ts:17 (param ignored)
+✅ C-6   HMAC + timingSafeEqual + SESSION_SECRET (V17.9)  access-auth.ts:67-96
+✅ C-7   /api/chat/messages rate limit (V17.9)  chat/messages/route.ts:4-17
+✅ C-8   validateBaseUrl + private IP regex (V17.9)  providers.ts:12-86
+✅ C-9   contact time-trap fail-closed (V17.7)  contact/route.ts:88-106
+✅ C-10  reCAPTCHA fail-closed (V17.7)  contact/route.ts:108-143
+✅ C-11  /api/content PUBLIC_KEYS whitelist (V17.7)  content/route.ts:62-71
+✅ C-12  try/catch on 30/31 routes (V17.6+V17.7+V17.9)
+          Only exception: src/app/api/route.ts (Hello world GET,
+          no DB call — try/catch not required).
+✅ C-13  dead ?password= URL params removed (V17.8)
+          grep for `searchParams.get("password")` returns 0 hits.
+✅ C-14  change_password targets authCheck.userId (V17.9)  security/route.ts:67-69
+✅ C-15  Settings tab admin-only (V17.9)  user-dashboard/page.tsx:142
+✅ C-16  install.sh set -eo pipefail (V17.7)  install.sh:15
+✅ C-17  install.sh openssl verification (V17.7)  install.sh:76-80
+✅ C-18  install.sh non-root systemd user (V17.7)  install.sh:210-244
+          User=ehsansite, Group=ehsansite, NoNewPrivileges=true,
+          ProtectSystem=full, ProtectHome=true, PrivateTmp=true.
+✅ C-19  install.sh idempotent (V17.7)  install.sh:99-107 (SESSION_SECRET
+          preserved), 114-125 (webhook secrets preserved),
+          172-182 (admin user preserved).
+✅ C-20  install.sh chmod 700 db + chmod 600 .env + chmod 600 db/custom.db
+          install.sh:128, 148, 159
+✅ C-21  webhook secrets timingSafeEqual (V17.5) — bale + telegram webhooks
+✅ C-22  bale webhook GET try/catch (V17.9)  bale/webhook/route.ts:55-82
+✅ C-23  5 rate-limit Maps ALL have setInterval cleanup (4+1 Maps)
+          1. rateLimitMap (middleware.ts:43)        cleanup @ 60-65
+          2. loginAttempts (user/login/route.ts:22) cleanup @ 25-31
+          3. hits (contact/route.ts:8)              cleanup @ 11-19
+          4. msgRateLimit (chat/messages/route.ts:5) cleanup @ 8-16
+          5. hits (chat/route.ts:9)                 cleanup @ 12-20
+✅ C-24  29 tables in apply_schema.py (User, Post, ContactMessage,
+          MessageReply, MessageTag, MessageTagRelation, MessageNote,
+          ChatSession, ChatMessage, SiteSetting, AiProvider,
+          LabEquipment, PageView, TutorialView, Book, Article,
+          Tutorial, Skill, AiInstruction, EmailConfig,
+          TelegramConfig, CustomTheme, SiteText, NavItem,
+          AccessUser, AccessLog, BlockedIp, SecurityLog, AparatClip).
+✅ C-25  db/ NOT tracked in git
+          .gitignore has /db/, /db/*.db, /db/*.db-journal, etc.
+          `git ls-files db/` returns empty.
+✅ C-26  install-v18.0.zip ships EMPTY db/ directory (no custom.db, no .env)
+          `unzip -l public/install-v18.0.zip` shows:
+            personal-site/db/                  0 bytes (dir only)
+            personal-site/.env.example          252 bytes (template only)
+          No custom.db, no .env in zip. ✅
+✅ C-27  Cookie attributes (HttpOnly + Secure + SameSite=strict + Path=/ + MaxAge=86400)
+          user/login/route.ts:116-122
+✅ C-28  next.config.ts outputFileTracingIncludes only includes
+          prisma/schema.prisma (NOT db/) — line 30-32.
+
+================================================================
+PART D — BUILD VERIFICATION
+================================================================
+
+✅ D-1  tsc --noEmit
+          Output: clean (no TypeScript errors)
+          Ran via: `npx tsc --noEmit`
+
+✅ D-2  next build
+          Output: ✓ Compiled successfully in 13.0s
+                  ✓ Finished TypeScript in 6.8s
+                  ✓ Generating static pages 38/38 in 242ms
+                  All 31 API routes present in build output.
+          Warning: middleware file convention deprecated (U-12/V18.0-FIX-Q).
+                   Not blocking V18.1.
+
+✅ D-3  standalone db inspection (post-build)
+          .next/standalone/db/custom.db exists locally (421KB, 29 tables)
+          BUT — all tables EMPTY:
+            AccessUser: 0 rows
+            ContactMessage: 0 rows
+            ChatMessage: 0 rows
+            SiteSetting: 0 rows
+            AiProvider: 0 rows
+            AccessLog: 0 rows
+            PageView: 0 rows
+            SecurityLog: 0 rows
+          No credentials or data leaked via standalone build. ✅
+
+================================================================
+PART E — REGRESSION CHECKS (V17.7+V17.8+V17.9)
+================================================================
+
+E-1  Contact route comprehensive checks:
+       ✅ Bot UA detection (contact/route.ts:55-60)
+       ✅ Rate limit (contact/route.ts:62-67)
+       ✅ Honeypot field `website` (contact/route.ts:81-87)
+       ✅ Time-trap fail-closed (contact/route.ts:88-106)
+       ✅ reCAPTCHA fail-closed (contact/route.ts:108-143)
+       ✅ Email regex (contact/route.ts:153-158)
+       ✅ Message length 10+ chars (contact/route.ts:159-164)
+       ✅ Spam pattern filter (contact/route.ts:35-44, 165-170)
+       ✅ Telegram notification (contact/route.ts:183-188)
+       ✅ Bale notification (contact/route.ts:177-181)
+       ✅ Formsubmit forward (contact/route.ts:191-208)
+       ✅ try/catch with server_error 500 (contact/route.ts:215-221)
+
+E-2  Login route cookie hardening:
+       ✅ httpOnly: true (user/login/route.ts:117)
+       ✅ secure: process.env.NODE_ENV === "production" (line 118)
+       ✅ sameSite: "strict" (line 119)
+       ✅ path: "/" (line 120)
+       ✅ maxAge: 86400 (line 121) — 24h, matches SESSION_DURATION_HOURS
+       ✅ Rate limit 5/15min (line 19-44)
+       ✅ Generic "invalid_credentials" to prevent enumeration (line 73, 79)
+       ✅ Logs login_success/login_failed (line 78, 103)
+       ✅ Checks active + expiresAt post-credential-match (line 82-92)
+
+E-3  Logout route:
+       ✅ try/catch (user/logout/route.ts:9-25)
+       ✅ Logs logout to AccessLog (line 11-18)
+       ✅ Cookie delete (line 20)
+       ⚠️  Logout logging failure silently swallowed (line 11 try, line 18 catch)
+           — not a security issue, just observability gap.
+
+E-4  Webhook security (bale + telegram):
+       ✅ Both require secret (timingSafeEqual — V17.5)
+       ⚠️  Accept ?secret= in URL query string (V18.0-FIX-M not applied)
+           nginx access_log captures URL → secret in logs (low priority).
+
+================================================================
+PART F — ADMIN PANEL AUTH VERIFICATION (all admin routes)
+================================================================
+
+F-1  admin-auth.ts checkAdminAuth:
+       ✅ No password fallback (admin-auth.ts:17)
+       ✅ Calls getSessionFromRequest → verifySessionToken (HMAC verified)
+       ✅ Loads user from DB
+       ✅ Checks user.active
+       ✅ Checks user.role === "admin"
+       ⚠️  `_password?: string` param kept for backward compat (harmless dead code).
+
+F-2  admin/users/[id]/route.ts:
+       ✅ PUT — checkAdmin auth (line 32-35)
+       ✅ PUT — cannot deactivate self (line 73-75)
+       ✅ DELETE — checkAdmin auth (line 110-113)
+       ✅ DELETE — cannot delete self (line 118-120)
+       ❌ PUT — does NOT increment tokenVersion on:
+                 - active=false (line 61-66)
+                 - passwordHash change (line 68-70)
+                 - role change (line 49)
+       ❌ DELETE — cascade deletes AccessLog but doesn't revoke
+                   sessions (existing cookies remain valid until expiry
+                   since verifySessionToken has no DB lookup).
+       Both these gaps are part of V18.0-FIX-A. NOT APPLIED.
+
+================================================================
+PART G — MIDDLEWARE AUDIT (all 7 concerns)
+================================================================
+
+G-1  hasValidSession (V18.0-FIX-G status) — ❌ INADEQUATE
+       middleware.ts:71-94
+       Structural check only — no HMAC. See V18.0-FIX-G above.
+
+G-2  Rate limit — ✅ present
+       middleware.ts:43-66 + 145-156
+       Window 15min, login max 5, contact/chat max 8.
+       ✅ setInterval cleanup at 60-65.
+       ⚠️  Uses XFF first (line 146-147) — bypassable (V18.0-FIX-E).
+
+G-3  CSRF (V17.8) — ✅ COMPLETE
+       middleware.ts:158-179
+       Methods: POST, PUT, PATCH, DELETE all covered (line 161).
+       Origin check + host match (line 162-178).
+       PUBLIC_API_PREFIXES list at 24-38 — /api/user/logout removed ✅.
+
+G-4  Body size limit (V17.8) — ✅ COMPLETE
+       middleware.ts:199-210
+       Methods: POST, PUT, PATCH, DELETE all covered (line 201).
+       Max 1MB content-length (line 203).
+
+G-5  CSP — ✅ present
+       middleware.ts:112-134
+       Strict default-src 'self', frame-ancestors 'none',
+       object-src 'none', base-uri 'self'.
+       ⚠️  script-src allows 'unsafe-inline' + 'unsafe-eval' (line 115).
+           Needed for Next.js but worth tracking.
+
+G-6  HSTS (V17.8) — ✅ COMPLETE
+       middleware.ts:215-220
+       `req.url.startsWith("https://") || req.headers.get("x-forwarded-proto") === "https"`
+       max-age=63072000; includeSubDomains; preload.
+
+G-7  Security headers on redirect (V17.9) — ✅ COMPLETE
+       middleware.ts:184-188
+       `const redirectRes = NextResponse.redirect(loginUrl); return addSecurityHeaders(redirectRes);`
+       Headers applied to redirect response.
+
+G-8  Map cleanup (4+1 Maps) — ✅ ALL 5 MAPS HAVE setInterval CLEANUP
+       See C-23 above.
+
+================================================================
+PART H — REMAINING CRITICAL ISSUES (V18.1 BLOCKERS)
+================================================================
+
+🚨 H-1  STOLEN COOKIE VALID AFTER PASSWORD CHANGE [CRITICAL — V18.0-FIX-A missed]
+       Files:
+         prisma/schema.prisma:380-415 (AccessUser has NO tokenVersion)
+         scripts/apply_schema.py:378-395 (AccessUser CREATE TABLE has NO tokenVersion)
+         src/lib/access-auth.ts:65-96 (HMAC payload = `${userId}.${expiresAt}` only)
+         src/app/api/admin/security/route.ts:86-91 (change_password does NOT increment any version)
+         src/app/api/admin/users/[id]/route.ts:68-70 (password change does NOT increment)
+         src/app/api/admin/users/[id]/route.ts:61-66 (active=false does NOT invalidate session)
+         src/app/api/admin/users/[id]/route.ts:129 (DELETE doesn't invalidate session — relies on cookie expiry)
+       Impact: Stolen admin cookie remains valid up to 24h after
+                password change, user deactivation, user delete.
+                Combined with H-5 (middleware doesn't verify HMAC)
+                → forged-cookie attacker has admin UI access.
+                Combined with H-4 (XFF spoofable) → unlimited rate
+                limit bypass for credential stuffing.
+       Fix: Add `tokenVersion Int @default(0)` to AccessUser in
+            schema + apply_schema.py. Include in HMAC payload.
+            Increment on: password change (security POST), user
+            PUT active=false, user DELETE, role change. DB lookup
+            in verifySessionToken (compare token's version with
+            user.tokenVersion).
+       Effort: 2-3 hours (schema + access-auth + 3 admin routes +
+                apply_schema.py migration + tests).
+
+🚨 H-2  /api/chat/messages IDOR BYPASS (visitorId omitted) [CRITICAL — V18.0-FIX-B partial]
+       File: src/app/api/chat/messages/route.ts:36-48
+       Bug: `const reqVisitorId = url.searchParams.get("visitorId") || "";`
+            Then `if (reqVisitorId && session.visitorId !== reqVisitorId)`
+            — empty string is falsy → check skipped entirely when
+            visitorId param is missing from URL.
+       Impact: Anyone (no cookie, no visitorId) can read any chat
+                session's assistant messages by sessionId enumeration.
+                Attacker who knows sessionId (from network sniffing,
+                referer leakage, XSS) gets full message history.
+       Fix: Make visitorId REQUIRED — return 400 if missing.
+            OR: require admin auth as alternative (checkAdminAuth).
+            `if (!reqVisitorId) return 400; if (session.visitorId !== reqVisitorId) return 403;`
+       Effort: 5 min (1 line change).
+
+🚨 H-3  SSRF validateBaseUrl REMAINING BYPASSES [HIGH — V18.0-FIX-C partial]
+       File: src/lib/providers.ts:12-86
+       Remaining bypasses:
+         (a) DNS rebinding — no dns.lookup() call. Hostname string
+             passes regex check; IP resolved at fetch time may be private.
+         (b) Octal IP `0177.0.0.1` — not matched by `/^\d+$/` (has dots)
+             nor by `/^127\./` (starts with "0177"). Node URL parser
+             may normalize to 127.0.0.1 at connect time.
+         (c) Hex IP without `0x` prefix `7f000001` — not matched by
+             `/^\d+$/` (has 'f' char).
+         (d) IPv6-mapped IPv4 `[::ffff:127.0.0.1]` — not blocked by
+             `/^::1$/` regex.
+       Additional gap: baseUrl NOT validated at STORE time
+         src/app/api/admin/providers/route.ts:60-69 (create)
+         src/app/api/admin/providers/route.ts:84 (update)
+         validateBaseUrl only called at fetch time inside
+         callOpenAI/callOllama/callGroq (providers.ts:178, 233, 256).
+       Impact: Admin (or attacker with stolen cookie via H-1) can
+                save baseUrl that passes regex but resolves to
+                private IP / cloud metadata at fetch time → server
+                makes outbound request → leaks cloud IAM creds
+                on GCP/Azure.
+       Fix:
+         (1) Replace regex-only with dns.lookup() — resolve hostname
+             to IP, then check resolved IP against private ranges.
+         (2) Add octal/hex/IPv6-mapped detection to existing regex
+             block.
+         (3) Call validateBaseUrl at STORE time in /api/admin/providers
+             POST create + update handlers — return 400 to admin
+             on invalid baseUrl instead of silent fetch failure.
+         (4) Alternative simpler fix: strict hostname allowlist
+             (api.openai.com, api.anthropic.com, api.groq.com,
+             localhost:11434 only — reject custom hostnames).
+       Effort: 1-2 hours (DNS resolution + IP range check + store-time
+                validation + tests).
+
+🚨 H-4  XFF SPOOFING BYPASSES ALL RATE LIMITS [HIGH — V18.0-FIX-E missed]
+       Files: 7 sites (see V18.0-FIX-E above)
+       All check `x-forwarded-for` first, fall back to `x-real-ip`.
+       Attacker rotates XFF header to bypass:
+         - Login brute-force (5/15min → unlimited)
+         - Contact form (3/10min → unlimited)
+         - Chat (8/min → unlimited)
+         - Chat messages IDOR (20/min → unlimited — combines with H-2)
+       Fix: Replace `x-forwarded-for` with `x-real-ip` (set by nginx
+            unspoofable from $remote_addr). OR walk XFF chain
+            right-to-left past TRUSTED_PROXIES env list.
+       Effort: 30 min (mechanical replacement in 7 sites, OR add
+                shared getClientIpSafe helper).
+
+🚨 H-5  middleware hasValidSession DOES NOT VERIFY HMAC [HIGH — V18.0-FIX-G missed]
+       File: src/middleware.ts:71-94 (especially line 88-89 comment)
+       Current check is structural only:
+         - token base64-decodable
+         - 3 dot-separated parts
+         - expiresAt is integer
+         - not expired
+         - userId non-empty string
+       No HMAC verification. Forged cookie `base64("fakeuser.<future_ts>.<garbage>")`
+       passes middleware.
+       Impact: Forged cookie reaches /user-dashboard HTML load →
+                admin panel UI rendered to attacker. API routes
+                verify HMAC so data fetches fail with 401, but UI
+                structure leaks (admin tab labels, permission hints,
+                form fields). Combined with H-1 (no tokenVersion) →
+                forged-cookie attacker has full admin UI access
+                until cookie expires (24h).
+       Fix:
+         Option A (preferred): Read process.env.SESSION_SECRET in
+           middleware, compute expected HMAC, compare with
+           crypto.timingSafeEqual. ~30 min rewrite of hasValidSession.
+         Option B: Move session check entirely to a server-side
+           helper called by each protected route (delete middleware
+           auth check). More invasive but cleaner.
+       Effort: 30-60 min.
+
+================================================================
+PART I — ADDITIONAL FINDINGS (MEDIUM/LOW)
+================================================================
+
+⚠️ I-1  install.sh PRINTS DEFAULT admin/admin123 (V18.0-FIX-I not applied) [MEDIUM]
+       install.sh:316-317
+       Combined with no tokenVersion (H-1) → any unpatched install
+       with default creds is trivially exploitable, AND password
+       rotation doesn't revoke stolen cookies.
+       Fix: Generate random password with `openssl rand -base64 12`,
+            print once, store hash via seed_access_users.py. OR
+            add mustChangePassword flag and force change on first
+            login.
+       Effort: 30 min.
+
+⚠️ I-2  apply_schema.py NO VERSIONED MIGRATIONS (V18.0-FIX-P not applied) [HIGH — BLOCKS H-1]
+       scripts/apply_schema.py:1-475
+       Only uses CREATE TABLE IF NOT EXISTS. No schema_version table.
+       No ALTER TABLE statements. If V18.1 adds tokenVersion column
+       to schema.prisma + apply_schema.py CREATE TABLE, existing
+       V17.9/V18.0 DBs will NOT get the new column on re-run of
+       apply_schema.py (CREATE TABLE IF NOT EXISTS skips existing
+       tables). Users would need:
+         (a) Drop and recreate DB (loses all data), OR
+         (b) Manual ALTER TABLE AccessUser ADD COLUMN tokenVersion INTEGER DEFAULT 0.
+       Fix: Add `schema_version` table. On each apply_schema.py run,
+            check current version, apply ALTER TABLE statements to
+            bring DB up to latest version.
+       Effort: 1-2 hours (migration framework + initial migration
+                for tokenVersion).
+
+⚠️ I-3  Telegram notifications NOT wired in chat route [LOW]
+       src/app/api/chat/route.ts:159-170 — only Bale's notifyNewChat
+       is called. src/lib/telegram.ts:53 notifyTelegramChat exists
+       but is dead code.
+       Inconsistent with contact route (which wires both Bale + Telegram).
+       Fix: Add parallel import("@/lib/telegram").then(({ notifyTelegramChat }) => ...)
+       Effort: 5 min.
+
+⚠️ I-4  Dead body.password vars in 14 POST handlers (V18.0-FIX-N not applied) [LOW]
+       Files include:
+         src/app/api/admin/providers/route.ts:50
+         src/app/api/admin/security/route.ts:44
+         src/app/api/admin/chat-reply/route.ts (similar pattern)
+       Each reads body.password and passes to checkAdminAuth which
+       ignores it. Harmless dead code; mechanical removal would
+       clean up.
+       Effort: 10 min.
+
+⚠️ I-5  middleware deprecation warning (V18.0-FIX-Q not applied) [LOW]
+       next build warns: "The 'middleware' file convention is
+       deprecated. Please use 'proxy' instead."
+       Will become breaking in future Next.js major.
+       Fix: `npx @next/codemod@canary middleware-to-proxy .`
+            Test thoroughly before V18.1 release.
+       Effort: 5 min + testing.
+
+⚠️ I-6  Webhook secrets in URL query (V18.0-FIX-M not applied) [LOW]
+       src/app/api/bale/webhook/route.ts:19 — accepts ?secret=
+       src/app/api/telegram/webhook/route.ts:9 — accepts ?secret=
+       nginx access_log captures full URL → secret in logs.
+       Fix: Prefer header over URL query; configure nginx
+            access_log off for webhook paths.
+       Effort: 30 min (nginx config + bot setup docs).
+
+⚠️ I-7  Standalone db/custom.db ships with 29 EMPTY tables [INFO]
+       .next/standalone/db/custom.db exists locally after build,
+       421KB, 29 tables, all empty (no users, no messages, no settings).
+       install-v18.0.zip itself ships with EMPTY db/ DIRECTORY ONLY
+       (no custom.db file inside the zip — verified via unzip -l).
+       This is the expected behavior — install.sh creates db/custom.db
+       on first run via apply_schema.py + seed_access_users.py.
+       NO LEAK. ✅ Just documenting for completeness.
+
+⚠️ I-8  innerHTML in anti-theft (V18.0-FIX-K not verified) [LOW]
+       src/app/page.tsx ~line 142-159 — document.body.innerHTML =
+       `<div>...</div>` (per prior worklog). Hardcoded HTML string,
+       not user input → not directly exploitable. Pattern fragile:
+       future change that interpolates user input becomes XSS.
+       Fix: Use document.body.textContent or DOM API.
+       Effort: 10 min.
+
+⚠️ I-9  Telegram webhook error inconsistency (V18.0-FIX-L not verified) [LOW]
+       src/app/api/telegram/webhook/route.ts:26 (per prior worklog)
+       catch returns `{ ok: false }` (no error field). Other routes
+       return `{ ok: false, error: "server_error" }`.
+       Fix: Add error field for consistency.
+       Effort: 1 line.
+
+⚠️ I-10 Build paths leaked in server.js (V18.0-FIX-O not verified) [LOW]
+       .next/standalone/server.js contains nextConfig JSON with
+       "outputFileTracingRoot":"/home/z/my-project",
+       "repoRoot":"/home/z/my-project",
+       "turbopack":{"root":"/home/z/my-project"}.
+       Reveals build machine's directory structure. Next.js injects
+       these automatically.
+       Fix: post-build sed to strip /home/z/my-project references,
+            OR build in a generic path like /app.
+       Effort: 5 min (post-build script).
+
+================================================================
+PART J — RUNTIME BUILD TESTS
+================================================================
+
+✅ J-1  tsc --noEmit            → 0 errors
+✅ J-2  next build              → ✓ Compiled successfully in 13.0s
+✅ J-3  All 31 API routes       → present in build output
+✅ J-4  All 38 pages/routes     → statically or dynamically generated
+✅ J-5  Standalone db/           → 29 tables, all empty (no leak)
+✅ J-6  install-v18.0.zip db/   → empty directory only (no custom.db, no .env)
+✅ J-7  .gitignore              → /db/ excluded, .env* excluded
+✅ J-8  git ls-files db/        → empty (db/ not tracked)
+✅ J-9  apply_schema.py tables  → 29 tables (verified via grep)
+✅ J-10 Map cleanup             → all 5 Maps (4 rate limit + 1 middleware) have setInterval
+
+================================================================
+PART K — FINAL VERDICT
+================================================================
+
+V18.0 FIXES APPLIED: 3 of 5 critical (D=chat session ownership ✅,
+                                    F=logout CSRF ✅,
+                                    H=VPS IP removed ✅).
+                     Telegram wired in contact route ✅.
+                     Decimal/hex/GCP-metadata SSRF blocked ✅
+                       (but DNS rebinding + octal + store-time
+                        validation still missing).
+
+V18.0 FIXES NOT APPLIED: 5 of 5 partial/missing critical fixes:
+                            A=tokenVersion ❌
+                            B=chat/messages ownership (bypassable) ⚠️
+                            C=SSRF hardening (partial) ⚠️
+                            E=XFF spoofing ❌
+                            G=middleware HMAC ❌
+
+V18.1 RELEASE READINESS: ❌ BLOCKED — 5 CRITICAL ISSUES (see PART H)
+
+================================================================
+PART L — TOP 5 CRITICAL BLOCKING V18.1
+================================================================
+
+🚨 #1 STOLEN COOKIE VALID AFTER PASSWORD CHANGE [CRITICAL — H-1]
+    Files: prisma/schema.prisma:380-415
+           scripts/apply_schema.py:378-395
+           src/lib/access-auth.ts:65-96
+           src/app/api/admin/security/route.ts:86-91
+           src/app/api/admin/users/[id]/route.ts:61-70, 129
+    Impact: Stolen admin cookie remains valid up to 24h after
+            password change, user deactivation, user delete.
+            Defeats incident response. Combined with #5 (middleware
+            doesn't verify HMAC) → forged-cookie attacker has admin
+            UI access. Combined with #4 (XFF spoofable) → unlimited
+            credential stuffing rate limit bypass.
+    Fix: Add `tokenVersion Int @default(0)` to AccessUser. Include
+         in HMAC payload `${userId}.${expiresAt}.${tokenVersion}`.
+         Increment on: password change, user deactivation, user
+         delete, role change. DB lookup in verifySessionToken
+         (compare token's version with user.tokenVersion from DB).
+         Requires V18.0-FIX-P (versioned migrations in apply_schema.py)
+         for existing DBs.
+    Effort: 2-3 hours (schema + access-auth + 3 admin routes +
+             apply_schema.py migration + tests).
+
+🚨 #2 /api/chat/messages IDOR — OWNERSHIP CHECK BYPASSABLE [CRITICAL — H-2]
+    File: src/app/api/chat/messages/route.ts:36-48
+    Bug: `const reqVisitorId = url.searchParams.get("visitorId") || "";`
+         Then `if (reqVisitorId && session.visitorId !== reqVisitorId)`
+         — empty string is falsy → check skipped entirely when
+         visitorId param is missing from URL.
+    Impact: Anyone (no cookie, no visitorId) can read ANY chat
+            session's assistant messages by sessionId enumeration.
+            V18.0-FIX-B intended to fix this but the conditional
+            on reqVisitorId leaves the original IDOR exploitable.
+    Fix: Make visitorId REQUIRED:
+           `if (!reqVisitorId) return 400;`
+           `if (session.visitorId !== reqVisitorId) return 403;`
+         OR require admin auth as alternative (checkAdminAuth).
+    Effort: 5 min (1 line change).
+
+🚨 #3 SSRF BYPASSES IN validateBaseUrl [HIGH — H-3]
+    File: src/lib/providers.ts:12-86
+    Bypass vectors: DNS rebinding (no dns.lookup), octal IP
+                   (0177.0.0.1), hex IP without 0x prefix (7f000001),
+                   IPv6-mapped IPv4 ([::ffff:127.0.0.1]).
+    Additional gap: baseUrl NOT validated at STORE time in
+                   /api/admin/providers POST create (line 60-69) and
+                   update (line 84). Admin saves invalid/SRRF baseUrl →
+                   silent fetch failure later.
+    Impact: Admin (or attacker with stolen cookie via #1) can
+            set baseUrl that passes regex check but resolves to
+            private IP / cloud metadata at fetch time → server makes
+            outbound request → leaks cloud IAM creds on GCP/Azure.
+    Fix: (1) Replace regex with dns.lookup() — resolve hostname to IP,
+            then check resolved IP against private ranges.
+         (2) Add octal/hex/IPv6-mapped detection to existing regex.
+         (3) Call validateBaseUrl at STORE time in providers POST
+            (create + update) → return 400 on invalid.
+         (4) OR simpler: strict hostname allowlist (api.openai.com,
+            api.anthropic.com, api.groq.com, localhost:11434 only).
+    Effort: 1-2 hours (DNS resolution + IP range check + store-time
+            validation + tests).
+
+🚨 #4 X-FORWARDED-FOR SPOOFING BYPASSES ALL RATE LIMITS [HIGH — H-4]
+    Files: 7 sites
+      - src/middleware.ts:146-147
+      - src/lib/access-auth.ts:176-181
+      - src/app/api/contact/route.ts:49-51
+      - src/app/api/user/logout/route.ts:14-15
+      - src/app/api/track/route.ts:12
+      - src/app/api/chat/route.ts:79-81
+      - src/app/api/chat/messages/route.ts:51-52
+    Impact: Attacker rotates XFF header to bypass:
+      - Login brute-force (5/15min → unlimited)
+      - Contact form (3/10min → unlimited)
+      - Chat (8/min → unlimited)
+      - Chat messages IDOR (20/min → unlimited — combines with #2)
+    Fix: Trust only req.socket.remoteAddress for direct connections,
+         OR walk XFF chain right-to-left past TRUSTED_PROXIES env
+         list. For nginx+next.js, configure nginx to set X-Real-IP
+         from $remote_addr (already done in nginx-ehsanmorad.conf:23)
+         and use x-real-ip INSTEAD of x-forwarded-for[0] — meaning
+         swap the order: try x-real-ip FIRST, fall back to XFF (or
+         drop XFF entirely).
+    Effort: 30 min (replace x-forwarded-for with x-real-ip in 7
+            sites, OR add a shared helper).
+
+🚨 #5 middleware hasValidSession DOES NOT VERIFY HMAC [HIGH — H-5]
+    File: src/middleware.ts:71-94 (especially line 88-89 comment)
+    Current check is structural only — forged cookie
+    `base64("fakeuser.<future_ts>.<garbage>")` passes middleware.
+    Impact: Forged cookie reaches /user-dashboard HTML load →
+            admin panel UI rendered to attacker. API routes verify
+            HMAC so data fetches fail with 401, but UI structure
+            leaks. Combined with #1 (no tokenVersion) → forged-cookie
+            attacker has full admin UI access until cookie expires.
+    Fix: Read process.env.SESSION_SECRET in middleware, compute
+         expected HMAC, compare via crypto.timingSafeEqual. ~30 min
+         rewrite of hasValidSession. OR move session check entirely
+         to a server-side helper called by each protected route.
+    Effort: 30-60 min.
+
+================================================================
+PART M — REMEDIATION ORDER (recommended for V18.1)
+================================================================
+
+V18.1-FIX-1: tokenVersion (H-1) + apply_schema.py migrations (I-2)
+             Schema: add `tokenVersion Int @default(0)` to AccessUser
+             Token: include in HMAC payload `${userId}.${expiresAt}.${tokenVersion}`
+             Increment on: password change, user deactivation, user delete
+             Verify: DB lookup in verifySessionToken (compare token's
+                     version with user.tokenVersion from DB)
+             Migration: apply_schema.py needs schema_version table +
+                         ALTER TABLE AccessUser ADD COLUMN tokenVersion
+                         INTEGER NOT NULL DEFAULT 0
+             Files: prisma/schema.prisma, scripts/apply_schema.py,
+                    src/lib/access-auth.ts,
+                    src/app/api/admin/security/route.ts,
+                    src/app/api/admin/users/[id]/route.ts
+             Effort: 2-3 hours
+
+V18.1-FIX-2: /api/chat/messages ownership (H-2)
+             Make visitorId REQUIRED (return 400 if missing).
+             Then visitorId match check.
+             Files: src/app/api/chat/messages/route.ts:36-48
+             Effort: 5 min
+
+V18.1-FIX-3: SSRF hardening (H-3)
+             dns.lookup() + IP range check on resolved IP
+             Octal/hex/IPv6-mapped detection
+             Store-time validation in /api/admin/providers POST
+             Files: src/lib/providers.ts, src/app/api/admin/providers/route.ts
+             Effort: 1-2 hours
+
+V18.1-FIX-4: Trusted proxy / XFF (H-4)
+             Replace `x-forwarded-for` with `x-real-ip` (or shared
+             helper). 7 sites.
+             Effort: 30 min
+
+V18.1-FIX-5: middleware HMAC (H-5)
+             Read SESSION_SECRET in middleware, compute HMAC,
+             timingSafeEqual compare.
+             Files: src/middleware.ts:71-94
+             Effort: 30-60 min
+
+V18.1-FIX-6 (bonus): install.sh random password (I-1)
+                    Telegram chat notifications (I-3)
+                    Dead body.password cleanup (I-4)
+                    middleware → proxy migration (I-5)
+                    Webhook secret via header only (I-6)
+                    innerHTML → textContent (I-8)
+                    Telegram webhook error consistency (I-9)
+                    Build paths stripped from server.js (I-10)
+                    Total bonus effort: 1-2 hours
+
+Estimated total effort for V18.1-FIX-1 through V18.1-FIX-5:
+  4-6 hours of focused work + 1 hour testing.
+
+After applying V18.1-FIX-1 through V18.1-FIX-5, re-run this audit
+to verify all 5 CRITICAL tests flip to PASS.
+
+================================================================
+NO CODE CHANGES MADE (read-only audit per task instructions)
+================================================================
+
+This task is a read-only security audit. No files under /home/z/my-project/
+were modified EXCEPT appending this worklog entry. Build outputs
+(`npx tsc --noEmit`, `npx next build`) were generated in .next/ which
+is gitignored. No source files modified.
+
+Verified no source modifications:
+  - /home/z/my-project/src/** (all files unchanged — git status clean
+    except for public/install-v18.0.zip timestamp bump from build)
+  - /home/z/my-project/scripts/** (unchanged)
+  - /home/z/my-project/install.sh (unchanged)
+  - /home/z/my-project/prisma/schema.prisma (unchanged)
+  - /home/z/my-project/package.json (unchanged)
+  - /home/z/my-project/next.config.ts (unchanged)
+
+================================================================
+SUMMARY: V18.1 BLOCKED — 5 CRITICAL ISSUES (PART L)
+================================================================
+
+
+--- Task ID: V18.1-PANEL-FULL ---
+
+================================================================
+V18.1-PANEL-FULL — OBSESSIVE AUDIT OF ALL ADMIN PANEL + FEATURES
+================================================================
+Date: 2026-09-30 (read-only audit, no source modifications)
+Scope: ALL admin components in /home/z/my-project/src/components,
+       ALL /api/admin/* + /api/chat/* + /api/messages endpoints,
+       public page.tsx, personal.css, layout.tsx, sitemap.xml,
+       robots.txt, install.sh, apply_schema.py, prisma schema.
+Method: Static source review + runtime install test of
+        public/install-v18.0.zip on port 3018.
+TSC:    exit 0 (no type errors)
+GIT:    working tree clean — only worklog.md + install-v18.0.zip
+        modified (the latter was rebuilt in V18.0 release commit
+        538e8a0 — not by this audit).
+
+================================================================
+PART A — INSTALL TEST (V18.0 standalone, port 3018)
+================================================================
+Setup:
+  - Extracted public/install-v18.0.zip → /tmp/v18-test-extract/
+  - Copied to /tmp/v18-audit-test/ (throwaway test dir)
+  - Replaced .next/ + server.js + package.json with the project's
+    actual .next/standalone build (zip ships build manifests only;
+    install.sh on real host runs `npm run build` first).
+  - apply_schema.py → "29 tables created/verified"
+  - seed_access_users.py → admin/admin123 created
+  - .env: SESSION_SECRET=openssl rand -hex 32, BALE/TELEGRAM_WEBHOOK_SECRET
+  - Started `node server.js` on PORT=3018, NODE_ENV=production
+  - Test DB at /tmp/v18-audit-test/db/custom.db (untouched my-project DB)
+
+PASS (install):
+  ✅ Apply schema → 29 tables
+  ✅ Seed admin → bcrypt-hashed password, role=admin
+  ✅ Cookie attrs: HttpOnly; Secure (NODE_ENV=production);
+     SameSite=strict; Max-Age=86400; Path=/
+  ✅ HSTS absent on plain HTTP; HSTS present with
+     x-forwarded-proto=https (V17.8 fix intact)
+  ✅ Public /api/content returns NO bot tokens (PUBLIC_KEYS filter)
+  ✅ All 15 admin GET endpoints return 401 without cookie
+  ✅ All 15 admin GET endpoints return 200 with admin cookie
+  ✅ Webhook without secret → 403 invalid_secret
+  ✅ Webhook with wrong secret → 403 invalid_secret
+
+PASS (V18.0 fixes confirmed applied):
+  ✅ TEST 6  — chat session hijack: attacker POST returns 403
+     session_mismatch (V18.0-FIX-B applied — chat/route.ts:137-144)
+  ✅ TEST 8  — /api/chat/messages with WRONG visitorId → 403 forbidden
+     (V18.0-FIX-B applied — chat/messages/route.ts:46-48)
+  ✅ TEST 10 — logout CSRF (no Origin header) → 403 missing_origin
+     (V18.0-FIX-D applied — middleware.ts:30-31)
+  ✅ TEST 11 — logout CSRF (wrong Origin) → 403 origin_mismatch
+  ✅ TEST 13 (partial) — chat: rate limit triggered at 7th message
+     from same IP (no XFF); 429 rate_limit returned.
+  ✅ TEST 45/46/47 — SSRF fetch attempts ALL blocked by validateBaseUrl:
+     - 169.254.169.254 → ^169\.254\. regex → blocked
+     - 2130706433 (decimal) → converted to 127.0.0.1 by line 22-31
+       → matches ^127\. → blocked (V18.0 SSRF hardening works!)
+     - 0177.0.0.1 (octal) → Node's URL parser auto-converts to 127.0.0.1
+       → matches ^127\. → blocked (Node 24 behaviour, not explicit fix)
+     - metadata.google.internal → in blockedHosts Set → blocked
+  ✅ TEST 18 — VPS IP removed from install.sh:295 (now uses
+     `hostname -I | awk '{print $1}'` fallback — V18.0-FIX-H applied)
+  ✅ TEST 19/20 — Telegram notification FIRES for /api/contact (V18.0
+     fix applied — contact/route.ts:184-188 calls
+     notifyTelegramContactMessage)
+
+FAIL (CRITICAL — 3 confirmed runtime regressions / unfixed issues):
+
+🚨 A-1 STOLEN COOKIE VALID AFTER PASSWORD CHANGE [CRITICAL, UNFIXED]
+   TEST 3: After change_password (admin123 → newpass1234),
+   OLD cookie still returns 200 on /api/admin/settings.
+   Files:
+     - prisma/schema.prisma:380-415 (NO tokenVersion field on AccessUser)
+     - src/lib/access-auth.ts:67-96 (verifySessionToken does NOT
+       check any version; payload = `${userId}.${expiresAt}`)
+     - src/app/api/admin/security/route.ts:86-91 (update only sets
+       passwordHash, no tokenVersion increment)
+   SAME as V18.0-PANEL-FULL #1, V17.9 Critical #1, V17.8 D-1.
+   V18.1-FIX-A still pending.
+
+🚨 A-2 /api/chat/messages IDOR BYPASS WITH EMPTY visitorId [CRITICAL, NEW]
+   TEST 21: GET /api/chat/messages?sessionId=$SID (no visitorId
+   param at all) → 200 ok=true, returns the victim's assistant
+   messages!
+   Root cause: src/app/api/chat/messages/route.ts:46
+     `if (reqVisitorId && session.visitorId !== reqVisitorId)`
+   The `reqVisitorId &&` short-circuits when reqVisitorId is empty
+   string. An attacker who knows or enumerates a sessionId (via
+   network sniffing, referer leak, XSS) can read assistant
+   messages by simply omitting the visitorId query param.
+   This is a BYPASS of the V18.0-FIX-B ownership check that was
+   otherwise correctly added for the case where visitorId IS
+   supplied but mismatches.
+   Fix: change condition to
+     `if (!reqVisitorId || session.visitorId !== reqVisitorId)`
+   OR require visitorId server-side (400 if missing).
+   Effort: 1 line.
+
+🚨 A-3 XFF SPOOFING STILL BYPASSES ALL RATE LIMITS [CRITICAL, UNFIXED]
+   TEST 13: 12 messages with 12 different XFF values
+   (10.0.0.1 through 10.0.0.12) in <2 seconds — ALL returned
+   ok=true. Rate limit never triggered.
+   Files (7 sites, unchanged from V17.9/V18.0 audits):
+     - src/middleware.ts:146-147
+     - src/lib/access-auth.ts:175-181 (getClientIp)
+     - src/app/api/contact/route.ts:48-51
+     - src/app/api/user/logout/route.ts:14-15
+     - src/app/api/track/route.ts:12
+     - src/app/api/chat/route.ts:78-81
+     - src/app/api/chat/messages/route.ts:51-52
+   Same as V17.9 Critical #5 / V18.0 #3 — V18.1-FIX-C still
+   pending. NOTE: chat/messages route.ts:51-52 NOW uses both
+   x-forwarded-for[0] AND x-real-ip fallback, but XFF is still
+   trusted blindly as the FIRST preference.
+
+PARTIAL (HIGH):
+
+🚨 A-4 SSRF: ADMIN ENDPOINT STORES MALICIOUS baseUrl [HIGH, UNFIXED]
+   TEST 15-18: All four malicious baseUrl values (AWS metadata,
+   decimal IP, GCP metadata hostname, octal IP) were accepted by
+   POST /api/admin/providers and persisted in DB.
+   Files:
+     - src/app/api/admin/providers/route.ts:60-69 (create — no
+       validateBaseUrl call before db.aiProvider.create)
+     - src/app/api/admin/providers/route.ts:75-94 (update — same)
+   Mitigation: validateBaseUrl (providers.ts:11-86) DOES block
+   fetch at LLM-call time (TESTS 45-47 confirm), so server-side
+   request to private IP is prevented. But the malicious URL is
+   silently stored and displayed as "configured" in the UI,
+   misleading the admin.
+   Same as V18.0 #5 — V18.1-FIX-E still pending.
+
+🚨 A-5 /api/admin/text, /api/admin/themes, /api/admin/nav ALLOW
+   NON-ADMIN AUTHENTICATED USERS [HIGH, design smell]
+   TEST 35: regular_user cookie → /api/admin/text → 200 ok=true
+   TEST 36: regular_user cookie → /api/admin/themes → 200 (visible-only)
+   TEST 38: regular_user cookie → /api/admin/nav → 200 (visible-only)
+   BUT TEST 39: regular_user cookie → /api/admin/clips → 401
+       TEST 40: regular_user cookie → /api/admin/content → 401
+       TEST 41: regular_user cookie → /api/admin/settings → 401
+   Inconsistency: 3 admin endpoints allow any authenticated user
+   to fetch visible-only items via /api/admin/* path. Not a leak
+   (data is public), but the /api/admin/* prefix should
+   consistently require admin auth.
+   Files:
+     - src/app/api/admin/text/route.ts:13-25 (where: isAdmin ? {} : {})
+     - src/app/api/admin/themes/route.ts:14-19 (same pattern)
+     - src/app/api/admin/nav/route.ts:10-13 (same pattern)
+
+================================================================
+PART B — COMPONENT-LEVEL FINDINGS
+================================================================
+
+------------------------------------------------------------
+B-1 SettingsPanel.tsx (967 lines) — 15 features
+------------------------------------------------------------
+✅ 15 features verified (all present and functional):
+   1. switchPanelLang (fa/en/de) — persists localStorage:288
+   2. switchFont (5 fonts) — sets data-font:296
+   3. changeName (fa/en/de) — POST /api/admin/security:428-432
+   4. changeHandle — POST action=change_handle:413-415
+   5. changeTagline (fa/en/de) — POST action=change_tagline:441-445
+   6. changePassword — currentPassword verified, min 6 chars:382-389
+   7. saveEmail — POST /api/admin/email set_email:461
+   8. saveBale — POST /api/admin/settings (token skip-if-masked
+      on server:83-86)
+   9. saveTelegram — same pattern
+   10. saveAi (apiEnabled toggle, adminTagline, adminStatus):503-509
+   11. saveProvider (create/update — apiKey only if !starts-with ••••):528
+   12. deleteProvider — confirm() dialog:545
+   13. toggleProvider — POST action=toggle:557
+   14. Provider edit form (name/label/model/priority/apiKey/baseUrl/
+       enabled):865-949
+   15. Help section (6 hints × 3 langs):952-963
+
+✅ V17.5 masked tokens verified (server settings/route.ts:139-144
+   masks baleBotToken + telegramBotToken on GET).
+✅ V17.6 apiKey masked in POST verified (server providers/route.ts:88
+   — `if (data.apiKey && !String(data.apiKey).startsWith("••••"))`
+   skips masked values).
+✅ V17.9 settings tab admin-only verified
+   (user-dashboard/page.tsx:141-142 — `if (tabId === "settings") return isAdmin;`).
+✅ Promise.all for parallel fetch on load:302-306.
+✅ RTL-aware container:566.
+✅ Toast notifications:567-571, auto-hide 3s:358.
+✅ aria-label on password show/hide button:721.
+
+🚨 B-1a adminTagline/adminStatus saved but NEVER DISPLAYED on site
+   (V18.0-PANEL-FULL B-1c — UNFIXED).
+   - Saved: SettingsPanel.tsx:507-508 (POST /api/admin/settings)
+   - Stored: SiteSetting key=adminTagline, adminStatus
+   - Returned publicly: api/content/route.ts:62-68 (PUBLIC_KEYS includes
+     both)
+   - But page.tsx NEVER reads siteContent.settings.adminTagline or
+     adminStatus. Dead feature.
+
+🚨 B-1b Hero subtitle uses PERSONAL.tagline[lang] (HARDCODED)
+   instead of admin-edited tagline_<lang>.
+   File: src/app/page.tsx:546
+     `<p className="hero-subtitle">{PERSONAL.tagline[lang]}</p>`
+   Admin edits tagline_fa/en/de via SettingsPanel.changeTagline →
+   stored in DB → returned by /api/content → page.tsx IGNORES it.
+   Same as V18.0 B-12a — UNFIXED.
+   Fix: change to
+     `{siteContent.settings?.["tagline_" + lang] || PERSONAL.tagline[lang]}`
+
+🚨 B-1c /api/chat/route.ts buildSystemPrompt uses PERSONAL.fullName
+   + PERSONAL.tagline (HARDCODED), NOT admin-edited name/tagline
+   from DB.
+   Files: src/app/api/chat/route.ts:37-38, 61, 201-203
+   Same as V18.0 B-1d — UNFIXED.
+
+⚠️ B-1d Only 1 aria-* attribute in entire SettingsPanel (line 721).
+   Missing aria-label on: save buttons (617, 628, 641, 653, 672,
+   684, 698, 736, 752, 777, 802, 818, 841, 941), delete button
+   (838), toggle button (832), edit button (835), font/lang
+   selectors (579, 591), provider editor close (944).
+   Same as V18.0 B-1a — UNFIXED.
+
+⚠️ B-1e Panel language not applied to dashboard page (only to
+   SettingsPanel). The user-dashboard sets `lang` state
+   separately (page.tsx:89). If admin changes panel_lang via
+   SettingsPanel, the dashboard doesn't sync until page reload.
+   File: src/app/user-dashboard/page.tsx:91-96 vs
+         src/components/SettingsPanel.tsx:286-291
+   Same as V18.0 B-1b — UNFIXED.
+
+⚠️ B-1f Mixed RTL/LTR inputs: SettingsPanel uses dir="rtl" on
+   container (line 566) but individual inputs override with
+   dir="ltr" for tokens/emails/handles (lines 615, 626, 638, 650,
+   714, 733, 749, 763, 770, 786, 793, etc.). Inconsistent.
+   Same as V18.0 B-15f — UNFIXED.
+
+------------------------------------------------------------
+B-2 ContentManager.tsx (264 lines)
+------------------------------------------------------------
+✅ V17.6 aiInstructions fix verified — loadItems maps
+   aiInstruction→"aiInstructions" key (line 43), and
+   /api/admin/content returns alias aiInstruction=aiInstructions
+   for backward compat (route.ts:48).
+✅ V17.6 equipment fields verified — getEmptyItem for equipment
+   (line 123) has all 8 schema fields: name, model, category,
+   status, description, specs, visible, order.
+✅ bulkImport sends items[] to POST action=bulk_import:112.
+✅ /api/admin/equipment POST bulk_import (route.ts:91-124) —
+   each item properly mapped to schema fields (line 99-107),
+   specs stringified if object (line 109-110), invalid JSON
+   specs rejected with `failed++` + error message (line 113-114).
+✅ V17.8 Promise.all used implicitly (single fetch, parallel
+   not needed for loadItems).
+✅ Type labels EN+FA only (line 17-24) — NO German translations.
+
+🚨 B-2a saveItem/deleteItem/toggleItem DON'T CHECK data.ok from
+   response (lines 73-80, 83-92, 94-102). Just `await fetch(...)`
+   then `loadItems()`. If server fails (500, 400, network), no
+   error shown to admin — silent failure.
+   Compare to bulkImport (line 115) which DOES check `if (data.ok)`.
+   Same as V18.0 B-2c — UNFIXED.
+
+⚠️ B-2b Inline styles heavily used (17 occurrences) vs only 15
+   className usages. Inconsistent with SettingsPanel which uses
+   CSS classes (.settings-*).
+   Same as V18.0 B-2a — UNFIXED.
+
+⚠️ B-2c No loading skeleton/spinner. Just `<p>loading...</p>`
+   (line 235). No error display — silent fail (line 51-53).
+   Same as V18.0 B-2b — UNFIXED.
+
+⚠️ B-2d typeLabels only EN+FA (line 17-24). NO German
+   translations for the 6 type tabs (book/article/tutorial/
+   skill/aiInstruction/equipment). Inconsistency: panel supports
+   3 langs but type tabs only 2.
+   Same as V18.0 B-15a — UNFIXED.
+
+⚠️ B-2e 0 aria-* attributes. Missing aria-label on add/bulk
+   import/edit/save/cancel/delete/toggle buttons.
+   Same as V18.0 B-2d — UNFIXED.
+
+⚠️ B-2f Hardcoded English UI strings: "+ add" (194),
+   "bulk import" (195), "loading..." (235), "No items yet."
+   (237), "edit"/"show"/"hide"/"delete"/"save"/"cancel" (228,
+   229, 255, 256, 254, 254), "items" (196), "JSON array of
+   items:" (201), "Must be JSON array" (107), "Imported N of M"
+   (116), "Invalid JSON" (119).
+   Same as V18.0 B-15e (partial) — UNFIXED.
+
+------------------------------------------------------------
+B-3 user-dashboard/page.tsx (505 lines)
+------------------------------------------------------------
+✅ 10 tabs verified (line 165): overview, messages, content,
+   text, nav, themes, users, clips, font, settings.
+✅ V17.9 Settings tab admin-only verified (line 141-142).
+✅ Language switcher (fa/en/de) — persists localStorage:117.
+✅ RTL applied:96 (`dir = savedLang === "fa" ? "rtl" : "ltr"`).
+✅ role="tablist" + role="tab" + aria-selected (215, 223, 224).
+✅ role="alert" on access warning (207) + MessagesPanel error
+   (439).
+✅ Logout button calls POST /api/user/logout then redirects:123.
+✅ Responsive (dashboard-tabs overflow-x:auto on mobile).
+
+🚨 B-3a MessagesPanel isAdmin-gated at render (line 266:
+   `activeTab === "messages" && isAdmin`). But hasTabAccess
+   returns true for non-admin users with "messages" permission
+   (line 143: `return userPermissions.includes(tabId);`). So a
+   regular user with messages permission sees the tab, but
+   MessagesPanel doesn't render. Click on tab → blank content
+   area.
+   Same as V18.0 B-3a — UNFIXED.
+
+🚨 B-3b MessagesPanel has NO pagination. Loads ALL messages via
+   /api/messages (server caps at 100, route.ts:22). Task
+   description requires pagination. Missing feature.
+   Same as V18.0 B-3b/B-10a — UNFIXED.
+
+🚨 B-3c MessagesPanel uses inline error display (line 438-442),
+   NOT toasts. Task description requires "toasts". Inconsistent
+   with SettingsPanel which uses .settings-toast class.
+   Same as V18.0 B-3c/B-10b — UNFIXED.
+
+⚠️ B-3d role="tablist" + role="tab" but NO role="tabpanel" on
+   the content container (line 233). NO aria-controls on tabs.
+   NO id on tabs. Incomplete ARIA pattern (WCAG AA: tablist-tab-
+   tabpanel must be linked via aria-controls/aria-labelledby).
+   Same as V18.0 B-14a — UNFIXED.
+
+⚠️ B-3e No aria-current="page" on active tab. aria-selected is
+   present (good for tablist semantics) but aria-current is the
+   more universally-supported pattern for nav.
+   Same as V18.0 B-3e — UNFIXED.
+
+⚠️ B-3f Logout button (line 196-201) has no aria-label. "خروج →"
+   is text-only, OK for screen readers but RTL layout may render
+   arrow in wrong direction.
+   Same as V18.0 B-3f — UNFIXED.
+
+⚠️ B-3g No "skip to main content" link on dashboard. WCAG 2.4.1
+   (AA) recommends skip link as first focusable element.
+   Same as V18.0 B-14e — UNFIXED.
+
+------------------------------------------------------------
+B-4 AccessUserManager.tsx (578 lines)
+------------------------------------------------------------
+✅ CRUD: fetchUsers (GET, line 84), handleSubmit (POST/PUT,
+   line 149), handleDelete (DELETE, line 200).
+✅ Permissions: 6 sections (messages, clips, content, text, nav,
+   themes) — PERMISSION_SECTIONS array (line 37-44).
+✅ fetchLogs: GET /api/admin/users/logs?limit=200 (line 104).
+✅ credentials: "include" on ALL fetches (lines 87, 171, 203, 104).
+✅ Self-protection: cannot_deactivate_self, cannot_delete_self
+   (server-side checks in /api/admin/users/[id]/route.ts:73,118).
+✅ Error message map (line 182-194) — 9 error codes translated.
+✅ Day-of-week selector with toggle buttons (line 367-377).
+✅ Permission section selector with toggle buttons (line 389-406).
+
+🚨 B-4a Logs table column headers in English only (Time/User/
+   Action/IP/Details — line 244-248). No i18n.
+   Same as V18.0 B-4b — UNFIXED.
+
+⚠️ B-4b Heavy inline styles (49 occurrences) — most of any
+   admin component. Only 8 className usages.
+   Same as V18.0 B-4a — UNFIXED.
+
+⚠️ B-4c 0 aria-* attributes. Edit/Delete buttons (line 519-520)
+   are icon-only (✏️/🗑️) with no aria-label. Screen readers will
+   announce "emoji edit button" with no context.
+   Same as V18.0 B-4c — UNFIXED.
+
+⚠️ B-4d Form uses `<form onSubmit={handleSubmit}>` (good) but
+   inputs lack `id` and `<label htmlFor>` association. Labels
+   are styled <span>s (line 289, 302, 314, etc.), not real
+   <label> elements bound to inputs.
+   WCAG AA: every input needs programmatic label association.
+   Same as V18.0 B-4d — UNFIXED.
+
+⚠️ B-4e AccessUserManager ALL Persian only:
+   - Form labels: "Username (نام کاربری)" mixed EN+FA (line 289)
+   - Day names: Persian only (line 46-54)
+   - Permission section labels: Persian emoji labels (line 37-44)
+   - Empty states: Persian only (line 262, 525)
+   - Error messages: Persian only (line 182-194)
+   - "Cancel"/"Save changes" buttons: Persian only (line 442-443)
+   - "کاربر جدید"/"ویرایش"/"هیچ کاربری وجود ندارد"/"هیچ لاگی
+     وجود ندارد"/"در حال بارگذاری کاربران..." (lines 230, 262,
+     276, 457, etc.)
+   No language switcher, no EN/DE support. Inconsistent with
+   rest of panel (SettingsPanel has T() for 3 langs).
+   Same as V18.0 B-15b — UNFIXED.
+
+⚠️ B-4f handleDelete uses alert() for error (line 213) —
+   inconsistent with rest of UI which uses inline error div.
+   Same as V18.0 F-6 — UNFIXED.
+
+------------------------------------------------------------
+B-5 AparatClipManager.tsx (294 lines)
+------------------------------------------------------------
+✅ CRUD: fetchClips (GET, line 39), handleSubmit (POST
+   create/update, line 57), handleDelete (DELETE, line 88).
+✅ credentials: "include" on all fetches (lines 43, 68, 91).
+✅ Form validation: title and embedCode required (lines 149, 161).
+✅ Error display (inline, lines 137-140, 228-232).
+
+🚨 B-5a handleDelete (lines 88-101) does NOT check `data.ok`
+   from response. Just `await fetch(...)` then `fetchClips()`.
+   If server fails (500, 404), no error shown to admin. Silent
+   failure. Same as V18.0 B-5a — UNFIXED.
+   Compare to handleSubmit (line 75: `if (data.ok)`) which does
+   check.
+
+⚠️ B-5b "toggleClip" feature mentioned in task description is
+   NOT implemented. Only create/update/delete. The AparatClip
+   model has `visible` field but there's no UI to toggle it.
+   Workaround: admin must edit clip and change `visible`
+   checkbox in the edit form (line 203-211).
+   /api/admin/clips POST only handles create/update — no
+   toggle action (route.ts:38-65).
+   Same as V18.0 B-5b — UNFIXED.
+
+⚠️ B-5c AparatClipManager ALL Persian only. No language
+   switcher. Labels, placeholders, errors all Persian.
+   Same as V18.0 B-15c — UNFIXED.
+
+⚠️ B-5d 0 aria-* attributes. Edit/Delete buttons (line 256-257)
+   are icon-only (✏️/🗑️) with no aria-label.
+   Same as V18.0 B-14b — UNFIXED.
+
+⚠️ B-5e handleDelete uses alert() for error (line 99) —
+   inconsistent with inline error display elsewhere.
+
+⚠️ B-5f Heavy inline styles (22 occurrences). Only 5 className
+   usages.
+   Same as V18.0 F-1 — UNFIXED.
+
+------------------------------------------------------------
+B-6 ThemeBuilder.tsx (296 lines)
+------------------------------------------------------------
+✅ CRUD: loadThemes (GET, line 63), saveTheme (POST create/
+   update, line 80), deleteTheme (POST delete, line 101),
+   toggleTheme (POST toggle, line 111).
+✅ Live preview box updates as colors change (lines 195-233).
+✅ 15 color fields defined (COLOR_FIELDS array, line 42-58).
+✅ Mini preview on theme cards (line 252-268).
+✅ Empty state message (line 240-243).
+
+⚠️ B-6a NO color validation. Admin can enter arbitrary
+   strings in the color text inputs (e.g., "not-a-color").
+   The `<input type="color">` (line 156-161) constrains to
+   valid hex, but the text input (line 163-168) accepts
+   anything. Invalid color strings get saved to DB and applied
+   as CSS — silently ignored by browser.
+   File: src/components/ThemeBuilder.tsx:163-168
+   Server: src/app/api/admin/themes/route.ts:46-72 — accepts
+   any string, no hex regex check.
+   Same as V18.0 B-6a — UNFIXED.
+
+⚠️ B-6b saveTheme/deleteTheme/toggleTheme don't check `data.ok`.
+   Just `await fetch(...)` then `loadThemes()`. Silent failures.
+   (Lines 87-99, 101-109, 111-118)
+   Same as V18.0 B-6b — UNFIXED.
+
+⚠️ B-6c Editing theme name doesn't check uniqueness.
+   Server-side CustomTheme.name is @unique (schema.prisma:312).
+   Server returns 500 on duplicate. UI shows no error. Silent
+   failure.
+   Same as V18.0 B-6c — UNFIXED.
+
+⚠️ B-6d 0 aria-* attributes. Edit/delete/toggle buttons have
+   text labels but no aria-label for the color picker swatches.
+   Same as V18.0 B-6d — UNFIXED.
+
+⚠️ B-6e Heavy inline styles (38 occurrences). Most layout via
+   inline grid/flex instead of CSS classes.
+   Same as V18.0 B-6e/F-1 — UNFIXED.
+
+⚠️ B-6f Hardcoded English strings: "loading..." (239),
+   "custom themes" (130), "new theme" (127), "save" (182),
+   "cancel" (185), "Live Preview" (193), "sample text" (260),
+   "Theme Name" (144), "edit" (279), "hide"/"show" (283),
+   "del" (287).
+   Same as V18.0 B-15e — UNFIXED.
+
+------------------------------------------------------------
+B-7 NavMenuManager.tsx (145 lines)
+------------------------------------------------------------
+✅ CRUD: loadItems (GET, line 13), save (POST create/update,
+   line 30), del (POST delete, line 46), toggle (POST toggle,
+   line 56).
+✅ Move up/down (line 65-81) — swaps orders via Promise.all.
+✅ Empty item default href="#", target="_self" (line 83).
+✅ Client-side href scheme validation in page.tsx:474-482
+   (blocks javascript:, data:).
+
+🚨 B-7a NO server-side href validation. /api/admin/nav POST
+   accepts any string as href (route.ts:36:
+   `href: String(d.href || "#")`). page.tsx client-side
+   validates (javascript:/data: blocked), but if a non-browser
+   client (curl) renders the nav, javascript: links would
+   execute. Defense in depth: server should also validate.
+   File: src/app/api/admin/nav/route.ts:34-40 (create),
+        :42-48 (update)
+   Same as V18.0 B-7a — UNFIXED.
+
+⚠️ B-7b save/del/toggle don't check `data.ok`. Silent failures.
+   (Lines 30-44, 46-54, 56-63)
+   Same as V18.0 B-7b — UNFIXED.
+
+⚠️ B-7c move() uses Promise.all of two updates (line 72-79).
+   If first succeeds but second fails (network), state is
+   inconsistent. No rollback, no error display.
+   Same as V18.0 B-7c — UNFIXED.
+
+⚠️ B-7d 0 aria-* attributes. Move up/down buttons (↑/↓) are
+   icon-only, disabled state doesn't have aria-disabled.
+   Same as V18.0 B-7d — UNFIXED.
+
+⚠️ B-7e Hardcoded English: "loading..." (85), "items" (91),
+   "new item" (90), "edit" (97, 131), "save" (112), "cancel"
+   (113), "delete" (47), "hide"/"show" (132).
+   Same as V18.0 B-7e/B-15e — UNFIXED.
+
+------------------------------------------------------------
+B-8 TextEditor.tsx (181 lines)
+------------------------------------------------------------
+✅ loadTexts (GET /api/admin/text, line 14).
+✅ saveText (POST action=set) with valueEn/valueFa/valueDe
+   (lines 35-41).
+✅ Filter by section/key/text (lines 65-69).
+✅ Grouped by section (line 57-63).
+✅ Per-key save button + saved indicator (line 156-167).
+✅ RTL applied to FA textarea (line 133: dir="rtl").
+
+⚠️ B-8a saveText doesn't display errors. Just `if (data.ok)`.
+   No error UI if save fails. Silent failure.
+   Same as V18.0 B-8a — UNFIXED.
+
+⚠️ B-8b Hardcoded English: "loading..." (74), "EN"/"FA"/"DE"
+   labels (115, 128, 141), "No text found" (176), "search
+   text..." (82).
+   Same as V18.0 B-8b/B-15e — UNFIXED.
+
+⚠️ B-8c No bulk save. Each text key has its own save button
+   (line 156). If admin edits 20 texts, must click 20 times.
+   No "save all changes" button. /api/admin/text supports
+   bulk_set (route.ts:74-96) but UI doesn't use it.
+   Same as V18.0 B-8c — UNFIXED.
+
+⚠️ B-8d 0 aria-* attributes. Filter input has no aria-label.
+   Textareas have visible EN/FA/DE labels but not bound via
+   htmlFor/id.
+   Same as V18.0 B-8d/B-14b — UNFIXED.
+
+------------------------------------------------------------
+B-9 FontSelector.tsx (78 lines)
+------------------------------------------------------------
+✅ 5 fonts: vazirmatn, inter, lora, fira-code, geist-mono
+   (line 12-18).
+✅ V17.5 data-font set on mount (line 27) — VERIFIED.
+✅ Persists to localStorage (line 32).
+✅ Preview text shows selected font via CSS inheritance
+   (line 70-74).
+✅ Active state highlighted (.active class, line 55).
+
+⚠️ B-9a Hardcoded Persian description text (line 48: "فونت
+   سایت رو انتخاب کن..."). No i18n despite panel supporting
+   3 langs.
+   Same as V18.0 B-9a — UNFIXED.
+
+⚠️ B-9b Preview text "سلام دنیا! Hello World! 12345" (line 73)
+   is hardcoded. Doesn't change with language.
+   Same as V18.0 B-9b — UNFIXED.
+
+⚠️ B-9c Layout uses inline `style={{display: "grid",
+   gridTemplateColumns: "1fr 1fr"}}`. On mobile, two columns
+   may be too narrow. No @media query for FontSelector
+   specifically.
+   Same as V18.0 B-9c — UNFIXED.
+
+⚠️ B-9d 0 aria-* attributes. Font buttons have visible text
+   labels (font.label) — OK for screen readers but no
+   aria-pressed for the active state.
+   Same as V18.0 B-9d — UNFIXED.
+
+------------------------------------------------------------
+B-10 MessagesPanel (user-dashboard/page.tsx:359-505)
+------------------------------------------------------------
+✅ load (GET /api/messages, line 367).
+✅ reply (POST /api/admin/reply, line 380-403).
+✅ delete (POST /api/admin/clear target=message, line 405-423).
+✅ Reply form with textarea, autoFocus (line 485-491).
+✅ Replies displayed (msg.replies, line 464-471).
+✅ Error display (inline, line 438-442, NOT toast).
+
+🚨 B-10a NO pagination. Loads ALL messages client-side
+   (server caps at 100, /api/messages route.ts:22 take:100).
+   For sites with >100 messages, older ones never shown.
+   Same as V18.0 B-10a — UNFIXED.
+
+🚨 B-10b NO toasts. Task description requires "toasts". Uses
+   inline error div (line 438-442). Inconsistent with
+   SettingsPanel which uses .settings-toast class.
+   Same as V18.0 B-10b — UNFIXED.
+
+⚠️ B-10c Reply sends to /api/admin/reply which stores in DB
+   but doesn't email the visitor. Email forwarding only happens
+   for NEW contact messages (via /api/contact formsubmit.co).
+   Replies to existing messages aren't emailed. Admin must
+   manually email.
+   Same as V18.0 B-10c — UNFIXED.
+
+⚠️ B-10d No "mark as read/unread" UI. Status field exists in
+   schema (ContactMessage.status default="new") and
+   /api/messages POST supports set_status, but MessagesPanel
+   doesn't expose it.
+   Same as V18.0 B-10d — UNFIXED.
+
+⚠️ B-10e deleteMessage uses client-side filter (line 416:
+   `prev.filter(m => m.id !== msgId)`). If fetch fails
+   silently, the message disappears from UI but remains in
+   DB. Refresh brings it back.
+   Same as V18.0 B-10e — UNFIXED.
+
+⚠️ B-10f 0 aria-* attributes on reply/delete buttons. Reply
+   form textarea has placeholder but no <label>.
+   Same as V18.0 B-10f — UNFIXED.
+
+------------------------------------------------------------
+B-11 ChatSection.tsx (198 lines)
+------------------------------------------------------------
+✅ Polling at 3s interval (line 76: setInterval 3000ms).
+✅ visitorId generated once, persisted to localStorage
+   (line 24-32).
+✅ V18.0 fix verified: visitorId IS in poll URL (line 62):
+     `/api/chat/messages?sessionId=${sessionId}&since=${lastPollTs}&visitorId=${encodeURIComponent(visitorId)}`
+✅ V17.8 chat history bounded take:20 — VERIFIED in
+   /api/chat/route.ts:135.
+✅ AI disabled check (server /api/chat checks apiEnabled,
+   route.ts:113-127).
+✅ Auto-scroll on new message (line 48-52).
+✅ Greeting message per language (line 35-45).
+✅ Enter to send (form onSubmit, line 80).
+✅ maxLength=500 on input (line 186).
+
+🚨 B-11a PERSONAL imported but unused (line 4:
+   `import { UI, PERSONAL, type Lang } from "@/lib/content";`).
+   Dead import. Same as V18.0 E-1 — UNFIXED.
+
+⚠️ B-11b Polling at 3s is aggressive. If user opens 3 tabs,
+   that's 60 requests/min just for polling. With rate limit
+   20/min/IP, third tab would be rate-limited silently (no
+   error shown — just empty messages[] returned, polling
+   continues).
+   File: src/components/ChatSection.tsx:60-78
+   Same as V18.0 B-11c/D-4 — UNFIXED.
+
+⚠️ B-11c Polling stops if `sessionId` is empty (line 59), but
+   starts on first successful POST. If first POST fails (rate
+   limit, server error), sessionId stays empty and polling
+   never starts. User must manually re-send.
+   Same as V18.0 B-11e — UNFIXED.
+
+⚠️ B-11d 0 aria-* attributes. Chat input has placeholder but
+   no <label>. Send button has visible text "tx [enter]" —
+   confusing for screen readers. No aria-live region for new
+   messages.
+   Same as V18.0 B-11f — UNFIXED.
+
+------------------------------------------------------------
+B-12 page.tsx homepage (878 lines)
+------------------------------------------------------------
+✅ Language switcher (fa/en/de) with aria-label (line 523).
+✅ Theme switcher (7 themes) with title attributes (line 509-515).
+✅ Nav menu: DB-driven with fallback to defaults (line 469-505).
+✅ Tutorials section with ArchiveGrid (search/sort/pagination)
+   (line 672-687).
+✅ Contact form: honeypot + time-trap (V17.4 formLoadTime on
+   mount, line 75) + reCAPTCHA (V17.7 fail-closed).
+✅ V17.9 VPS IP REMOVED from authorizedDomains (line 125-135
+   — only localhost, 127.0.0.1, ehsanmorad.ir, ehsan-morad.ir,
+   ehsanmorad.id.ir). ✅ VERIFIED.
+✅ V17.9 VPS IP REMOVED from canvas-protect.ts
+   AUTHORIZED_DOMAINS.
+✅ V18.0 VPS IP REMOVED from install.sh:295 (now uses
+   `hostname -I` fallback). ✅ VERIFIED.
+✅ Responsive: media queries at 900/720/480px (personal.css:1343+).
+✅ Tutorial modal with Escape key close (line 305-313).
+✅ Body scroll lock when modal/menu open (line 285-288).
+✅ to-top button (line 830-836).
+✅ Honeypot field aria-hidden + tabIndex=-1 (line 763-770).
+✅ Contact form has <label htmlFor> for name/email/message
+   (line 774, 778, 782).
+✅ role="status" on form status (line 802).
+
+🚨 B-12a Hero subtitle uses PERSONAL.tagline[lang] (HARDCODED),
+   NOT admin-edited tagline (line 546).
+   File: src/app/page.tsx:546
+   Admin can edit tagline_fa/en/de via SettingsPanel → stored
+   in DB → returned by /api/content → page.tsx IGNORES it.
+   Same as V18.0 B-12a — UNFIXED.
+   Fix: `{siteContent.settings?.["tagline_" + lang] || PERSONAL.tagline[lang]}`
+
+⚠️ B-12b Footer copyright uses admin-edited name (line 811)
+   and hero title uses admin-edited name (line 545). ✅ These
+   work. But tagline is NOT admin-editable in UI display
+   (see B-12a).
+
+⚠️ B-12c Anti-theft warning uses document.body.innerHTML =
+   (line 142-159). Self-XSS risk if future change interpolates
+   user input. Pattern is fragile. Hardcoded string → not
+   directly exploitable now.
+   Same as V18.0 B-12c/O-2 — UNFIXED.
+
+⚠️ B-12d DevTools detection (line 178-188) uses threshold of
+   160px on outerWidth-innerWidth. False positives: browser
+   zoom > 100%, sidebar bookmarks, split-screen windows.
+   Anti-feature: punishes legitimate users.
+   Same as V18.0 B-12d — UNFIXED.
+
+⚠️ B-12e Tutorial modal iframe `src` validation (line 852-865):
+   allows aparat.com/youtube.com/youtu.be/player.vimeo.com.
+   Missing: facebook.com/watch, vimeo.com (without player.
+   subdomain), dailymotion.com. If admin adds tutorial with
+   these platforms, modal shows about:blank.
+   Same as V18.0 B-12e — UNFIXED.
+
+⚠️ B-12f Nav links client-side validation only blocks
+   javascript:/data: (line 474-482). Server-side /api/admin/nav
+   accepts any string. Defense in depth missing.
+   Same as V18.0 B-12f/B-7a — UNFIXED.
+
+⚠️ B-12g Footer "admin" link (line 818-825) is non-functional
+   `<a>` with title="Ctrl+Shift+A" but no onClick handler. The
+   Ctrl+Shift+A keyboard shortcut isn't bound anywhere. Dead
+   UI.
+   Same as V18.0 B-12g — UNFIXED.
+
+⚠️ B-12h Status bar shows "2.4GHz" and "-67dBm" hardcoded
+   (line 444, 447). Not dynamic. Misleading — appears to be
+   live RF signal but is static text.
+   Same as V18.0 B-12h — UNFIXED.
+
+⚠️ B-12i PERSONAL.email exposed in chat fallback reply
+   (route.ts:61): `${PERSONAL.email}` — admin cannot change
+   this from panel. `PERSONAL.email` is hardcoded in
+   content.ts:34 to "your-email@example.com". If admin doesn't
+   change content.ts, visitors see placeholder email.
+   Same as V18.0 B-12i — UNFIXED.
+
+------------------------------------------------------------
+B-13 personal.css (3492 lines)
+------------------------------------------------------------
+✅ Responsive breakpoints: 900/720/600/480px (14 @media queries).
+✅ RTL adjustments (line 184: html[dir="rtl"] body font swap,
+   line 1408-1420: nav-links, about-stats, skill-card,
+   book-cover, footer-admin).
+✅ Touch target: most buttons ≥36px (line 3168-3184
+   dashboard-btn padding 8px 14px).
+✅ Modals: tutorial-modal with backdrop + body scroll lock.
+✅ reCAPTCHA: .g-recaptcha container styled, fallback
+   placeholder (page.tsx:796).
+✅ Focus visible (line 3481-3484): outline 2px solid
+   var(--green).
+✅ prefers-reduced-motion honored (line 1395-1401, 1463+).
+✅ sr-only class defined (line 3468-3478).
+
+🚨 B-13a text-faint color FAILS WCAG AA for normal text.
+   - --text-faint: #5a7a5a on #000000 = 3.2:1 contrast ratio.
+   - WCAG AA requires 4.5:1 for normal text (<18pt or <14pt
+     bold).
+   - Comment in source (line 30) acknowledges this:
+     "/* 3.2:1 contrast (was 2a4a2a = 2.06:1) — for large
+     text only */"
+   - But it IS used for small text in many places (admin
+     message metadata, status bar, dashboard-info-label,
+     font selector descriptions, etc.).
+   Same as V18.0 B-13a — UNFIXED.
+
+⚠️ B-13b Touch target sizes below 44x44px (WCAG 2.5.5):
+   - .dashboard-tab: 9px 14px padding → ~28px height (line 3250)
+   - .signal-waveform-btn: 6px 4px padding → ~22px height
+   - .osc-arrow-btn: 5px 10px padding → ~22px height
+   - .lab-visualizer-close: 20x20px (line 3395)
+   - .settings-btn-icon: 0 12px padding → ~28px height
+   WCAG 2.5.5 (AAA) requires 44x44px. WCAG AA doesn't mandate
+   this but recommends it.
+   Same as V18.0 B-13b — UNFIXED.
+
+⚠️ B-13c Mixed CSS class + inline style approach across
+   components (see F-1 for per-component counts).
+   Same as V18.0 B-13c — UNFIXED.
+
+⚠️ B-13d Loading states inconsistent:
+   - dashboard-loading: animated blinking "_" (line 3334-3348)
+   - SettingsPanel: plain "Loading..." text (line 562)
+   - ContentManager/NavMenuManager/ThemeBuilder/TextEditor:
+     plain "loading..." text
+   - AccessUserManager: "در حال بارگذاری کاربران..." (Persian)
+   No shared loading component. Each component rolls its own.
+   Same as V18.0 B-13d — UNFIXED.
+
+⚠️ B-13e Error states inconsistent:
+   - dashboard-access-warning: amber banner with role="alert"
+   - SettingsPanel: toast (settings-toast class)
+   - AccessUserManager: inline red div
+   - AparatClipManager: inline red div
+   - MessagesPanel: inline red div with role="alert"
+   - ContentManager: silent (catches and sets [])
+   No shared error component.
+   Same as V18.0 B-13e — UNFIXED.
+
+⚠️ B-13f RTL support partial:
+   - dashboard-header, dashboard-actions, dashboard-message-actions
+     have RTL flex-direction: row-reverse. ✅
+   - settings-root, settings-card, settings-row: NO RTL overrides.
+     Inputs with dir="ltr" force LTR even in RTL mode.
+   - admin-* classes: no RTL rules at all.
+   Same as V18.0 B-13f — UNFIXED.
+
+------------------------------------------------------------
+B-14 WCAG AA — keyboard, focus, labels, contrast, landmarks
+------------------------------------------------------------
+✅ Keyboard: focus-visible outline defined (personal.css:3481).
+✅ Escape closes tutorial modal (page.tsx:305-313).
+✅ Body scroll lock on modal/menu open.
+✅ Form labels: contact form has <label htmlFor> (page.tsx:774,
+   778, 782).
+✅ role="alert" on access warning (user-dashboard:207) +
+   MessagesPanel error (439).
+✅ role="status" on form status (page.tsx:802).
+✅ aria-label on language switcher (page.tsx:523).
+✅ aria-label on toggle menu (page.tsx:531).
+✅ role="tablist" + role="tab" + aria-selected on dashboard
+   tabs (user-dashboard:215, 223, 224).
+✅ sr-only class defined (personal.css:3468).
+
+🚨 B-14a Tablist missing role="tabpanel" on content container
+   (user-dashboard/page.tsx:233). Tabs not linked via
+   aria-controls. Incomplete ARIA pattern.
+   Same as V18.0 B-14a — UNFIXED.
+
+🚨 B-14b 7 admin components have 0 aria-* attributes:
+   ContentManager (0), NavMenuManager (0), ThemeBuilder (0),
+   TextEditor (0), FontSelector (0), AparatClipManager (0),
+   AccessUserManager (0).
+   SettingsPanel has 1 (line 721). user-dashboard/page.tsx has
+   3 (aria-live:128, aria-label:190, role=tab/aria-selected:223-224).
+   Icon-only buttons (✏️/🗑️/↑/↓/👁/✕) have no aria-label.
+   Same as V18.0 B-14b — UNFIXED.
+
+🚨 B-14c AccessUserManager form labels are styled <span>, not
+   real <label htmlFor>. Inputs lack id. No programmatic
+   association. Screen readers may not announce label-input
+   pairing.
+   Same as V18.0 B-14c — UNFIXED.
+
+🚨 B-14d text-faint color fails AA contrast (3.2:1) — see
+   B-13a.
+   Same as V18.0 B-14d — UNFIXED.
+
+⚠️ B-14e No "skip to main content" link on homepage or
+   dashboard. WCAG 2.4.1 (AA) recommends skip link as first
+   focusable element.
+   Same as V18.0 B-14e — UNFIXED.
+
+⚠️ B-14f No landmark roles on homepage sections. <section>
+   elements lack aria-labelledby pointing to section titles.
+   Screen readers can't navigate by region.
+   Same as V18.0 B-14f — UNFIXED.
+
+⚠️ B-14g Anti-theft right-click disable (page.tsx:163-165)
+   blocks context menu — accessibility issue for users who
+   rely on right-click for browser commands.
+   Same as V18.0 B-14g — UNFIXED.
+
+⚠️ B-14h Anti-theft keyboard shortcut blocking (page.tsx:166-
+   176) blocks F12, Ctrl+Shift+I/J, Ctrl+U, Ctrl+S. Blocks
+   legitimate browser functionality. Accessibility concern for
+   power users.
+   Same as V18.0 B-14h — UNFIXED.
+
+------------------------------------------------------------
+B-15 i18n/RTL — panel switcher, RTL, hardcoded strings, 3 langs
+------------------------------------------------------------
+✅ Panel language switcher (user-dashboard:186-195 select).
+✅ Panel language persists to localStorage (line 117).
+✅ RTL applied to <html> dir (line 96).
+✅ SettingsPanel has full T() translations for fa/en/de (lines
+   60-236).
+✅ Dashboard has TAB_LABELS for 3 langs (lines 43-80).
+✅ UI strings in content.ts for 3 langs.
+
+🚨 B-15a ContentManager typeLabels only EN+FA (line 17-24).
+   No German translations for the 6 type tabs.
+   Same as V18.0 B-15a — UNFIXED.
+
+🚨 B-15b AccessUserManager ALL Persian only (see B-4e).
+   Same as V18.0 B-15b — UNFIXED.
+
+🚨 B-15c AparatClipManager ALL Persian only (see B-5c).
+   Same as V18.0 B-15c — UNFIXED.
+
+🚨 B-15d error.tsx, global-error.tsx, not-found.tsx — Persian
+   only. English/German users see Persian error pages.
+   Same as V18.0 B-15d — UNFIXED.
+
+🚨 B-15e Hardcoded English strings in admin components:
+   - ContentManager: "+ add", "bulk import", "loading...",
+     "No items yet.", "edit", "show", "hide", "delete",
+     "save", "cancel", "create", "JSON array of items:",
+     "Must be JSON array", "Imported N of M", "Invalid JSON"
+   - NavMenuManager: "loading...", "items", "new item",
+     "edit", "save", "cancel", "delete", "same page", "new tab"
+   - ThemeBuilder: "loading...", "custom themes", "new theme",
+     "save", "cancel", "Live Preview", "sample text",
+     "Theme Name", "edit", "hide", "show", "del"
+   - TextEditor: "loading...", "search text...", "EN"/"FA"/"DE",
+     "save", "saved", "No text found"
+   - FontSelector: "Font Selector", description,
+     "پیش‌نمایش:"
+   These are not internationalized despite panel supporting
+   3 languages.
+   Same as V18.0 B-15e — UNFIXED.
+
+⚠️ B-15f Mixed RTL/LTR inputs (see B-1f).
+   Same as V18.0 B-15f — UNFIXED.
+
+⚠️ B-15g Persian digits not used consistently. UI[fa].about.num
+   uses Persian digits (content.ts), but AccessUserManager
+   login counts and log counts use Arabic digits. Inconsistent.
+   Same as V18.0 B-15g — UNFIXED.
+
+------------------------------------------------------------
+B-16 SEO — OG, Twitter, JSON-LD, sitemap, robots, canonical,
+        hreflang
+------------------------------------------------------------
+✅ OpenGraph metadata (layout.tsx:40-56): type, locale,
+   alternateLocale, url, siteName, title, description, images.
+✅ Twitter Card (layout.tsx:58-63): summary_large_image.
+✅ JSON-LD WebSite schema (layout.tsx:128-143).
+✅ metadataBase set (layout.tsx:29).
+✅ Canonical URL (layout.tsx:86-91): alternates.canonical.
+✅ Robots meta (layout.tsx:75-84): index:true, googleBot rules.
+✅ PWA manifest (layout.tsx:65).
+✅ Icons (layout.tsx:67-73): 192px + 512px.
+✅ Viewport (layout.tsx:95-101): width=device-width, themeColor.
+✅ sitemap.xml with env-based siteUrl (sitemap.xml/route.ts:12).
+✅ robots.txt disallows /api/, /user-login, /user-dashboard,
+   /admin (verified in public/robots.txt).
+✅ robots.txt references sitemap (line 23).
+✅ rss.xml for articles.
+
+🚨 B-16a NO hreflang tags. Site supports 3 languages (fa/en/de)
+   but layout.tsx doesn't declare alternates with hreflang.
+   SEO impact: Google may not surface correct language
+   version.
+   Same as V18.0 B-16a — UNFIXED.
+
+🚨 B-16b OG image is /icon-512.png (layout.tsx:50, 62). This
+   is a 512x512 square icon, not a proper 1200x630 social
+   preview image. Social shares will show a small icon, not a
+   branded card.
+   Same as V18.0 B-16b — UNFIXED.
+
+⚠️ B-16c JSON-LD only has WebSite type. Missing:
+   - Person schema (for the site owner)
+   - ProfilePage schema
+   - Article schema for individual articles
+   - BreadcrumbList for navigation
+   Same as V18.0 B-16c — UNFIXED.
+
+🚨 B-16d robots.txt hardcodes ehsanmorad.ir (line 23, 26 —
+   Sitemap + Host directives). If admin deploys to different
+   domain, robots.txt still points to ehsanmorad.ir sitemap.
+   Fix: generate robots.txt dynamically from env (like
+   sitemap.xml does).
+   Same as V18.0 B-16d — UNFIXED.
+
+⚠️ B-16e sitemap.xml uses /#about, /#skills etc. (line 22-28).
+   Google may ignore fragment URLs in sitemap.
+   Same as V18.0 B-16e — UNFIXED.
+
+⚠️ B-16f rss.xml guid is just article ID, not a valid URL.
+   RSS best practice: guid should be a permalink.
+   Same as V18.0 B-16f — UNFIXED.
+
+⚠️ B-16g rss.xml link points to /#articles for all items.
+   Individual articles don't have dedicated URLs.
+   Same as V18.0 B-16g — UNFIXED.
+
+⚠️ B-16h No `<lastmod>` in sitemap entries. Google uses lastmod
+   to determine crawl frequency.
+   Same as V18.0 B-16h — UNFIXED.
+
+⚠️ B-16i OG description is generic "Personal portfolio
+   website" (layout.tsx:47, 62). Doesn't reflect admin's
+   tagline or dynamic content.
+   Same as V18.0 B-16i — UNFIXED.
+
+================================================================
+PART C — API CONTRACT — ALL ADMIN CALLS
+================================================================
+Verified at runtime with admin cookie + regular user cookie:
+
+| Endpoint                          | Method | Admin | Regular | No-auth |
+|-----------------------------------|--------|-------|---------|---------|
+| /api/admin/settings               | GET    | 200   | 401     | 401 ✅   |
+| /api/admin/settings               | POST   | 200   | —       | 401 ✅   |
+| /api/admin/email                  | GET    | 200   | 401     | 401 ✅   |
+| /api/admin/email                  | POST   | 200   | —       | 401 ✅   |
+| /api/admin/providers              | GET    | 200   | 401     | 401 ✅   |
+| /api/admin/providers              | POST   | 200   | —       | 401 ✅   |
+| /api/admin/content                | GET    | 200   | 401     | 401 ✅   |
+| /api/admin/content                | POST   | 200   | —       | 401 ✅   |
+| /api/admin/equipment              | GET    | 200   | 401     | 401 ✅   |
+| /api/admin/equipment              | POST   | 200   | —       | 401 ✅   |
+| /api/admin/clips                  | GET    | 200   | 401     | 401 ✅   |
+| /api/admin/clips                  | POST   | 200   | —       | 401 ✅   |
+| /api/admin/clips                  | DELETE | 200   | —       | 401 ✅   |
+| /api/admin/themes                 | GET    | 200   | 200 ⚠️  | 200 ⚠️  |
+| /api/admin/themes                 | POST   | 200   | 401     | 401 ✅   |
+| /api/admin/nav                    | GET    | 200   | 200 ⚠️  | 200 ⚠️  |
+| /api/admin/nav                    | POST   | 200   | 401     | 401 ✅   |
+| /api/admin/text                   | GET    | 200   | 200 ⚠️  | 200 ⚠️  |
+| /api/admin/text                   | POST   | 200   | 401     | 401 ✅   |
+| /api/admin/users                  | GET    | 200   | 401     | 401 ✅   |
+| /api/admin/users                  | POST   | 200   | 401     | 401 ✅   |
+| /api/admin/users/[id]             | PUT    | 200   | 401     | 401 ✅   |
+| /api/admin/users/[id]             | DELETE | 200   | 401     | 401 ✅   |
+| /api/admin/users/logs             | GET    | 200   | 401     | 401 ✅   |
+| /api/admin/stats                  | GET    | 200   | 401     | 401 ✅   |
+| /api/admin/security               | GET    | 200   | 401     | 401 ✅   |
+| /api/admin/security               | POST   | 200   | 401     | 401 ✅   |
+| /api/admin/security-dashboard     | GET    | 200   | 401     | 401 ✅   |
+| /api/admin/security-dashboard     | POST   | 200   | 401     | 401 ✅   |
+| /api/admin/chat-reply             | POST   | 200   | 401     | 401 ✅   |
+| /api/admin/reply                  | POST   | 200   | 401     | 401 ✅   |
+| /api/admin/clear                  | POST   | 200   | 401     | 401 ✅   |
+| /api/messages                     | GET    | 200   | 401     | 401 ✅   |
+| /api/messages                     | POST   | 200   | 401     | 401 ✅   |
+| /api/chat/messages (no visitorId) | GET    | --    | --      | 200 🚨  |
+| /api/chat/messages (wrong vid)    | GET    | --    | --      | 403 ✅   |
+| /api/chat/messages (right vid)    | GET    | --    | --      | 200 ✅   |
+
+🚨 C-1 /api/admin/text, /api/admin/themes, /api/admin/nav GET
+   allows NON-ADMIN AUTHENTICATED USERS (returns visible-only
+   items). TESTS 35, 36, 38 confirmed at runtime.
+   Files (3 routes with `where: isAdmin ? {} : { visible: true }`):
+   - src/app/api/admin/text/route.ts:13-25
+   - src/app/api/admin/themes/route.ts:14-19
+   - src/app/api/admin/nav/route.ts:10-13
+   Same as V18.0 C-1 — UNFIXED.
+
+🚨 C-2 /api/chat/messages returns 200 with messages when
+   visitorId query param is OMITTED (TEST 21 confirmed).
+   This bypasses the V18.0 ownership check because line 46:
+   `if (reqVisitorId && session.visitorId !== reqVisitorId)`
+   short-circuits when reqVisitorId is empty string.
+   This is a NEW CRITICAL finding not present in V18.0 audit
+   (V18.0 added the check but didn't account for missing param).
+   Fix: `if (!reqVisitorId || session.visitorId !== reqVisitorId)`
+   OR require visitorId param (400 if missing).
+   File: src/app/api/chat/messages/route.ts:46
+
+⚠️ C-3 Inconsistent auth helper usage:
+   - Some routes use checkAdminAuth (admin-auth.ts)
+   - Some routes use checkAdminSession (admin-session.ts)
+   - /api/admin/users and [id] inline their own checkAdmin()
+   All three do the same thing (getSessionFromRequest +
+   role check). Should be unified.
+   Same as V18.0 C-2 — UNFIXED.
+
+⚠️ C-4 Response shape inconsistency:
+   - /api/admin/clips GET returns `{clips: [...]}` ✅
+   - /api/admin/content GET returns `{books, articles, ...}`
+     (spread) ✅
+   - /api/admin/equipment GET returns `{items: [...]}` ✅
+   - /api/admin/themes GET returns `{themes: [...]}` ✅
+   - /api/admin/nav GET returns `{items: [...]}` (uses items
+     key — same as equipment, could confuse client code if
+     both loaded together)
+   - /api/admin/text GET returns `{texts: {...}}` (object,
+     not array)
+   - /api/admin/users GET returns `{users: [...]}` ✅
+   - /api/admin/users/logs GET returns `{logs: [...], total:
+     N}` ✅
+   Mostly consistent, but equipment & nav share `items` key.
+   Same as V18.0 C-3 — UNFIXED.
+
+⚠️ C-5 /api/admin/clips uses checkAdminSession (NextRequest
+   typed), while /api/admin/content uses checkAdminAuth
+   (Request typed). Mixing NextRequest and Request types.
+   Works because NextRequest extends Request, but inconsistent.
+   Same as V18.0 C-4 — UNFIXED.
+
+🚨 C-6 Dead `const password = "";` assignments remain in 11
+   admin GET routes (verified via grep):
+   - src/app/api/admin/content/route.ts:17
+   - src/app/api/admin/email/route.ts:23
+   - src/app/api/admin/equipment/route.ts:13
+   - src/app/api/admin/nav/route.ts:9
+   - src/app/api/admin/providers/route.ts:13
+   - src/app/api/admin/security-dashboard/route.ts:12
+   - src/app/api/admin/security/route.ts:18
+   - src/app/api/admin/settings/route.ts:111
+   - src/app/api/admin/stats/route.ts:8
+   - src/app/api/admin/text/route.ts:13 (approx)
+   - src/app/api/admin/themes/route.ts:13
+   All have comment "V17.8: dead param removed" but the dead
+   `const password = "";` line is still there. Cosmetic, but
+   contradicts the V17.8 release notes.
+   Same as V18.0 C-5 — UNFIXED.
+
+🚨 C-7 Dead `const password = String(body.password || "")`
+   extractions remain in 13 admin POST routes (verified via
+   grep):
+   - src/app/api/admin/chat-reply/route.ts
+   - src/app/api/admin/clear/route.ts
+   - src/app/api/admin/content/route.ts
+   - src/app/api/admin/email/route.ts
+   - src/app/api/admin/equipment/route.ts
+   - src/app/api/admin/nav/route.ts
+   - src/app/api/admin/providers/route.ts
+   - src/app/api/admin/reply/route.ts
+   - src/app/api/admin/security-dashboard/route.ts
+   - src/app/api/admin/security/route.ts
+   - src/app/api/admin/settings/route.ts
+   - src/app/api/admin/text/route.ts
+   - src/app/api/admin/themes/route.ts
+   Each extracts password from body and passes to
+   checkAdminAuth which ignores it. Dead code path. Should be
+   removed.
+   Same as V18.0 C-6 — UNFIXED.
+
+================================================================
+PART D — PERFORMANCE — sync ops, DB queries, N+1, bundles,
+         fonts
+================================================================
+✅ V17.8 Promise.all verified:
+   - /api/admin/content GET uses Promise.all (5 queries)
+     (route.ts:31-37)
+   - /api/admin/users/logs GET uses Promise.all (queries +
+     count)
+   - /api/admin/stats GET uses Promise.all (11 queries)
+   - /api/admin/security-dashboard GET uses Promise.all
+   - /api/messages GET uses Promise.all (4 queries + tags)
+   - SettingsPanel loadSettings uses Promise.all (3 fetches:
+     settings/email/content, line 302-306)
+   - sitemap.xml GET uses Promise.all (3 queries,
+     sitemap.xml/route.ts:14-18)
+   - /api/chat/messages GET — single findUnique + findMany,
+     no N+1.
+
+🚨 D-1 BULK IMPORT N+1 PATTERNS (sequential awaits in loops):
+   - /api/admin/equipment POST bulk_import (route.ts:91-122):
+     `for (const item of items) { try { await
+     db.labEquipment.create({...}) } catch {...} }`
+     Should use `db.labEquipment.createMany({data: items,
+     skipDuplicates: true})`.
+   - /api/admin/content POST bulk_import (route.ts:123-141):
+     Same pattern.
+   - /api/admin/text POST bulk_set (route.ts:79-95):
+     `for (const item of items) { await db.siteText.upsert({...}) }`
+     Could use transaction with createMany (upsert not
+     supported in createMany, but could check-then-batch).
+   - seedDefaultProviders (providers.ts:331-333): sequential
+     create in for-loop. Should be createMany.
+   Performance impact: 100 items = 100 sequential DB writes
+   (~100ms-1s). Should be ~10ms with createMany.
+   Same as V18.0 D-1 — UNFIXED.
+
+🚨 D-2 console.log in production code:
+   - src/lib/providers.ts:334:
+     `console.log("[providers] Seeded default AI providers");`
+     Fires every time seedDefaultProviders() runs on first
+     /api/chat request after fresh DB. Logs to server stdout.
+   - All other console.* are console.error (acceptable for
+     error logging).
+   Same as V18.0 D-2 — UNFIXED.
+
+⚠️ D-3 useContent.ts ALWAYS sets cache: "no-store" AND removes
+   localStorage cache. Every page mount re-fetches /api/content
+   (9-table join). No client-side cache. For high-traffic
+   sites, this is significant load. Should cache for 30-60s
+   with revalidate.
+   Same as V18.0 D-3 — UNFIXED.
+
+⚠️ D-4 Chat polling at 3s (ChatSection.tsx:76) is aggressive.
+   3 tabs open = 60 requests/min just for polling. With rate
+   limit 20/min/IP, third tab gets rate-limited silently.
+   Same as V18.0 D-4 — UNFIXED.
+
+⚠️ D-5 Chat history bounded take:20 (V17.8) — but on every
+   chat POST, full 20 messages + system prompt are sent to
+   LLM. No summarization, no token counting. Long
+   conversations hit context window limits silently.
+   Same as V18.0 D-5 — UNFIXED.
+
+⚠️ D-6 /api/messages GET loads ALL messages (take:100) with
+   includes (replies, notes, tags, tags.tag). N+1 risk:
+   Prisma includes are batched, but for 100 messages with 5
+   tags each, response is large. Should paginate.
+   Same as V18.0 D-6 — UNFIXED.
+
+⚠️ D-7 /api/admin/users/logs GET loads up to 500 logs with
+   user include. No pagination UI in AccessUserManager —
+   fetches ?limit=200 always. Could be slow with 10k+ logs.
+   Same as V18.0 D-7 — UNFIXED.
+
+✅ D-8 Prisma indexes verified:
+   - All foreign keys indexed
+   - visible+order composite indexes on content models
+   - createdAt indexed on log tables
+   - username unique index on AccessUser
+
+✅ D-9 No sync operations in API routes (all use async/await).
+
+✅ D-10 Fonts: 6 Google fonts loaded via next/font
+   (layout.tsx:10-20). Vazirmatn has display: "swap" (line
+   15). Others don't specify display — defaults to "swap" in
+   next/font/google. Acceptable.
+
+✅ D-11 No bundle size issues. Build output: 38 routes,
+   standalone build is reasonable.
+
+================================================================
+PART E — DEAD CODE & UNUSED IMPORTS
+================================================================
+🚨 E-1 8 files import PERSONAL but never use it (verified via
+   grep — import count vs usage count both checked):
+   - src/app/api/admin/chat-reply/route.ts:4 (import=1, usage=0)
+   - src/app/api/admin/equipment/route.ts:4 (import=1, usage=0)
+   - src/app/api/admin/content/route.ts:4 (import=1, usage=0)
+   - src/app/api/admin/email/route.ts:5 (import=1, usage=0)
+   - src/app/api/admin/clear/route.ts:4 (import=1, usage=0)
+   - src/app/api/admin/reply/route.ts:4 (import=1, usage=0)
+   - src/app/sitemap.xml/route.ts:3 (import=1, usage=0)
+   - src/components/ChatSection.tsx:4 (import=1, usage=0)
+   V18.0-PANEL-FULL E-1 claim "dead imports removed" is
+   INACCURATE — these 8 files still have the dead import.
+   UNFIXED.
+
+🚨 E-2 Telegram CHAT notification NEVER FIRES (but contact
+   notification DOES fire — V18.0 partially applied):
+   - src/lib/telegram.ts:53 notifyTelegramChat (exported,
+     never imported anywhere)
+   - /api/contact/route.ts:184-188 — calls BOTH
+     notifyNewContactMessage (Bale) AND
+     notifyTelegramContactMessage (Telegram) ✅ V18.0 fix
+     applied.
+   - /api/chat/route.ts:161-170 — calls ONLY
+     notifyNewChat (Bale), NEVER notifyTelegramChat. 🚨
+     V18.0 fix NOT applied for chat.
+   Impact: Admin configures Telegram bot in SettingsPanel,
+   gets notifications for NEW CONTACT MESSAGES but NOT for
+   NEW CHAT MESSAGES. The Telegram Chat bot feature is
+   effectively dead for chat events.
+   Fix: in /api/chat/route.ts after the Bale import block,
+   add:
+     import("@/lib/telegram")
+       .then(({ notifyTelegramChat }) =>
+         notifyTelegramChat({ sessionId, visitorId, message,
+           isFirst: isFirstMessage }))
+       .catch(() => {});
+   Files: src/app/api/chat/route.ts:159-170
+   NEW finding — partial regression vs V18.0-PANEL-FULL
+   expectation.
+
+🚨 E-3 adminTagline/adminStatus saved but NEVER DISPLAYED
+   (see B-1a).
+   Same as V18.0 E-3 — UNFIXED.
+
+🚨 E-4 EmailConfig and TelegramConfig models in schema are
+   DEAD (verified — no code reads or writes these tables):
+   - prisma/schema.prisma defines EmailConfig and
+     TelegramConfig tables
+   - apply_schema.py creates these tables (29 tables total,
+     verified in TEST 56)
+   - But NO code reads or writes these tables. Email config
+     uses SiteSetting key="forwardEmail". Telegram config
+     uses SiteSetting keys telegramBotToken/telegramChatId/
+     telegramEnabled.
+   - Two unused tables in DB. Should be removed from schema
+     and apply_schema.py.
+   Same as V18.0 E-4 — UNFIXED.
+
+🚨 E-5 User and Post models in schema are DEAD:
+   - prisma/schema.prisma defines User and Post
+   - apply_schema.py creates these tables
+   - But NO code uses them. AccessUser replaces User. No blog
+     post feature exists.
+   - Two unused tables in DB. Should be removed.
+   Same as V18.0 E-5 — UNFIXED.
+
+⚠️ E-6 TutorialView model exists but never written:
+   - prisma/schema.prisma defines TutorialView
+   - apply_schema.py creates the table
+   - But /api/track only writes to PageView, never
+     TutorialView
+   - No code reads TutorialView either. Dead table.
+   Same as V18.0 E-6 — UNFIXED.
+
+⚠️ E-7 PERSONAL.adminUsername and PERSONAL.adminPassword in
+   content.ts are DEAD:
+   - No code reads these. Authentication uses AccessUser
+     table.
+   - Leftover from pre-V16 era. Should be removed (security:
+     even though value is placeholder, having "adminPassword"
+     constant in source is confusing).
+   Same as V18.0 E-7 — UNFIXED.
+
+⚠️ E-8 RF_EQUIPMENT, SKILLS, BOOKS, ARTICLES, TUTORIALS
+   constants in content.ts are FALLBACKS only — DB content
+   is primary. But InteractiveTerminal.tsx imports SKILLS,
+   BOOKS, ARTICLES, TUTORIALS directly (not via useContent).
+   Terminal commands show static fallback content, not DB
+   content. Inconsistency: main page uses DB, terminal uses
+   static.
+   Same as V18.0 E-8 — UNFIXED.
+
+⚠️ E-9 /api/route.ts exists but is just a placeholder
+   (returns site info). Not used by any client code.
+   Same as V18.0 E-9 — UNFIXED.
+
+================================================================
+PART F — BEAUTY/UX — CSS classes vs inline, consistency,
+         loading, errors, toasts, RTL, responsive
+================================================================
+✅ SettingsPanel uses consistent .settings-* CSS classes (121
+   className usages, 0 inline styles — best of all admin
+   components).
+✅ Dashboard uses consistent .dashboard-* classes.
+✅ Contact form uses .contact-form, .field classes.
+✅ Theme switcher uses .theme-icon, .theme-switcher.
+
+🚨 F-1 7 admin components use heavy inline styles (verified
+   via grep `style={{` count):
+   - ContentManager.tsx: 17 inline vs 15 className
+   - NavMenuManager.tsx: 18 inline vs 10 className
+   - ThemeBuilder.tsx: 38 inline vs 6 className (worst ratio)
+   - TextEditor.tsx: 17 inline vs 2 className
+   - FontSelector.tsx: 10 inline vs 0 className (ALL inline)
+   - AparatClipManager.tsx: 22 inline vs 5 className
+   - AccessUserManager.tsx: 49 inline vs 8 className (most
+     total)
+   Inconsistent with SettingsPanel which uses classes.
+   Impact: theme changes don't propagate, responsive
+   breakpoints don't apply, RTL rules don't work, maintenance
+   harder.
+   Same as V18.0 F-1 — UNFIXED.
+
+⚠️ F-2 Loading states inconsistent (see B-13d):
+   - 5 different loading patterns across components
+   - No shared LoadingSpinner component
+   - Some show "loading..." text, others show animated "_",
+     others show "در حال بارگذاری..."
+   Same as V18.0 F-2 — UNFIXED.
+
+⚠️ F-3 Error states inconsistent (see B-13e):
+   - 5 different error display patterns
+   - Some inline red div, some toast, some silent
+   - No shared ErrorBanner component
+   Same as V18.0 F-3 — UNFIXED.
+
+⚠️ F-4 Success feedback inconsistent:
+   - SettingsPanel: toast (3s auto-hide) ✅ best
+   - TextEditor: inline "✓ saved" (2s) ✅ good
+   - MessagesPanel: no success feedback on reply (just closes
+     form) ⚠️
+   - AccessUserManager: no success feedback on save (just
+     closes form) ⚠️
+   - ContentManager: no success feedback on save (just
+     reloads) ⚠️
+   - ThemeBuilder: no success feedback on save ⚠️
+   - NavMenuManager: no success feedback ⚠️
+   - AparatClipManager: no success feedback ⚠️
+   Same as V18.0 F-4 — UNFIXED.
+
+⚠️ F-5 Confirm dialogs use browser `confirm()`:
+   - ContentManager.tsx:84 `if (!confirm("Delete?"))`
+   - AccessUserManager.tsx:201 `if (!confirm(\`حذف کاربر...\`))`
+   - ThemeBuilder.tsx:102 `if (!confirm("Delete this theme?"))`
+   - NavMenuManager.tsx:47 `if (!confirm(fa ? "حذف؟" : "Delete?"))`
+   - AparatClipManager.tsx:89 `if (!confirm("حذف این کلیپ؟"))`
+   - SettingsPanel.tsx:545 `if (!confirm(...))`
+   Inconsistent with site's terminal aesthetic. Native browser
+   confirm() is jarring. Should use custom modal.
+   Same as V18.0 F-5 — UNFIXED.
+
+⚠️ F-6 Alert dialogs use browser `alert()`:
+   - ContentManager.tsx:107, 116, 119 `alert(...)`
+   - AccessUserManager.tsx:213 `alert(...)`
+   - AparatClipManager.tsx:99 `alert("خطا در حذف")`
+   Same issue as F-5. Should use custom toast/modal.
+   Same as V18.0 F-6 — UNFIXED.
+
+⚠️ F-7 Icon-only buttons without text labels:
+   - AccessUserManager edit (✏️) and delete (🗑️) buttons
+     (line 519-520)
+   - NavMenuManager move (↑/↓), edit, hide/show, delete
+     buttons (line 129-133)
+   - ThemeBuilder edit, toggle, delete buttons (line 277-288)
+   - AparatClipManager edit (✏️) and delete (🗑️) buttons
+     (line 256-257)
+   - SettingsPanel close (✕) and show/hide (👁/🙈) buttons
+     (line 723, 945)
+   No aria-labels on any of these. Screen readers announce
+   emoji names.
+   Same as V18.0 F-7 — UNFIXED.
+
+⚠️ F-8 Spacing/padding inconsistent:
+   - dashboard-btn: 8px 14px (line 3169)
+   - settings-btn: 10px 20px (line 2887)
+   - settings-btn-small: 5px 12px (line 2912)
+   - signal-waveform-btn: 6px 4px (line 2218)
+   No shared spacing scale.
+   Same as V18.0 F-9 — UNFIXED.
+
+⚠️ F-9 Font sizes inconsistent:
+   - dashboard-info-label: 9px (line 3301)
+   - dashboard-info-value: 13px (line 3310)
+   - settings-label: 12px (line 2845)
+   - admin-search: 0.82rem (line 2306)
+   No shared type scale.
+   Same as V18.0 F-10 — UNFIXED.
+
+================================================================
+PART G — INSTALL.SH ISSUES
+================================================================
+✅ V17.9 set -eo pipefail (line 15) ✅
+✅ SESSION_SECRET idempotent (lines 99-111) ✅
+✅ Webhook secrets idempotent (lines 114-125) ✅
+✅ reCAPTCHA preserved (lines 131-132) ✅
+✅ DB permissions chmod 600 (line 159) ✅
+✅ .env chmod 600 (line 148) ✅
+✅ systemd with non-root user ehsansite (line 211) ✅
+✅ NoNewPrivileges + ProtectSystem + ProtectHome (lines 232-235) ✅
+
+✅ G-1 V18.0 VPS IP REMOVED from install.sh:295 (NOW APPLIED!):
+   `SITE_URL="http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'YOUR_IP'):3000"`
+   V18.0-PANEL-FULL #9 fix CONFIRMED APPLIED. ✅
+   File: /home/z/my-project/install.sh:295
+
+⚠️ G-2 install.sh:317 STILL PRINTS default password "admin123":
+   `echo "    password: admin123"`
+   Visible in shell history and terminal scrollback.
+   Fix: generate random password, print once, force change
+   on first login. OR add mustChangePassword flag.
+   Same as V18.0 G-2/N-8 — UNFIXED.
+
+⚠️ G-3 install.sh:175-178 runs 4 seed scripts sequentially.
+   If one fails, the error is suppressed with
+   `|| echo "⚠ ... failed"`. No rollback. If
+   seed_access_users.py fails (e.g., bcryptjs missing),
+   admin can't login but install reports success.
+   Same as V18.0 G-3 — UNFIXED.
+
+⚠️ G-4 install.sh:200 `cd "$SITE_DIR"` changes directory to
+   standalone subdirectory. If user runs install.sh from
+   project root expecting it to operate on root, this silent
+   cd is surprising.
+   Same as V18.0 G-4 — UNFIXED.
+
+⚠️ G-5 install.sh:253 `cp nginx-ehsanmorad.conf ...` —
+   config file is hardcoded to ehsanmorad.ir domain. If user
+   deploys to different domain, nginx config is wrong.
+   Should template.
+   Same as V18.0 G-5 — UNFIXED.
+
+⚠️ G-6 install.sh:284 certbot uses
+   --register-unsafely-without-email. No email means Let's
+   Encrypt can't send expiry warnings.
+   Same as V18.0 G-6 — UNFIXED.
+
+⚠️ G-7 install.sh:332-336 prints webhook URLs with "YOUR_IP"
+   placeholder if no domain. Doesn't use actual server IP.
+   Admin must manually find IP.
+   Same as V18.0 G-7 — UNFIXED.
+
+================================================================
+PART H — TOP 10 CRITICAL FINDINGS (priority order)
+================================================================
+
+🚨 #1 STOLEN COOKIE VALID AFTER PASSWORD CHANGE [CRITICAL, UNFIXED]
+   Files: prisma/schema.prisma:380-415 (no tokenVersion),
+          src/lib/access-auth.ts:67-96 (no version check),
+          src/app/api/admin/security/route.ts:86-91 (no
+          tokenVersion increment on password change)
+   Impact: Stolen admin cookie valid up to 24h after password
+   change. Defeats incident response.
+   Verified: TEST 3 confirmed — old cookie returns 200 on
+   /api/admin/settings after change_password.
+   Same as V17.9 Critical #1, V18.0 #1 — STILL UNFIXED.
+
+🚨 #2 /api/chat/messages IDOR BYPASS WITH EMPTY visitorId
+   [CRITICAL, NEW]
+   File: src/app/api/chat/messages/route.ts:46
+   Root cause: `if (reqVisitorId && session.visitorId !==
+   reqVisitorId)` short-circuits when reqVisitorId is empty
+   string. Attacker who knows/enumerates sessionId can read
+   victim's assistant messages by OMITTING visitorId from
+   URL.
+   Verified: TEST 21 — GET /api/chat/messages?sessionId=$SID
+   (no visitorId) → 200 ok=true with messages.
+   Fix: change to
+     `if (!reqVisitorId || session.visitorId !== reqVisitorId)`
+   Effort: 1 line.
+
+🚨 #3 XFF SPOOFING BYPASSES ALL RATE LIMITS [CRITICAL, UNFIXED]
+   Files (7 sites, all unchanged):
+     - src/middleware.ts:146-147
+     - src/lib/access-auth.ts:175-181
+     - src/app/api/contact/route.ts:48-51
+     - src/app/api/user/logout/route.ts:14-15
+     - src/app/api/track/route.ts:12
+     - src/app/api/chat/route.ts:78-81
+     - src/app/api/chat/messages/route.ts:51-52
+   Impact: Attacker rotates XFF to bypass login brute-force,
+   contact form, chat rate limits.
+   Verified: TEST 13 — 12 messages with rotating XFF
+   (10.0.0.1-10.0.0.12) all returned ok=true.
+   Same as V17.9 Critical #5, V18.0 #3 — STILL UNFIXED.
+
+🚨 #4 SSRF: ADMIN ENDPOINT STORES MALICIOUS baseUrl [HIGH,
+   UNFIXED]
+   Files: src/app/api/admin/providers/route.ts:60-69 (create),
+          src/app/api/admin/providers/route.ts:75-94 (update)
+   Impact: Admin (or attacker with stolen cookie via #1) can
+   store arbitrary baseUrl including private IPs and cloud
+   metadata hostnames. validateBaseUrl only fires at LLM-call
+   time, not at storage time.
+   Verified: TESTS 15-18 — all 4 malicious URLs stored
+   successfully (AWS metadata, decimal IP, GCP metadata
+   hostname, octal IP).
+   Mitigation: validateBaseUrl (providers.ts:11-86) DOES
+   block fetch at LLM-call time (TESTS 45-47 confirm). So
+   server-side request to private IP is prevented. But
+   malicious URL silently stored and displayed as
+   "configured".
+   Same as V17.9 Critical #3, V18.0 #5 — STILL UNFIXED.
+
+🚨 #5 /api/admin/text, /api/admin/themes, /api/admin/nav ALLOW
+   NON-ADMIN USERS [HIGH, design smell]
+   Files (3 routes with `where: isAdmin ? {} : { visible:
+   true }`):
+     - src/app/api/admin/text/route.ts:13-25
+     - src/app/api/admin/themes/route.ts:14-19
+     - src/app/api/admin/nav/route.ts:10-13
+   Verified: TESTS 35, 36, 38 — regular_user cookie returns
+   200 with visible-only items via /api/admin/* path.
+   Same as V18.0 C-1 — UNFIXED.
+
+🚨 #6 TELEGRAM CHAT NOTIFICATIONS NEVER FIRE [HIGH, functional
+   bug, NEW]
+   File: src/lib/telegram.ts:53 (notifyTelegramChat exported,
+   never imported anywhere)
+   Impact: SettingsPanel Telegram config works for CONTACT
+   messages (V18.0 fix applied at /api/contact/route.ts:184-188)
+   but NOT for CHAT messages (/api/chat/route.ts only calls
+   Bale's notifyNewChat, never Telegram's notifyTelegramChat).
+   Admin saves Telegram bot token+chatId expecting chat
+   notifications — gets none.
+   Fix: in /api/chat/route.ts after the Bale block (line 170),
+   add:
+     import("@/lib/telegram")
+       .then(({ notifyTelegramChat }) =>
+         notifyTelegramChat({ sessionId, visitorId, message,
+           isFirst: isFirstMessage }))
+       .catch(() => {});
+   Effort: 5 lines + 1 import.
+   Regression: V18.0 release notes claim "Telegram wired"
+   but only contact path was wired.
+
+🚨 #7 adminTagline/adminStatus + tagline_<lang> SAVED BUT NEVER
+   DISPLAYED [MEDIUM, functional bug, UNFIXED]
+   Files: src/app/page.tsx:546 (uses PERSONAL.tagline,
+          ignores admin-edited tagline_<lang>)
+          src/app/page.tsx (never reads adminTagline/adminStatus
+          from siteContent.settings)
+          src/app/api/chat/route.ts:37-38, 193-195 (uses
+          PERSONAL constants, not DB values)
+   Impact: Admin edits tagline → no visible effect on site.
+   adminTagline/adminStatus settings are dead from UI
+   perspective. Chat greeting doesn't reflect admin name
+   change.
+   Same as V18.0 #8 — UNFIXED.
+
+🚨 #8 install.sh:317 STILL PRINTS DEFAULT PASSWORD "admin123"
+   [MEDIUM, info leak]
+   File: /home/z/my-project/install.sh:317
+   Impact: Default password visible in shell history,
+   terminal scrollback, systemd journal.
+   Same as V18.0 G-2/N-8 — UNFIXED.
+
+🚨 #9 BULK IMPORTS USE N+1 SEQUENTIAL CREATES [MEDIUM, perf]
+   Files: src/app/api/admin/equipment/route.ts:91-122,
+          src/app/api/admin/content/route.ts:123-141,
+          src/app/api/admin/text/route.ts:79-95,
+          src/lib/providers.ts:331-333 (seedDefaultProviders)
+   Impact: 100 items = 100 sequential DB writes (~100ms-1s).
+   Should use createMany (~10ms).
+   Same as V18.0 #10 — UNFIXED.
+
+🚨 #10 WCAG AA — 7 admin components have 0 aria-* attributes
+   [MEDIUM, accessibility]
+   Files: ContentManager, NavMenuManager, ThemeBuilder,
+          TextEditor, FontSelector, AparatClipManager,
+          AccessUserManager.
+   Icon-only buttons (✏️/🗑️/↑/↓/👁/✕) have no aria-label.
+   Plus dashboard tablist missing role="tabpanel" +
+   aria-controls linkage. Plus text-faint color fails AA
+   contrast (3.2:1).
+   Same as V18.0 #N (FIX-N) — UNFIXED.
+
+================================================================
+PART I — V17.x VERIFICATION SUMMARY
+================================================================
+✅ V17.4 personal.css global import (layout.tsx:4)
+✅ V17.4 formLoadTime on mount (page.tsx:79)
+✅ V17.4 setInterval cleanup with unref (rate limiter maps)
+✅ V17.5 sitemap domain from env (sitemap.xml/route.ts:12)
+✅ V17.5 provider apiKey masking on update
+   (providers/route.ts:88, 96, 122)
+✅ V17.5 FontSelector data-font on mount (FontSelector.tsx:27)
+✅ V17.5 webhook GET maskedToken (bale/webhook/route.ts)
+✅ V17.6 equipment bulk_import correct fields
+   (equipment/route.ts:99-107)
+✅ V17.6 content aiInstructions preserved (content/route.ts:48
+   alias)
+✅ V17.6 apiKey masked on all provider POST actions (verified
+   live: POST create returns masked apiKey)
+✅ V17.6 /api/admin/users try/catch wrapper (users/route.ts)
+✅ V17.7 /api/content PUBLIC_KEYS filter (content/route.ts:62-68)
+✅ V17.7 /api/contact fail-closed on invalid _t
+   (contact/route.ts:96-100)
+✅ V17.7 install.sh set -eo pipefail (install.sh:15)
+✅ V17.8 PATCH in CSRF methods (middleware.ts:160)
+✅ V17.8 DELETE in body-size limit (middleware.ts:200)
+✅ V17.8 x-forwarded-proto in HSTS (middleware.ts:216)
+✅ V17.8 chat history bounded take:20 (chat/route.ts:135)
+✅ V17.8 chat messages bounded take:50 (chat/messages:70)
+✅ V17.8 LLM timeout AbortSignal.timeout(30000) in 4 providers
+✅ V17.8 Promise.all in admin content GET (content/route.ts:31)
+✅ V17.9 Settings tab admin-only (user-dashboard/page.tsx:142)
+✅ V17.9 VPS IP removed from page.tsx authorizedDomains
+   (line 125-135)
+✅ V17.9 VPS IP removed from canvas-protect.ts
+   AUTHORIZED_DOMAINS
+✅ V17.9 /api/admin/security change_password uses
+   authCheck.userId (security/route.ts:67-69)
+✅ V17.9 /api/chat/messages rate limit added
+   (chat/messages/route.ts:5-46)
+✅ V17.9 SSRF validateBaseUrl added (providers.ts:11-86)
+   V18.0 enhanced: decimal/hex IP conversion + cloud metadata
+   hostnames blocked.
+✅ V18.0 Chat session ownership check (chat/route.ts:137-144)
+✅ V18.0 /api/chat/messages visitorId match check
+   (chat/messages/route.ts:36-48) — BUT with empty-visitorId
+   bypass bug (see #2).
+✅ V18.0 Logout CSRF protection (middleware.ts:30 — /api/user/
+   logout removed from PUBLIC_API_PREFIXES)
+✅ V18.0 VPS IP removed from install.sh:295 (hostname -I)
+✅ V18.0 Telegram notification wired for /api/contact
+   (contact/route.ts:184-188)
+🚨 V18.0 Telegram notification NOT wired for /api/chat
+   (chat/route.ts only calls Bale) — see #6
+🚨 V18.0 tokenVersion NOT IMPLEMENTED (no schema change) —
+   see #1
+
+================================================================
+PART J — SUGGESTED REMEDIATION TASKS (V18.2)
+================================================================
+
+  - V18.2-FIX-A: tokenVersion for session revocation
+   (CRITICAL #1, BLOCKING — same as V18.0-FIX-A, V17.9-FIX-A)
+      Schema: add `tokenVersion Int @default(0)` to AccessUser
+      Token: include in HMAC payload, increment on password
+      change + deactivation + delete
+      Verify: DB lookup in verifySessionToken (compare token's
+      version with user.tokenVersion from DB)
+      Migration: apply_schema.py needs ALTER TABLE statement
+      for existing V18.0 DBs (see V18.0-PANEL-FULL S-7).
+      Files: prisma/schema.prisma:380-415,
+             scripts/apply_schema.py (add ALTER TABLE
+             AccessUser ADD COLUMN tokenVersion INTEGER NOT
+             NULL DEFAULT 0;),
+             src/lib/access-auth.ts:67-96,
+             src/app/api/admin/security/route.ts:86-91
+             (increment on change_password),
+             src/app/api/admin/users/[id]/route.ts:61-66
+             (increment on active=false), :129 (increment on
+             delete).
+      PRIORITY: CRITICAL — blocks release.
+
+  - V18.2-FIX-B: /api/chat/messages visitorId required + match
+   (CRITICAL #2, NEW)
+      Change line 46 from:
+        `if (reqVisitorId && session.visitorId !== reqVisitorId)`
+      to:
+        `if (!reqVisitorId || session.visitorId !== reqVisitorId)`
+      OR add early 400 if visitorId is missing.
+      File: src/app/api/chat/messages/route.ts:46
+      PRIORITY: CRITICAL — 1 line fix.
+
+  - V18.2-FIX-C: Trusted proxy / XFF handling
+   (CRITICAL #3, BLOCKING — same as V18.0-FIX-C, V17.9-FIX-E)
+      Add: TRUSTED_PROXIES env, walk XFF right-to-left
+      Or: use req.socket.remoteAddress only
+      Or: prefer x-real-ip (set by nginx unspoofable from
+      $remote_addr) over x-forwarded-for[0].
+      Files: 7 sites listed in A-3 above.
+      PRIORITY: CRITICAL.
+
+  - V18.2-FIX-D: SSRF validation at admin endpoint
+   (HIGH #4 — same as V18.0-FIX-E)
+      Move validateBaseUrl check to /api/admin/providers POST
+      create/update BEFORE storing in DB. Return 400 if
+      invalid.
+      Also add hostname allowlist (api.openai.com,
+      api.anthropic.com, api.groq.com, localhost:11434) for
+      defense in depth.
+      Files: src/app/api/admin/providers/route.ts:60-69,
+             src/app/api/admin/providers/route.ts:75-94,
+             src/lib/providers.ts (export validateBaseUrl).
+      PRIORITY: HIGH.
+
+  - V18.2-FIX-E: /api/admin/text, /api/admin/themes,
+   /api/admin/nav — admin-only (HIGH #5)
+      Replace `where: isAdmin ? {} : { visible: true }` with
+      admin-only check (return 401 if not admin).
+      Files: 3 routes listed in C-1.
+      PRIORITY: HIGH (design smell, not a leak — but
+      inconsistent with /api/admin/* prefix semantics).
+
+  - V18.2-FIX-F: Telegram chat notification wiring
+   (HIGH #6, NEW)
+      In /api/chat/route.ts after the Bale block (line 170),
+      add:
+        import("@/lib/telegram")
+          .then(({ notifyTelegramChat }) =>
+            notifyTelegramChat({ sessionId, visitorId,
+              message, isFirst: isFirstMessage }))
+          .catch(() => {});
+      File: src/app/api/chat/route.ts:159-170
+      PRIORITY: HIGH (functional bug — Telegram chat feature
+      is dead).
+
+  - V18.2-FIX-G: Display admin-edited tagline + adminTagline
+   + adminStatus (MEDIUM #7 — same as V18.0-FIX-H)
+      page.tsx:546 change `PERSONAL.tagline[lang]` to
+      `siteContent.settings?.["tagline_" + lang] ||
+       PERSONAL.tagline[lang]`
+      Add UI element to display adminTagline/adminStatus on
+      homepage.
+      /api/chat/route.ts:37-38,193-195 — read name/tagline
+      from DB instead of PERSONAL constant.
+      Files: src/app/page.tsx:546, src/app/api/chat/route.ts
+      PRIORITY: MEDIUM.
+
+  - V18.2-FIX-H: install.sh random admin password (MEDIUM #8)
+      Generate random password in install.sh, print once,
+      store hash. OR add mustChangePassword flag and force
+      change on first login.
+      File: /home/z/my-project/install.sh:317
+      PRIORITY: MEDIUM (info leak).
+
+  - V18.2-FIX-I: Bulk imports use createMany
+   (MEDIUM #9 — same as V18.0-FIX-J)
+      Files: src/app/api/admin/equipment/route.ts:91-122,
+             src/app/api/admin/content/route.ts:123-140,
+             src/lib/providers.ts:331-333
+      Replace sequential await loop with createMany (with
+      skipDuplicates for partial failure handling).
+      PRIORITY: MEDIUM (perf).
+
+  - V18.2-FIX-J: WCAG AA — aria labels + tabpanel + contrast
+   (MEDIUM #10 — same as V18.0-FIX-N/O)
+      Add aria-label to all icon-only buttons in 7 admin
+      components.
+      Add role="tabpanel" + aria-controls to dashboard tabs.
+      Add <label htmlFor> to AccessUserManager form inputs.
+      Change --text-faint from #5a7a5a (3.2:1) to #6a9a6a
+      (4.6:1) or restrict usage to large text only.
+      Add "skip to main content" link on homepage + dashboard.
+      Files: 7 admin components + user-dashboard/page.tsx +
+              personal.css:30.
+      PRIORITY: MEDIUM (accessibility).
+
+  - V18.2-FIX-K: Remove dead PERSONAL imports (LOW)
+      Files: 8 files listed in E-1.
+      PRIORITY: LOW (code quality).
+
+  - V18.2-FIX-L: Remove dead `const password` assignments
+   (LOW)
+      Files: 11 GET routes + 13 POST routes listed in C-6/C-7.
+      PRIORITY: LOW (code quality).
+
+  - V18.2-FIX-M: Remove dead EmailConfig/TelegramConfig/User/
+   Post/TutorialView models (LOW)
+      Files: prisma/schema.prisma, scripts/apply_schema.py.
+      PRIORITY: LOW (DB cleanup).
+
+  - V18.2-FIX-N: AparatClipManager add toggle visible +
+   check data.ok (LOW)
+      Add UI button (like ContentManager has) and POST action=
+      toggle handler (already exists in API? No —
+      /api/admin/clips POST only handles create/update, no
+      toggle. Need to add).
+      Also fix handleDelete to check data.ok (line 88-101).
+      Files: src/components/AparatClipManager.tsx,
+             src/app/api/admin/clips/route.ts.
+      PRIORITY: LOW (feature parity).
+
+  - V18.2-FIX-O: Shared loading + error + toast components
+   (LOW — same as V18.0-FIX-P)
+      Create LoadingSpinner, ErrorBanner, Toast React
+      components. Replace 5+ inline patterns across admin
+      components.
+      PRIORITY: LOW (UX consistency).
+
+  - V18.2-FIX-P: hreflang tags (LOW — same as V18.0-FIX-Q)
+      Add alternates.languages to layout.tsx metadata.
+      File: src/app/layout.tsx
+      PRIORITY: LOW (SEO).
+
+  - V18.2-FIX-Q: Proper OG image 1200x630 (LOW — same as
+   V18.0-FIX-R)
+      Create dedicated og-image.jpg (1200x630).
+      Update layout.tsx to reference it.
+      PRIORITY: LOW (SEO/social).
+
+  - V18.2-FIX-R: MessagesPanel pagination + toasts (MEDIUM —
+   same as V18.0-FIX-S)
+      Add page param to /api/messages, add pagination UI to
+      MessagesPanel. Replace inline error with toast.
+      Files: src/app/api/messages/route.ts,
+             src/app/user-dashboard/page.tsx (MessagesPanel)
+      PRIORITY: MEDIUM.
+
+  - V18.2-FIX-S: i18n completeness (LOW — same as V18.0-FIX-T)
+      Add German translations to ContentManager typeLabels.
+      Add language switcher to AccessUserManager +
+      AparatClipManager.
+      Translate error.tsx, global-error.tsx, not-found.tsx.
+      Translate hardcoded English strings in 5 admin
+      components (ContentManager, NavMenuManager,
+      ThemeBuilder, TextEditor, FontSelector).
+      PRIORITY: LOW (i18n).
+
+  - V18.2-FIX-T: Server-side href validation in /api/admin/nav
+   (LOW — same as V18.0-FIX-U)
+      Block javascript:, data: schemes server-side.
+      File: src/app/api/admin/nav/route.ts:34-40
+      PRIORITY: LOW (defense in depth).
+
+  - V18.2-FIX-U: Remove PERSONAL.adminUsername/adminPassword
+   dead constants from content.ts (LOW — same as V18.0-FIX-V)
+      PRIORITY: LOW (security hygiene).
+
+  - V18.2-FIX-V: ThemeBuilder color validation (LOW)
+      Add hex regex check on color text input.
+      File: src/components/ThemeBuilder.tsx:163-168,
+            src/app/api/admin/themes/route.ts:46-72.
+      PRIORITY: LOW (UX).
+
+  - V18.2-FIX-W: eslint + eslint-config-next in devDependencies
+   (LOW — same as V17.9 U-5)
+      package.json has "lint": "eslint ." script but no eslint
+      or eslint-config-next in devDependencies (verified —
+      only @tailwindcss/postcss, @types/*, tailwindcss,
+      typescript present).
+      Running `npm run lint` would fail.
+      PRIORITY: LOW (dev experience).
+
+  - V18.2-FIX-X: Versioned DB migrations (HIGH, forward-
+   looking — same as V17.9 U-11)
+      apply_schema.py uses ONLY `CREATE TABLE IF NOT EXISTS`
+      (verified — 29 CREATE statements, 0 ALTER, 0
+      schema_version). If V18.2-FIX-A adds tokenVersion
+      column, existing V18.0 DBs WON'T get the new column.
+      Users would need to either drop and recreate DB (loses
+      data) OR run manual ALTER TABLE statements.
+      Fix: add schema_version table to apply_schema.py. On
+      each run, check current version, apply ALTER TABLE
+      statements to bring DB up to latest.
+      File: scripts/apply_schema.py
+      PRIORITY: HIGH (required for V18.2-FIX-A).
+
+  - V18.2-FIX-Y: Migrate middleware → proxy convention
+   (LOW — same as V17.9 U-12)
+      Next.js 16 deprecation warning: "The 'middleware' file
+      convention is deprecated. Please use 'proxy' instead."
+      Run `npx @next/codemod@canary middleware-to-proxy .`
+      Test thoroughly before V18.2 release.
+      Files: src/middleware.ts → src/proxy.ts (rename).
+      PRIORITY: LOW (will become breaking in future Next
+      major).
+
+================================================================
+NO CODE CHANGES MADE (read-only audit per task instructions)
+================================================================
+This task is a read-only audit. No files under /home/z/my-project/
+were modified except appending this worklog entry.
+
+Test setup (admin user seed, .env creation, server start on port
+3018) was done in a throwaway manner and cleaned up:
+  - /tmp/v18-audit-test/ created from public/install-v18.0.zip
+  - apply_schema.py + seed_access_users.py ran against /tmp DB
+    (separate from /home/z/my-project/db/custom.db — original
+    project DB UNTOUCHED)
+  - .env generated with openssl rand secrets
+  - server.js ran on port 3018 for runtime tests
+  - /tmp/v18-audit-test/ will be removed at end of session
+  - Test server process killed (verified via ps)
+
+Verified no source modifications:
+  - /home/z/my-project/src/** (all files unchanged — git status
+    shows only worklog.md and install-v18.0.zip as modified, the
+    latter was modified by previous V18.0 release commit
+    538e8a0, not by this audit)
+  - /home/z/my-project/scripts/** (unchanged)
+  - /home/z/my-project/install.sh (unchanged)
+  - /home/z/my-project/prisma/schema.prisma (unchanged)
+  - /home/z/my-project/package.json (unchanged)
+  - /home/z/my-project/.next/standalone/db/custom.db (untouched
+    — test used /tmp/v18-audit-test/db/custom.db)
+
+================================================================
+V18.2 RELEASE READINESS: ❌ BLOCKED — 4 CRITICAL ISSUES
+================================================================
+
+The V18.0 release shipped WITHOUT applying CRITICAL fixes from
+V17.9 and V18.0 audits:
+
+❌ V18.0-FIX-A (tokenVersion) — STILL NOT APPLIED. Stolen
+   cookie valid 24h after password change. Same as V17.9 #1
+   and V18.0 #1.
+❌ V18.0-FIX-B (chat session ownership) — APPLIED but has
+   empty-visitorId bypass bug (V18.2-FIX-B). NEW CRITICAL
+   finding.
+❌ V18.0-FIX-C (XFF handling) — STILL NOT APPLIED. XFF
+   spoofing bypasses all rate limits. Same as V17.9 #5 and
+   V18.0 #3.
+❌ V18.0-FIX-E (SSRF at admin endpoint) — STILL NOT APPLIED.
+   Malicious baseUrl stored in DB (fetch blocked at LLM-call
+   time, but URL persists). Same as V17.9 #3 and V18.0 #5.
+
+The V18.0 fixes that WERE applied:
+✅ V18.0-FIX-D (logout CSRF) — APPLIED.
+✅ V18.0-FIX-H (install.sh VPS IP) — APPLIED.
+✅ V18.0-FIX-G partial (Telegram wired for contact, NOT for
+   chat) — PARTIAL. New finding #6.
+
+V18.2 CANNOT ship until the 4 CRITICAL issues are addressed.
+Estimated total effort: 4-6 hours of focused work.
+
+After applying V18.2-FIX-A through D, re-run this audit to
+verify all 4 CRITICAL runtime tests (PART A FAIL section) flip
+to PASS. Then address NEW CRITICAL #2 (1-line fix) and HIGH #6
+(5-line fix) for full Telegram feature parity.
+
+================================================================
