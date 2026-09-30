@@ -1,4 +1,5 @@
 import { checkAdminAuth } from "@/lib/admin-auth";
+import { getClientIpSafe } from "@/lib/ip";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { PERSONAL, UI, type Lang } from "@/lib/content";
@@ -75,10 +76,8 @@ IMPORTANT:
 // Returns: { ok, sessionId, reply, messageId }
 export async function POST(req: Request) {
   try {
-    const ip =
-      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      req.headers.get("x-real-ip") ||
-      "unknown";
+    // V18.2: use shared IP helper (prefer x-real-ip, then last XFF entry)
+    const ip = getClientIpSafe(req);
     const userAgent = req.headers.get("user-agent") || "";
 
     if (!rateLimit(ip)) {
@@ -98,7 +97,11 @@ export async function POST(req: Request) {
 
     const message = body.message.trim().slice(0, 2000);
     const lang: Lang = (["en", "de", "fa"].includes(body.lang) ? body.lang : "en") as Lang;
-    const visitorId = String(body.visitorId || "").slice(0, 100) || "anon";
+    // V18.2: visitorId اجباری شد (قبلاً "anon" fallback داشت → anonymous hijack)
+    const visitorId = String(body.visitorId || "").slice(0, 100);
+    if (!visitorId || visitorId === "anon") {
+      return NextResponse.json({ ok: false, error: "missing_visitor_id" }, { status: 400 });
+    }
     let sessionId = String(body.sessionId || "").slice(0, 100);
 
     if (!message) {

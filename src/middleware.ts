@@ -12,6 +12,7 @@
 
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { getClientIpSafe } from "@/lib/ip";
 
 // مسیرهای ادمین که نیاز به session دارند
 const ADMIN_PANEL_PATHS = ["/user-dashboard"];
@@ -143,8 +144,8 @@ export function middleware(req: NextRequest) {
 
   // --- 1. Rate limit برای login/contact/chat ---
   if (RATE_LIMIT_PATHS.includes(pathname)) {
-    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-               req.headers.get("x-real-ip") || "unknown";
+    // V18.2: use shared IP helper (prefer x-real-ip, then last XFF entry)
+    const ip = getClientIpSafe(req);
     const max = pathname === "/api/user/login" ? 5 : 8; // login: 5، contact/chat: 8
     if (!checkRateLimit(`${pathname}:${ip}`, max)) {
       const res = NextResponse.json(

@@ -171,13 +171,13 @@ export async function logAccess(
 
 // ----------------------------------------------------------------------------
 // getClientIp — استخراج IP کاربر از headers
+// V18.2: use shared IP helper (prefer x-real-ip, then last XFF entry)
 // ----------------------------------------------------------------------------
+import { getClientIpSafe } from "./ip";
+
 export function getClientIp(request: Request): string | null {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim();
-  const realIp = request.headers.get("x-real-ip");
-  if (realIp) return realIp;
-  return null;
+  const ip = getClientIpSafe(request);
+  return ip === "unknown" ? null : ip;
 }
 
 // ----------------------------------------------------------------------------

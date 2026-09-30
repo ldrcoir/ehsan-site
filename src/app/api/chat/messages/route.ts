@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getClientIpSafe } from "@/lib/ip";
 import { db } from "@/lib/db";
 
 // V17.9: rate limit برای /api/chat/messages (جلوگیری از IDOR brute-force)
@@ -52,8 +53,8 @@ export async function GET(req: Request) {
     }
 
     // V17.9: rate limit per IP (جلوگیری از sessionId enumeration)
-    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-               req.headers.get("x-real-ip") || "unknown";
+    // V18.2: use shared IP helper
+    const ip = getClientIpSafe(req);
     const now = Date.now();
     const arr = (msgRateLimit.get(ip) || []).filter(t => now - t < MSG_RATE_WINDOW);
     if (arr.length >= MSG_RATE_MAX) {

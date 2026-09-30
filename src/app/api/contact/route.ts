@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getClientIpSafe } from "@/lib/ip";
 import { db } from "@/lib/db";
 import { logSecurityEvent } from "@/lib/security";
 
@@ -45,10 +46,8 @@ function isSpammy(text: string): boolean {
 
 export async function POST(req: Request) {
   try {
-    const ip =
-      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      req.headers.get("x-real-ip") ||
-      "unknown";
+    // V18.2: use shared IP helper
+    const ip = getClientIpSafe(req);
     const userAgent = req.headers.get("user-agent") || "";
 
     // Bot detection

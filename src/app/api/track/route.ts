@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getClientIpSafe } from "@/lib/ip";
 import { db } from "@/lib/db";
 
 /**
@@ -9,7 +10,8 @@ import { db } from "@/lib/db";
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || null;
+    // V18.2: use shared IP helper
+    const ip = getClientIpSafe(req) === "unknown" ? null : getClientIpSafe(req);
     const userAgent = req.headers.get("user-agent") || null;
 
     // Don't track bots

@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { NextResponse } from "next/server";
+import { getClientIpSafe } from "@/lib/ip";
 import { logAccess, getSessionFromRequest } from "@/lib/access-auth";
 
 export async function POST(req: Request) {
@@ -11,9 +12,10 @@ export async function POST(req: Request) {
     try {
       const session = getSessionFromRequest(req);
       if (session?.userId) {
-        const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-                   req.headers.get("x-real-ip") || null;
-        await logAccess(session.userId, "logout", ip, req.headers.get("user-agent"));
+        // V18.2: use shared IP helper
+        const ip = getClientIpSafe(req);
+        const ipStr = ip === "unknown" ? null : ip;
+        await logAccess(session.userId, "logout", ipStr, req.headers.get("user-agent"));
       }
     } catch {}
     const response = NextResponse.json({ ok: true });
