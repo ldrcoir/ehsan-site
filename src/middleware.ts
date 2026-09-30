@@ -27,7 +27,8 @@ const PUBLIC_API_PREFIXES = [
   "/api/track",
   "/api/user/login",
   "/api/user/verify",
-  "/api/user/logout",
+  // V18.0: /api/user/logout از PUBLIC_API_PREFIXES حذف شد (CSRF protection)
+  // قبلاً logout بدون Origin check بود → cross-site logout CSRF
   "/api/contact",
   "/api/chat",
   "/api/bale/webhook",

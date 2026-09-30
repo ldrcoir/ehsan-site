@@ -59,7 +59,7 @@ export default function ChatSection({ lang }: { lang: Lang }) {
     if (!sessionId) return;
     const pollInterval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/chat/messages?sessionId=${sessionId}&since=${lastPollTs}`);
+        const res = await fetch(`/api/chat/messages?sessionId=${sessionId}&since=${lastPollTs}&visitorId=${encodeURIComponent(visitorId)}`);
         const data = await res.json();
         if (data.ok && data.messages && data.messages.length > 0) {
           setMessages((prev) => {

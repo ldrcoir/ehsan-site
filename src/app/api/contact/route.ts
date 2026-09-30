@@ -180,6 +180,13 @@ export async function POST(req: Request) {
       )
       .catch(() => {});
 
+    // V18.0: Send Telegram notification (was never wired — dead code)
+    import("@/lib/telegram")
+      .then(({ notifyTelegramContactMessage }) =>
+        notifyTelegramContactMessage({ id: saved.id, name, email, message })
+      )
+      .catch(() => {});
+
     // Forward to admin's email via formsubmit.co (async, non-blocking)
     import("@/lib/settings")
       .then(async ({ getSetting }) => {

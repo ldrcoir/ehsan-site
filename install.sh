@@ -17,7 +17,7 @@ set -eo pipefail
 SITE_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SITE_DIR"
 
-VERSION="V17.9"
+VERSION="V18.0"
 echo "=========================================="
 echo "  نصب سایت شخصی $VERSION (Pre-built)"
 echo "=========================================="
@@ -291,7 +291,8 @@ if [ -n "$DOMAIN_FOUND" ]; then
     fi
 else
     echo "  ⚠ دامنه‌ای DNS ست نشده. فعلاً HTTP."
-    SITE_URL="http://31.70.76.10:3000"
+    # V18.0: hardcoded VPS IP removed (info leak) — use hostname instead
+    SITE_URL="http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'YOUR_IP'):3000"
 fi
 
 # ============================================================================

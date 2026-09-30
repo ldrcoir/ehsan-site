@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 
 export type ProviderType = "openai" | "anthropic" | "ollama" | "groq" | "openrouter" | "custom";
 
-// V17.9: SSRF protection — validate baseUrl before fetch
+// V18.0: SSRF protection — validate baseUrl before fetch (enhanced from V17.9)
 function validateBaseUrl(baseUrl: string): { valid: boolean; sanitized: string } {
   try {
     const u = new URL(baseUrl);
@@ -16,17 +16,55 @@ function validateBaseUrl(baseUrl: string): { valid: boolean; sanitized: string }
     if (u.protocol !== "https:" && u.protocol !== "http:") {
       return { valid: false, sanitized: "" };
     }
-    const host = u.hostname;
-    // بلاک private IPs (SSRF protection)
+    let host = u.hostname;
+
+    // V18.0: decimal IP bypass fix (e.g., 2130706433 = 127.0.0.1)
+    if (/^\d+$/.test(host) && !host.includes(":")) {
+      const decimal = parseInt(host, 10);
+      if (decimal >= 0 && decimal <= 0xFFFFFFFF) {
+        const octet1 = (decimal >>> 24) & 0xFF;
+        const octet2 = (decimal >>> 16) & 0xFF;
+        const octet3 = (decimal >>> 8) & 0xFF;
+        const octet4 = decimal & 0xFF;
+        host = `${octet1}.${octet2}.${octet3}.${octet4}`;
+      }
+    }
+
+    // V18.0: hex IP bypass fix (e.g., 0x7f000001 = 127.0.0.1)
+    if (host.startsWith("0x") || /^0x[0-9a-f]+$/i.test(host)) {
+      const decimal = parseInt(host, 16);
+      if (!isNaN(decimal) && decimal >= 0 && decimal <= 0xFFFFFFFF) {
+        const octet1 = (decimal >>> 24) & 0xFF;
+        const octet2 = (decimal >>> 16) & 0xFF;
+        const octet3 = (decimal >>> 8) & 0xFF;
+        const octet4 = decimal & 0xFF;
+        host = `${octet1}.${octet2}.${octet3}.${octet4}`;
+      }
+    }
+
+    // V18.0: block cloud metadata hostnames (not just IPs)
+    const blockedHosts = new Set([
+      "metadata.google.internal",  // GCP metadata
+      "metadata",                   // GCP metadata short form
+      "169.254.169.254",           // AWS/Azure metadata
+      "metadata.azure.com",         // Azure metadata
+    ]);
+    if (blockedHosts.has(host)) {
+      return { valid: false, sanitized: "" };
+    }
+
+    // بلاک private IPs (SSRF protection) — V18.0: enhanced patterns
     const privatePatterns = [
-      /^169\.254\./,        // link-local (AWS metadata)
+      /^169\.254\./,        // link-local (AWS/Azure metadata)
       /^10\./,              // private class A
       /^172\.(1[6-9]|2[0-9]|3[01])\./, // private class B
       /^192\.168\./,        // private class C
       /^127\./,             // loopback
       /^0\./,               // current network
+      /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./, // CGNAT
       /^::1$/,              // IPv6 loopback
       /^fc00:/,             // IPv6 private
+      /^fd00:/,             // IPv6 private
       /^fe80:/,             // IPv6 link-local
     ];
     for (const p of privatePatterns) {

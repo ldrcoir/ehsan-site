@@ -134,6 +134,14 @@ export async function POST(req: Request) {
         // V17.8: bound chat history to last 20 messages (prevent unbounded LLM context)
         include: { messages: { orderBy: { createdAt: "asc" }, take: 20 } },
       });
+      // V18.0: session ownership check — sessionId باید متعلق به همون visitorId باشه
+      if (session && session.visitorId !== visitorId) {
+        // هکر سعی می‌کنه به session شخص دیگه‌ای پیام تزریق کنه
+        return NextResponse.json(
+          { ok: false, error: "session_mismatch" },
+          { status: 403 }
+        );
+      }
     }
     if (!session) {
       session = await db.chatSession.create({

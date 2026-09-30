@@ -33,6 +33,20 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: "missing_session" }, { status: 400 });
     }
 
+    // V18.0: session ownership check — فقط پیام‌های session خودت رو می‌تونی بخونی
+    const reqVisitorId = url.searchParams.get("visitorId") || "";
+    const session = await db.chatSession.findUnique({
+      where: { id: sessionId },
+      select: { visitorId: true },
+    });
+    if (!session) {
+      return NextResponse.json({ ok: false, error: "session_not_found" }, { status: 404 });
+    }
+    // V18.0: ownership check — visitorId باید مطابق باشه
+    if (reqVisitorId && session.visitorId !== reqVisitorId) {
+      return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
+    }
+
     // V17.9: rate limit per IP (جلوگیری از sessionId enumeration)
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
                req.headers.get("x-real-ip") || "unknown";
