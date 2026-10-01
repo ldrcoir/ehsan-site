@@ -7,7 +7,7 @@
 #   cd /home/ehsan/personal-site
 #   sudo bash scripts/reset-admin-password.sh
 #
-# رمز ادمین به "admin123" برگردانده می‌شه.
+# V18.8: رمز تصادفی ۱۶ کاراکتری تولید می‌شه و یک بار چاپ می‌شه.
 # بعداً از پنل می‌تونی رمز جدید بذاری.
 # ============================================================================
 
@@ -26,8 +26,13 @@ cd "$PROJECT_DIR"
 echo "مسیر پروژه: $PROJECT_DIR"
 echo ""
 
-# V18.3: رمز رو به stdout چاپ نمی‌کنیم (info leak)
-NEW_PASSWORD="admin123"
+# V18.8: تولید رمز تصادفی ۱۶ کاراکتری (به جای admin123)
+NEW_PASSWORD=$(openssl rand -base64 12 | tr -dc 'A-Za-z0-9' | head -c 16)
+
+if [ -z "$NEW_PASSWORD" ]; then
+    echo "❌ خطا در تولید رمز تصادفی. openssl نصبه؟"
+    exit 1
+fi
 
 # تولید هش bcrypt
 echo "در حال تولید هش..."
@@ -60,12 +65,14 @@ if [ "$COUNT" = "1" ]; then
     echo "  ✅ رمز ادمین ریست شد!"
     echo "=========================================="
     echo ""
-    echo "  رمز پیش‌فرض تنظیم شد. برای دیدن رمز:"
-    echo "    grep NEW_PASSWORD scripts/reset-admin-password.sh"
+    echo "  رمز جدید تصادفی (یک بار نمایش داده می‌شه):"
     echo ""
-    echo "  حالا می‌تونی وارد بشی:"
-    echo "    URL: http://YOUR_IP:3000/user-login"
     echo "    username: admin"
+    echo "    password: $NEW_PASSWORD"
+    echo ""
+    echo "  ⚠️  این رمز رو ذخیره کن — دوباره نمایش داده نمی‌شه!"
+    echo ""
+    echo "  URL: http://YOUR_IP:3000/user-login"
     echo ""
     echo "  ⚠️ بعد از ورود، از پنل رمز رو عوض کن!"
     echo ""

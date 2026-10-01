@@ -50,7 +50,27 @@ test
 prompt
 
 server.log
-# Skills directory
+# Skills directory (V18.8: removed — internal AI tool library, not part of site)
+/skills/
+
+# Dev tooling (V18.8: not used by deployed site)
+/.zscripts/
+/tests/
+/examples/
+/mini-services/
+
+# Worklog (V18.8: internal multi-agent dev log — not for user repo)
+worklog.md
+
+# Old tutorial versions + zips (V18.8: keep only latest)
+public/source-*.zip
+public/tutorial-*.zip
+download/TUTORIAL_FA_V*.docx
+public/TUTORIAL_FA_V*.docx
+!download/TUTORIAL_FA_V18.8.docx
+!public/TUTORIAL_FA_V18.8.docx
+!public/install-v18.8.zip
+
 /skills/.next/
 node_modules/
 package-lock.json

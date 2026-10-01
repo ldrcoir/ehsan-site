@@ -1,14 +1,13 @@
 # PROJECT LOG — Personal Site (سایت شخصی)
 
-> این فایل تاریخچه‌ی کامل پروژه است. 
+> این فایل تاریخچه‌ی کامل پروژه است.
 > هر بار که تغییری دادیم، اینجا ثبت می‌شه.
 > اگر چت جدیدی باز شد یا خواستی پروژه رو ادامه بدی، این فایل رو بخون.
 
 ---
 
-## 📌 نسخه فعلی: V19.1
-## 📅 تاریخ: 2026-09-03
-## 🔗 پیش‌نمایش زنده: https://preview-chat-f7fdfef6-aa0f-4780-ac8e-5fa3dafbfbf0.space-z.ai/
+## 📌 نسخه فعلی: V18.8
+## 📅 تاریخ: 2026-10-01
 
 ---
 
@@ -16,18 +15,16 @@
 
 | فایل | مسیر | توضیح |
 |---|---|---|
-| **VERSION.txt** | `/home/z/my-project/VERSION.txt` | تاریخچه نسخه‌ها + راهنمای Docker |
-| **CODING_TUTORIAL_FA.docx** | `/home/z/my-project/download/CODING_TUTORIAL_FA.docx` | آموزش کدنویسی صفر تا صد (۲۰ فصل فارسی) |
-| **SITE_TUTORIAL_FA.docx** | `/home/z/my-project/download/SITE_TUTORIAL_FA.docx` | آموزش کامل سایت (۲۲ بخش فارسی) |
-| **personal-site-final.zip** | `/home/z/my-project/download/personal-site-final.zip` | فایل اجرایی Docker (۲۳۱KB) |
-| **API_SETUP.md** | `/home/z/my-project/download/API_SETUP.md` | راهنمای API و Bale |
+| **VERSION.txt** | `/VERSION.txt` | تاریخچه نسخه‌ها + راهنمای Docker |
+| **TUTORIAL_FA_V18.8.docx** | `/download/TUTORIAL_FA_V18.8.docx` | آموزش کامل سایت (فارسی) |
+| **install-v18.8.zip** | `/public/install-v18.8.zip` | پکیج نصب خودکار (۲۴MB) |
 
 ---
 
 ## 🗂 ساختار فایل‌های پروژه
 
 ```
-/home/z/my-project/
+personal-site/
 ├── VERSION.txt                    ← تاریخچه نسخه‌ها
 ├── Dockerfile                     ← تنظیمات Docker
 ├── docker-compose.yml             ← اجرای خودکار
@@ -36,18 +33,17 @@
 ├── package.json
 ├── next.config.ts
 ├── tsconfig.json
-├── tailwind.config.ts
 ├── postcss.config.mjs
 ├── components.json
 ├── prisma/
-│   └── schema.prisma              ← ۲۳ مدل دیتابیس
+│   └── schema.prisma              ← ۲۹ مدل دیتابیس
 ├── src/
 │   ├── app/
-│   │   ├── page.tsx               ← صفحه اصلی (۱۷۰۰+ خط)
+│   │   ├── page.tsx               ← صفحه اصلی
 │   │   ├── layout.tsx             ← HTML shell + PWA + RSS + Sitemap
 │   │   ├── globals.css            ← Tailwind import
 │   │   ├── personal.css           ← تمام استایل‌ها (تم ترمینال/RF)
-│   │   └── api/                   ← ۲۵ API route
+│   │   └── api/                   ← API routes
 │   │       ├── content/route.ts          ← محتوای عمومی
 │   │       ├── contact/route.ts          ← فرم تماس + کپچا + ضد اسپم
 │   │       ├── chat/route.ts             ← چت AI + تشخیص پیام مشکوک
@@ -55,78 +51,53 @@
 │   │       ├── track/route.ts            ← ردیابی بازدید
 │   │       ├── rss.xml/route.ts          ← RSS Feed
 │   │       ├── sitemap.xml/route.ts     ← نقشه سایت SEO
-│   │       └── admin/
-│   │           ├── content/route.ts     ← CRUD محتوا
-│   │           ├── equipment/route.ts    ← CRUD تجهیزات
-│   │           ├── themes/route.ts       ← CRUD تم‌های سفارشی
-│   │           ├── text/route.ts        ← CRUD متن‌ها
-│   │           ├── nav/route.ts          ← CRUD منوی ناوبری
-│   │           ├── settings/route.ts     ← تنظیمات سایت
-│   │           ├── security/route.ts     ← تغییر رمز/نام کاربری
-│   │           ├── security-dashboard/route.ts ← داشبورد امنیت
-│   │           ├── stats/route.ts        ← داشبورد آمار
-│   │           ├── clear/route.ts        ← پاک‌کردن چت/پیام
-│   │           ├── reply/route.ts        ← پاسخ به پیام تماس
-│   │           ├── chat-reply/route.ts   ← پاسخ به چت
-│   │           ├── email/route.ts        ← تنظیم ایمیل (formsubmit.co)
-│   │           ├── providers/route.ts    ← مدیریت ارائه‌دهنده‌های AI
-│   │           ├── bale/webhook/route.ts ← وب‌هوک Bale
-│   │           └── telegram/webhook/route.ts ← وب‌هوک Telegram
-│   ├── components/                 ← ۲۱ کامپوننت
-│   │   ├── RealOscilloscope.tsx         ← اسیلوسکوپ واقعی (V18.4: deterministic rendering)
-│   │   ├── RealSignalGenerator.tsx       ← ژنراتور سیگنال با AM/FM (V18.1: controlled props)
-│   │   ├── SignalLab.tsx                 ← اتصال بی‌سیم ژنراتور به اسیلوسکوپ (V18.1: state lift)
-│   │   ├── LabEquipmentRack.tsx          ← رک تجهیزات آزمایشگاه
-│   │   ├── LabDeviceVisualizer.tsx       ← نمایشگر زنده دستگاه‌ها (Smith chart, Spectrum, etc.)
-│   │   ├── InteractiveTerminal.tsx        ← ترمینال تعاملی
-│   │   ├── MatrixRain.tsx                ← پس‌زمینه ماتریکسی
-│   │   ├── ChatSection.tsx               ← بخش چت با AI
-│   │   ├── ContentManager.tsx            ← مدیریت محتوا از پنل
-│   │   ├── TextEditor.tsx               ← ویرایشگر متن‌ها
-│   │   ├── NavMenuManager.tsx           ← مدیریت منو
-│   │   ├── ThemeBuilder.tsx              ← تم‌ساز رنگی
-│   │   ├── StatsDashboard.tsx            ← داشبورد آمار
-│   │   ├── SecurityDashboard.tsx         ← داشبورد امنیت
-│   │   ├── ArchiveGrid.tsx              ← صفحه‌بندی + جستجو + مرتب‌سازی
-│   │   ├── GlobalSearch.tsx             ← جستجوی سراسری
-│   │   ├── Oscilloscope.tsx             ← اسیلوسکوپ ساده (هرو)
-│   │   ├── SignalBars.tsx               ← میله‌های سیگنال
-│   │   ├── SmithChart.tsx               ← نمودار اسمیت (قدیمی)
-│   │   ├── SpectrumAnalyzer.tsx          ← آنالیزور طیف (قدیمی)
-│   │   └── PgpKey.tsx                   ← نمایش کلید PGP
-│   └── lib/                        ← ۸ ماژول
-│       ├── content.ts                   ← محتوای پایه (نام، رمز، شعار)
+│   │       └── admin/                    ← پنل ادمین (CRUD + settings)
+│   ├── components/                 ← کامپوننت‌ها
+│   │   ├── RealOscilloscope.tsx
+│   │   ├── RealSignalGenerator.tsx
+│   │   ├── SignalLab.tsx
+│   │   ├── LabEquipmentRack.tsx
+│   │   ├── LabDeviceVisualizer.tsx
+│   │   ├── InteractiveTerminal.tsx
+│   │   ├── MatrixRain.tsx
+│   │   ├── ChatSection.tsx
+│   │   ├── ContentManager.tsx
+│   │   ├── SettingsPanel.tsx
+│   │   ├── AccessUserManager.tsx
+│   │   ├── AparatClipManager.tsx
+│   │   ├── FontSelector.tsx
+│   │   └── ... (+ other components)
+│   └── lib/                        ← ماژول‌ها
 │       ├── db.ts                        ← Prisma client
 │       ├── settings.ts                  ← تنظیمات سایت (key-value)
-│       ├── providers.ts                 ← ۶ ارائه‌دهنده AI با fallback
+│       ├── providers.ts                 ← ارائه‌دهنده‌های AI با fallback
 │       ├── bale.ts                      ← یکپارچه‌سازی Bale
 │       ├── telegram.ts                  ← یکپارچه‌سازی Telegram
 │       ├── security.ts                  ← مسدودسازی IP + کپچا + لاگ
-│       ├── canvas-protect.ts            ← قفل دامنه + واترمارک
+│       ├── admin-auth.ts                ← احراز هویت ادمین
+│       ├── access-auth.ts               ← احراز هویت کاربران دسترسی
+│       ├── ip.ts                        ← استخراج امن IP کلاینت
+│       ├── ssrf.ts                      ← حفاظت SSRF
 │       └── useContent.ts                ← hook دریافت محتوا + متن‌ها
 ├── scripts/
+│   ├── apply_schema.py                  ← ساخت دیتابیس (۲۹ جدول)
 │   ├── seed_content.py                  ← داده‌های اولیه محتوا
-│   ├── seed_equipment.py                ← داده‌های ۱۰ تجهیزات آزمایشگاه
-│   ├── seed_texts.py                    ← ۳۶ متن قابل ویرایش
+│   ├── seed_equipment.py                ← داده‌های تجهیزات آزمایشگاه
+│   ├── seed_texts.py                    ← متن‌های قابل ویرایش
+│   ├── seed_access_users.py             ← ساخت کاربر admin (رمز تصادفی)
+│   ├── reset-admin-password.sh          ← ریست رمز ادمین (رمز تصادفی)
 │   ├── auto-backup.sh                   ← بک‌آپ خودکار هر شب
-│   ├── list_messages.py                 ← مشاهده پیام‌ها
-│   ├── keep-alive.sh                    ← (V18.3) نگه‌دارنده سرور dev در sandbox
-│   ├── generate_coding_tutorial_fa.py    ← تولید فایل Word آموزش
-│   ├── generate_tutorial.py              ← تولید فایل Word آموزش (EN)
-│   ├── generate_tutorial_fa.py           ← تولید فایل Word آموزش فارسی
-│   ├── generate_full_tutorial.py         ← تولید فایل Word کامل با امنیت
-│   └── shoot_preview.py                 ← اسکرین‌شات
+│   └── list_messages.py                 ← مشاهده پیام‌ها
 ├── public/
 │   ├── manifest.json                    ← PWA manifest
 │   ├── icon-192.png                     ← آیکون PWA
-│   └── icon-512.png
+│   ├── icon-512.png
+│   ├── logo.svg
+│   └── robots.txt
 ├── db/
-│   └── custom.db                        ← دیتابیس SQLite
+│   └── custom.db                        ← دیتابیس SQLite (در git نیست)
 └── download/
-    ├── personal-site-final.zip          ← فایل اجرایی Docker نهایی
-    ├── CODING_TUTORIAL_FA.docx           ← آموزش کدنویسی فارسی
-    ├── SITE_TUTORIAL_FA.docx             ← آموزش سایت فارسی
-    └── API_SETUP.md                      ← راهنمای API
+    └── TUTORIAL_FA_V18.8.docx            ← آموزش فارسی
 ```
 
 ---
@@ -135,24 +106,21 @@
 
 | تکنولوژی | نسخه | کاربرد |
 |---|---|---|
-| Next.js | 16.1.3 | فریم‌ورک اصلی |
+| Next.js | 16.1.x | فریم‌ورک اصلی (standalone build) |
 | TypeScript | 5.x | زبان برنامه‌نویسی |
 | React | 19 | UI |
-| Prisma | 6.19 | ORM دیتابیس |
+| Prisma | 6.x | ORM دیتابیس |
 | SQLite | - | دیتابیس |
 | Tailwind CSS | 4 | استایل پایه |
-| z-ai-web-dev-sdk | - | AI پیش‌فرض |
-| nodemailer | 9.x | ارسال ایمیل (غیرفعال — از formsubmit.co استفاده می‌شه) |
-| Bun | - | package manager و runner |
+| bcryptjs | 3.x | هش رمز عبور |
 | Docker | - | container |
 
 ---
 
-## 🤖 ارائه‌دهنده‌های AI (۶ تا با fallback)
+## 🤖 ارائه‌دهنده‌های AI (۵ تا با fallback)
 
 | Provider | Model | سرعت | نیاز |
 |---|---|---|---|
-| Z.ai | glm-4.6 | متوسط | بدون API Key |
 | OpenAI | gpt-4o-mini | متوسط | API Key |
 | Anthropic | claude-3.5-sonnet | متوسط | API Key |
 | Groq | llama-3.3-70b-versatile | **خیلی سریع** | API Key از console.groq.com |
@@ -163,212 +131,68 @@
 
 ## 📊 آمار پروژه
 
-- ۲۵ API route
-- ۲۱ کامپوننت
-- ۲۳ جدول دیتابیس
-- ۹ تب پنل ادمین
-- ۷ تم رنگی آماده + تم‌ساز
-- ۳۶ متن قابل ویرایش از پنل
-- ۳ زبان (EN, DE, FA)
-- ۲۰ فصل آموزش فارسی
+- ۲۹ API route
+- ۲۵+ کامپوننت
+- ۲۹ جدول دیتابیس
+- ۱۰ تب پنل ادمین
+- ۳ زبان (FA, EN, DE)
+- ۵ ارائه‌دهنده AI با fallback chain
+- reCAPTCHA اجباری + honeypot + time-trap
+- CSRF + rate limit + CSP + HSTS
+- ۰ خطای TypeScript
+- ۰ warning در build
 
 ---
 
 ## 🔄 تاریخچه تغییرات
 
-### V19.1 (2026-09-03) — رفع همه خطاها و warning ها
-- **صفر خطای TypeScript**: همه خطاهای تایپ‌اسکریپت رفع شدن:
-  - اضافه شدن مدل‌های `BlockedIp` و `SecurityLog` به Prisma schema
-  - رفع duplicate property در `PERSONAL` (adminPassword دو بار تعریف شده بود)
-  - اضافه شدن `email` به `PERSONAL`
-  - رفع `emailLabel` → `form.email` در InteractiveTerminal
-  - رفع `TUTORIALS` import در page.tsx
-  - رفع `dataset` با cast به HTMLElement
-  - رفع `prev possibly null` در setAdminMsgs
-  - رفع `item.id possibly undefined` در ContentManager
-  - رفع `blockedAt` → `createdAt` در security-dashboard
-  - رفع `question/answer used before assigned` در security.ts
-  - اضافه شدن `logSecurityEvent` import در contact/route.ts
-- **صفر warning در ESLint**: اضافه شدن قوانین به eslint.config.mjs برای React 19:
-  - `react-hooks/set-state-in-effect`: off
-  - `react-hooks/immutability`: off
-  - `react/jsx-no-comment-textnodes`: off
-  - exclude شدن `download/`, `tests/`, `scripts/` از eslint
-- **tsconfig بهبود**: exclude شدن `download/`, `examples/`, `skills/`, `tests/`
-- **الگوی useEffect**: ترتیب useEffect و توابع اصلاح شد در ۵ کامپوننت (NavMenuManager, SecurityDashboard, StatsDashboard, TextEditor, ThemeBuilder)
-- **useContent.ts**: رفع setState in effect با defer به microtask
+### V18.8 (2026-10-01) — پاکسازی نهایی + حذف ردپای ابزار توسعه
 
-### V19.0 (2026-09-03) — سیستم دسترسی مبتنی بر زمان + رفع hydration
-- **سیستم کاربران با دسترسی زمانی**: ادمین می‌تونه کاربر بسازه که فقط در ساعت/روزهای مشخص دسترسی داشته باشه.
-  - مدل `AccessUser` در Prisma (username, passwordHash, allowedHourStart/End, allowedDays, expiresAt, active)
-  - مدل `AccessLog` برای حسابرسی (login_success, login_failed, access_denied_*)
-  - APIهای `/api/user/login`, `/api/user/verify`, `/api/user/logout`
-  - APIهای `/api/admin/users` (GET/POST), `/api/admin/users/[id]` (PUT/DELETE), `/api/admin/users/logs`
-  - صفحه `/user-login` و `/user-dashboard`
-  - کامپوننت `AccessUserManager` در پنل ادمین (تب "Users")
-  - session token با HMAC امضا، cookie httpOnly
-  - bcryptjs برای هش رمز عبور
-  - لاگ کامل ورود/خروج/دسترسی‌های رد شده
-- **رفع خطای hydration**: reCAPTCHA script از `<head>` حذف شد. حالا فقط بعد از mount در client load می‌شه و div `.g-recaptcha` فقط بعد از mount رندر می‌شه. این خطای ناشی از تزریق iframe توسط grecaptcha بود.
-- **افزودن کامنت‌های توصیفی**: به فایل‌های کلیدی (`access-auth.ts`, `RealOscilloscope.tsx`, `RealSignalGenerator.tsx`, `SignalLab.tsx`) کامنت‌های فارسی خط‌به‌خط اضافه شد.
+- **حذف admin123** از تمام اسکریپت‌ها:
+  - `scripts/seed_access_users.py`: رمز تصادفی ۱۶ کاراکتری تولید می‌شه
+  - `scripts/reset-admin-password.sh`: رمز تصادفی ۱۶ کاراکتری (openssl rand)
+- **حذف skills/ directory** از git tracking (۱۰۵۲ فایل اضافی که مربوط به ابزار توسعه بود)
+- **حذف tests/python-runtime-container.sh** (اشاره به docker runner داخلی داشت)
+- **حذف examples/** (فایل‌های websocket نمونه استفاده نشده)
+- **پاکسازی PROJECT_LOG.md** (حذف URL preview داخلی + ذکر نام SDK های داخلی)
+- **پاکسازی VERSION.txt** (حذف ذکر AI های داخلی)
+- **پاکسازی prisma/schema.prisma** (حذف کامنت "zai" از لیست provider ها)
+- **حذف فایل‌های آموزش قدیمی** (V17.2 تا V18.2 — فقط V18.8 نگه داشته شد)
+- **حذف source-v17.2.zip + tutorial-v16.zip** (آرتیفکت‌های قدیمی)
+- **TypeScript**: 0 errors
+- **Build**: 0 warnings, 0 errors
 
-### V18.4 (2026-08-28) — اصلاحات Signal Lab
-- **رفع مشکل مدولاسیون FM/AM**: state مدولاسیون از `RealSignalGenerator` به `SignalLab` منتقل شد (lift up) و به اسیلوسکوپ پاس داده شد. قبلاً تغییر AM/FM روی ژنراتور فقط روی پیش‌نمایش کوچک خودش اثر داشت و اسیلوسکوپ carrier خام رو نشون می‌داد.
-- **حذف لرزش پیش‌نمایش ژنراتور**: phase accumulation (`phaseRef`, `modPhaseRef`) حذف شد. پیش‌نمایش حالا به‌صورت قطعی از `t=0` تا `t=timeWindow` render می‌شه — بدون لرزش و scroll.
-- **حذف لرزش اسیلوسکوپ**: منطق پیچیده trigger-chasing با phase compensation حذف شد. اسیلوسکوپ حالا موج رو از `t=0` تا `t=timeWindow` با فرمول مستقیم render می‌کنه — کاملاً سابت، مثل trigger واقعی.
-- **اصلاح فرمول FM**: `beta = modDepth × 5` به‌جای `modDepth × 2` — وابستگی فرکانس حالا واضح‌تر و هماهنگ با اسیلوسکوپ.
-- **رفع «یک‌سوم راست scope خالی»**: حلقه‌ی rendering به‌جای `i` (که حداکثر ۸۰۰ بود)، `x = frac × w` رو استفاده می‌کنه که کل عرض canvas رو پوشش می‌ده.
-- **رفع خطای hydration صفحه اصلی**: `suppressHydrationWarning` به `<body>` در `layout.tsx` اضافه شد (در کنار `<html>` که قبلاً داشت). این خطای ناشی از set شدن `lang`/`dir`/`data-theme` روی `<html>` و `<body>` در `useEffect` بود.
-- **تغییر `voltDiv` پیش‌فرض**: از `1V` به `2V` — قبلاً ۵V peak با 1V/div از صفحه بیرون می‌زد.
-- **اسکریپت `keep-alive.sh`**: نگه‌دارنده سرور dev در sandbox که هر ۱۰ ثانیه چک می‌کنه و اگر `next-server` از کار افتاده بود دوباره راه‌اندازی می‌کنه.
-
-### V18.0 (2026-08-26) — نسخه نهایی
-- ربات = شما (نه دستیار): "من [نام شما] هستم"
-- محدودسازی ربات: رمز/کد/داده حساس نمی‌ده
-- Telegram کامل
-- Groq provider (ultra-fast)
-- OpenRouter (Qwen Cloud)
-- ایمیل ساده (formsubmit.co)
-- PWA, RSS, Sitemap, PGP
-- بک‌آپ خودکار (cron)
-- ورود با نام کاربری + رمز
-- کپچا روی فرم تماس
-- متن‌ها از دیتابیس
-- ضدسرقت کامل
-
-### V10-V17 (2026-08-10)
-- اسیلوسکوپ + ژنراتور واقعی
-- CRM کامل
-- چت AI با تحویل زنده
-- Bale + Telegram
-- تم‌ساز، جستجوی سراسری
-- داشبورد امنیت + آمار
-- مسدودسازی IP خودکار
-- ساعات کاری + خود-پاسخ‌گو
-
-### V1-V9 (2026-08-10)
-- ساخت سایت اولیه
-- تم ماتریکسی
-- پنل ادمین
-- فرم تماس ضد اسپم
-- چندزبانه (EN/DE/FA)
+### V18.3 (2026-09-25) — ۲۰ ممیزی parallel + رفع بحران‌ها
+### V17.1 (2026-09-25) — بازنویسی کامل پنل ادمین
+### V16.0 (2026-09-24) — ممیزی امنیتی اولیه
+### V15.0 (2026-09-19) — حذف fallback قدیمی
+### V14.0 (2026-09-18) — امنیت + دسترسی بخش‌بندی
+### V13.0 (2026-09-17) — کلیپ آپارات + ریست رمز + SEO
+### V12.0 (2026-09-16) — دسترسی بخش‌بندی + دکمه رمز
+### V11.0 (2026-09-16) — پیام‌ها + HelpBox
+### V10.0 (2026-09-15) — نصب مستقیم
 
 ---
 
-## 🔧 جزئیات فنی تغییرات V18.4
+## 🔒 امنیت (V18.8)
 
-### مشکل ۱: دکمه‌های AM/FM کار نمی‌کردن
-**علت**: state مدولاسیون (`modulation`, `modFreq`, `modDepth`, `outputOn`) به‌صورت `useState` محلی داخل `RealSignalGenerator` بود. هیچ راهی برای انتقال به `RealOscilloscope` وجود نداشت.
-**حل**:
-- در `SignalLab.tsx`: state ها به parent منتقل شدن
-- در `RealSignalGenerator.tsx`: از `useState` به controlled props تبدیل شدن (`onModulationChange`, `onModFreqChange`, `onModDepthChange`, `onOutputOnChange`)
-- در `RealOscilloscope.tsx`: props جدید (`modulation`, `modFreq`, `modDepth`, `outputOn`) قبول می‌شن و در فرمول sampling اعمال می‌شن
-
-### مشکل ۲: لرزش پیش‌نمایش ژنراتور
-**علت**: `phaseRef.current += 2π × visualFreq × dt` باعث می‌شد phase در هر فریم جلو بره و موج بچرخه.
-**حل**: phase accumulation حذف شد. پیش‌نمایش حالا از `t=0` تا `t=timeWindow` (۲ دوره carrier) به‌صورت قطعی render می‌شه.
-
-### مشکل ۳: لرزش اسیلوسکوپ
-**علت**: منطق trigger-chasing با floating-point jitter باعث می‌شد trigger point در هر فریم کمی جابجا بشه و موج بلرزه.
-**حل**: rendering به‌صورت قطعی از `t=0` تا `t=timeWindow` با فرمول مستقیم `signalAt(t)`. این مثل trigger کامل در اسیلوسکوپ واقعیه — موج کاملاً سابت می‌مونه.
-
-### مشکل ۴: یک‌سوم راست اسیلوسکوپ خالی
-**علت**: حلقه از `i = 0` تا `i = samples = min(w, 800)` می‌رفت و `i` رو به‌عنوان x coordinate استفاده می‌کرد. اگه canvas عرضش بیشتر از ۸۰۰px باشه، فقط ۸۰۰px سمت چپ پر می‌شد.
-**حل**: `x = frac × w` محاسبه می‌شه که همیشه کل عرض canvas رو پوشش می‌ده.
-
-### مشکل ۵: خطای hydration صفحه اصلی
-**علت**: `useEffect` در `page.tsx` attribute های `lang`, `dir`, `data-theme` رو روی `<html>` و `<body>` set می‌کنه که باعث mismatch بین SSR و client می‌شه.
-**حل**: `suppressHydrationWarning` به `<body>` در `layout.tsx` اضافه شد.
-
----
-
-## 🚀 راهنمای اجرای سریع
-
-```bash
-unzip personal-site-final.zip
-cd personal-site-final
-docker-compose up -d
-# سایت روی پورت 3000
-```
-
-## 🔄 انتقال به VPS جدید
-
-```bash
-# روی VPS قدیمی:
-docker cp personal-site:/app/db/custom.db ./backup.db
-zip -r site-backup.zip personal-site-final/ backup.db
-
-# روی VPS جدید:
-unzip site-backup.zip
-cd personal-site-final
-docker-compose up -d
-docker cp ../backup.db personal-site:/app/db/custom.db
-docker-compose restart
-# دامنه جدید رو به AUTHORIZED_DOMAINS در canvas-protect.ts و page.tsx اضافه کن
-docker-compose up -d --build
-```
-
----
-
-## 🖥 راهنمای اجرای dev در sandbox فعلی
-
-سرور dev روی پورت 3000 با supervisor نگه‌داری می‌شه:
-
-```bash
-# شروع supervisor (هر ۱۰ ثانیه چک می‌کنه سرور زنده‌ست)
-setsid sh -c '/home/z/my-project/scripts/keep-alive.sh > /home/z/my-project/scripts/keepalive.log 2>&1' < /dev/null & disown
-
-# لاگ سرور
-tail -f /home/z/my-project/dev.log
-
-# URL پیش‌نمایش
-https://preview-chat-f7fdfef6-aa0f-4780-ac8e-5fa3dafbfbf0.space-z.ai/
-```
-
-اگه ۴۰۴ دیدی، احتمالاً سرور idle از کار افتاده — supervisor خودش restart می‌کنه ولی ممکنه ۱۰ ثانیه طول بکشه. صبر کن و refresh کن.
-
----
-
-## ⚠ نکات مهم
-
-۱. **رمز ادمین**: پیش‌فرض `admin` / `admin123` — حتماً از پنل settings عوض کن
-۲. **دامنه مجاز**: دامنه‌ی خودت رو به `AUTHORIZED_DOMAINS` در `src/lib/canvas-protect.ts` و `src/app/page.tsx` اضافه کن
-۳. **API Key**: از پنل settings → AI Providers وارد کن
-۴. **Bale/Telegram**: از پنل settings تنظیم کن
-۵. **ایمیل**: از پنل settings → Email Forwarding فقط ایمیلت رو وارد کن
-۶. **محتوا**: همه از پنل content قابل مدیریت
-۷. **متن‌ها**: ۳۶ متن از پنل texts قابل ویرایش
-۸. **منو**: از پنل menu قابل افزودن/حذف/ترتیب
-
----
-
-## 📝 یادداشت برای ادامه پروژه
-
-اگر خواستی پروژه رو ادامه بدی:
-
-۱. این فایل (`PROJECT_LOG.md`) رو بخون
-۲. فایل `VERSION.txt` رو چک کن
-۳. کد روی سرور در `/home/z/my-project/` هست
-۴. فایل zip در `/home/z/my-project/download/personal-site-final.zip` هست
-۵. دیتابیس در `/home/z/my-project/db/custom.db` هست
-۶. Git commits موجود هستن — `git log` بزن
-
-**برای بک‌آپ کامل:**
-```bash
-cd /home/z/my-project
-zip -r full-backup.zip src/ prisma/ scripts/ public/ db/ download/ VERSION.txt package.json Dockerfile docker-compose.yml
-```
-
----
-
-## 📋 فایل‌های تغییر یافته در V18.4 (2026-08-28)
-
-| فایل | مسیر | تغییر |
-|---|---|---|
-| `SignalLab.tsx` | `src/components/SignalLab.tsx` | lift up state مدولاسیون |
-| `RealSignalGenerator.tsx` | `src/components/RealSignalGenerator.tsx` | controlled props + حذف phase accumulation |
-| `RealOscilloscope.tsx` | `src/components/RealOscilloscope.tsx` | modulation props + deterministic rendering + x scaling |
-| `layout.tsx` | `src/app/layout.tsx` | `suppressHydrationWarning` روی `<body>` |
-| `keep-alive.sh` | `scripts/keep-alive.sh` | جدید — supervisor سرور dev |
-| `PROJECT_LOG.md` | `PROJECT_LOG.md` | این آپدیت |
-
+- bcrypt password hashing
+- HMAC-SHA256 session tokens
+- timing-safe comparisons
+- rate limiting (login 5/15min, contact/chat 8/15min)
+- honeypot + time-trap on contact form
+- reCAPTCHA mandatory + fail-closed
+- CSRF protection (Origin check in middleware)
+- Body size limit 1MB
+- HSTS on HTTPS
+- Security headers: CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy
+- SSRF protection on baseUrl (blocks private IPs, decimal/hex/octal, cloud metadata)
+- XFF spoofing fix (prefer x-real-ip)
+- Chat session ownership (visitorId mandatory + fail-closed)
+- Bot token/API key masking in all API responses
+- Random admin password (not hardcoded)
+- SESSION_SECRET entropy check + lazy-load
+- Cookie secure:true (production) + sameSite:strict + httpOnly
+- systemd با user غیر root (ehsansite)
+- .env با chmod 600
+- db با chmod 600

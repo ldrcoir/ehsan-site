@@ -95,9 +95,13 @@ def main():
         conn.close()
         return
 
-    # ساخت admin پیش‌فرض
+    # ساخت admin پیش‌فرض با رمز تصادفی ۱۶ کاراکتری
+    # V18.8: admin123 حذف شد — رمز تصادفی چاپ می‌شه
+    import secrets, string
+    ALPHABET = string.ascii_letters + string.digits
+    NEW_PASSWORD = "".join(secrets.choice(ALPHABET) for _ in range(16))
     print("Hashing password...")
-    password_hash = hash_password_bcrypt("admin123")
+    password_hash = hash_password_bcrypt(NEW_PASSWORD)
     import datetime
     now = datetime.datetime.utcnow().isoformat() + "Z"
 
@@ -119,6 +123,8 @@ def main():
     conn.commit()
     print("✅ Admin user created:")
     print("   username: admin")
+    print(f"   password: {NEW_PASSWORD}")
+    print("   ⚠️  این رمز فقط یک بار نمایش داده می‌شه — ذخیره کن!")
     print("   ⚠️  CHANGE PASSWORD IMMEDIATELY FROM ADMIN PANEL!")
     conn.close()
 

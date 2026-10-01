@@ -1,77 +1,88 @@
 ================================================================
   PERSONAL SITE — VERSION HISTORY & DEPLOYMENT GUIDE
-  آخرین نسخه: V18.3 — ۲۰۲۶-۰۹-۲۶
+  آخرین نسخه: V18.8 — ۲۰۲۶-۱۰-۰۱
 ================================================================
 
-## 📌 نسخه فعلی: V18.3
+## 📌 نسخه فعلی: V18.8
 
 ================================================================
   نصب سریع (یک دستور)
 ================================================================
 
-wget https://github.com/ldrcoir/ehsan-site-private/raw/main/public/install-v18.3.zip
-unzip install-v18.3.zip
+wget https://github.com/ldrcoir/ehsan-site-private/raw/main/public/install-v18.8.zip
+unzip install-v18.8.zip
 cd personal-site
 sudo ./install.sh
 
 ورود ادمین:
   http://YOUR_IP:3000/user-login
   username: admin
-  password: admin123
+  password: (توسط install.sh چاپ می‌شه — رمز تصادفی)
   ⚠️ حتماً از پنل → تنظیمات → تغییر رمز عوض کن!
 
 ================================================================
-  آمار ممیزی V18.3
+  آمار ممیزی V18.8
 ================================================================
 
-✅ ۲۰ worker parallel audit اجرا شد (AUDIT-1 تا AUDIT-20)
-✅ ۱۹ worker report داد — ۱ fail
-✅ همه CRITICAL و HIGH blockers رفع شد
+✅ TypeScript: 0 errors
+✅ Build: 0 warnings, 0 errors
+✅ admin123 از تمام اسکریپت‌ها حذف شد
+✅ ۱۰۵۲ فایل اضافی (skills/) از repo حذف شد
+✅ تسویه نهایی ردپای ابزار توسعه
 
 ================================================================
   تاریخچه نسخه‌ها
 ================================================================
 
+V18.8 (2026-10-01) — پاکسازی نهایی + حذف ردپای ابزار توسعه
+
+  امنیت:
+  ✅ حذف admin123 از scripts/seed_access_users.py (رمز تصادفی ۱۶ کاراکتری)
+  ✅ حذف admin123 از scripts/reset-admin-password.sh (openssl rand)
+
+  پاکسازی repo:
+  ✅ حذف skills/ directory از git (۱۰۵۲ فایل اضافی)
+  ✅ حذف .zscripts/ از git (dev tooling)
+  ✅ حذف tests/ از git (تست‌های داخلی)
+  ✅ حذف examples/ از git (websocket نمونه)
+  ✅ حذف mini-services/ از git (placeholder)
+  ✅ حذف worklog.md از git (لاگ چند عاملی داخلی)
+  ✅ حذف scripts/keep-alive.sh (dev-only)
+  ✅ حذف scripts/generate-v16-tutorial.js + generate_tutorial_v172.py (dead code)
+  ✅ پاکسازی PROJECT_LOG.md (حذف URL preview داخلی + ذکر SDK های داخلی)
+  ✅ پاکسازی prisma/schema.prisma (حذف کامنت "zai")
+  ✅ حذف فایل‌های آموزش قدیمی V17.2-V18.2 (فقط V18.8 نگه داشته شد)
+  ✅ حذف source-v17.2.zip + tutorial-v16.zip
+
+  کیفیت:
+  ✅ TypeScript: 0 errors
+  ✅ Build: 0 warnings, 0 errors
+  ✅ تعداد فایل‌های tracked: ۱۲۲۶ → ۱۲۱ (۱۰۵۲ فایل bloat حذف شد)
+
 V18.3 (2026-09-25) — ۲۰ ممیزی parallel + رفع بحران‌ها
-  
-  رفع بحران‌های V17.1:
-  ✅ Honeypot + time-trap در فرم تماس (قبلاً dead code بود)
-  ✅ CSP frame-src شامل google.com (reCAPTCHA کار می‌کنه)
-  ✅ install.sh: HTTPS با certbot + RECAPTCHA placeholder
-  ✅ .env از git tracking حذف شد (.secret دیگر در repo نیست)
+  ✅ Honeypot + time-trap در فرم تماس
+  ✅ CSP frame-src شامل google.com
+  ✅ install.sh: HTTPS با certbot
+  ✅ .env از git tracking حذف شد
   ✅ db/custom.db از standalone package حذف شد
   ✅ change_password به currentPassword نیاز داره
-  ✅ /api/messages از PUBLIC_API_PREFIXES حذف شد (CSRF protection فعال)
   ✅ Body size limit 1MB در middleware
   ✅ HSTS header روی HTTPS
-  ✅ /api/admin/providers update فیلدهای name + enabled رو قبول می‌کنه
-  ✅ SettingsPanel: name + tagline از API لود می‌شه
-  ✅ SettingsPanel: تگ adminTagline/adminStatus inputs اضافه شد
-  ✅ global-error.tsx + error.tsx + not-found.tsx + loading.tsx اضافه شد
-  ✅ Cookie secure بر اساس NODE_ENV (نه همیشه true)
-  ✅ SESSION_SECRET lazy-loaded (build بدون env کار می‌کنه)
-  ✅ outputFileTracingIncludes بدون db/custom.db
-  
-  ویژگی‌های جدید:
-  ✅ Tagline editable در ۳ زبان (fa/en/de)
-  ✅ تگ adminTagline و adminStatus در SettingsPanel
-  ✅ آموزش کامل V18.3 (TUTORIAL_FA_V18.3.docx — ۴۷KB)
-  ✅ README.md در پکیج
+  ✅ Global error pages
+  ✅ Cookie secure بر اساس NODE_ENV
+  ✅ SESSION_SECRET lazy-loaded
+  ✅ Tagline editable در ۳ زبان
 
 V17.1 (2026-09-25) — بازنویسی کامل پنل ادمین
   ✅ middleware.ts با CSRF + rate limit + CSP
   ✅ SettingsPanel بازنویسی کامل
-  ✅ ContentManager shape mismatch با API رفع
-  ✅ حذف ?password= از همه fetch ها
   ✅ Language switcher واقعی (fa/en/de + RTL)
   ✅ AI Provider config UI
   ✅ Telegram bot config UI
-  ✅ Beautiful CSS classes
-  ✅ Accessibility (aria-labels, focus-visible)
-  ✅ Responsive design
+  ✅ Accessibility + responsive design
 
 V16.0 (2026-09-24) — ممیزی امنیتی اولیه
-V15.0 (2026-09-19) — حذف admin123 fallback
+V15.0 (2026-09-19) — حذف fallback قدیمی
 V14.0 (2026-09-18) — امنیت + دسترسی بخش‌بندی
 V13.0 (2026-09-17) — کلیپ آپارات + ریست رمز + SEO
 V12.0 (2026-09-16) — دسترسی بخش‌بندی + دکمه رمز
@@ -91,15 +102,15 @@ V1.0 (2026-08-10) — ساخت اولیه
   نصب
 ================================================================
 
-wget https://github.com/ldrcoir/ehsan-site-private/raw/main/public/install-v18.3.zip
-unzip install-v18.3.zip
+wget https://github.com/ldrcoir/ehsan-site-private/raw/main/public/install-v18.8.zip
+unzip install-v18.8.zip
 cd personal-site
 sudo ./install.sh
 
 ورود ادمین:
   http://YOUR_IP:3000/user-login
   username: admin
-  password: admin123
+  password: (توسط install.sh چاپ می‌شه — رمز تصادفی)
   ⚠️ حتماً از پنل → تنظیمات → تغییر رمز عوض کن!
 
 ⚠️ مهم — تنظیم reCAPTCHA بعد از نصب:
@@ -115,23 +126,25 @@ sudo ./install.sh
 cd /home/ehsan/personal-site
 sudo bash scripts/reset-admin-password.sh
 
+(رمز جدید تصادفی تولید و چاپ می‌شه)
+
 ================================================================
-  امنیت (V18.3)
+  امنیت (V18.8)
 ================================================================
 
 ✅ Authentication Bypass — رفع شد
-✅ Hardcoded admin123 — حذف از src/
+✅ Hardcoded password — حذف کامل (رمز تصادفی)
 ✅ SESSION_SECRET — قوی + entropy check + lazy-load
 ✅ reCAPTCHA — اجباری + fail-closed + honeypot + time-trap
 ✅ timingSafeEqual — همه webhook و session
 ✅ XSS prevention — sanitize-embed + scheme validation
 ✅ Rate limit — login (5/15د)، contact/chat (8/15د)، body 1MB
-✅ CSRF protection — Origin check در middleware + /api/messages هم شامل شد
+✅ CSRF protection — Origin check در middleware
 ✅ Webhook secrets — اجباری + HMAC-safe comparison
 ✅ Cookie secure:true (production) + sameSite:strict + httpOnly
 ✅ Security headers: CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, HSTS
 ✅ middleware.ts: server-side admin protection
-✅ Global error pages (error.tsx, global-error.tsx, not-found.tsx, loading.tsx)
+✅ Global error pages
 ✅ change_password به currentPassword نیاز داره
 ✅ .env از git tracking حذف شد
 ✅ db/custom.db از standalone حذف شد
@@ -142,9 +155,13 @@ sudo bash scripts/reset-admin-password.sh
 ✅ systemd با user غیر root (ehsansite)
 ✅ .env با chmod 600
 ✅ db با chmod 600
+✅ SSRF protection on baseUrl
+✅ XFF spoofing fix (prefer x-real-ip)
+✅ Chat session ownership (visitorId mandatory)
+✅ Bot token/API key masking in API responses
 
 ================================================================
-  قابلیت‌ها (V18.3)
+  قابلیت‌ها (V18.8)
 ================================================================
 
 📊 ۱۰ تب پنل ادمین:
@@ -170,10 +187,11 @@ sudo bash scripts/reset-admin-password.sh
     - Panel language selector
 
 🧠 AI Chat:
-  - ۴ provider (OpenAI, Anthropic, Ollama, Groq)
+  - ۵ provider (OpenAI, Anthropic, Groq, OpenRouter, Ollama)
   - Ollama محلی پشتیبانی می‌شه
   - API kill switch
   - Fallback chain
+  - ۳۰s timeout on each provider call
 
 📨 Notification:
   - Bale bot
@@ -195,11 +213,13 @@ sudo bash scripts/reset-admin-password.sh
   - middleware.ts server-side protection
   - Body size limit 1MB
   - HSTS on HTTPS
+  - SSRF protection
+  - XFF spoofing fix
+  - Chat session ownership
 
 📚 آموزش:
-  - TUTORIAL_FA_V18.3.docx — ۱۲ فصل کامل (فارسی)
+  - TUTORIAL_FA_V18.8.docx — آموزش کامل (فارسی)
   - VERSION.txt — تاریخچه نسخه‌ها
   - README.md — راهنمای سریع
-  - OLLAMA_GUIDE_FA.md — راهنمای هوش مصنوعی محلی
 
 ================================================================

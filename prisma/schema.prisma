@@ -96,7 +96,7 @@ model SiteSetting {
 // AI Provider configuration — multiple providers with API keys
 model AiProvider {
   id        String   @id @default(cuid())
-  name      String   // "openai", "anthropic", "zai", "ollama"
+  name      String   // "openai", "anthropic", "ollama", "groq", "openrouter"
   label     String   // Display name
   apiKey    String?  // Encrypted API key (or null for local)
   baseUrl   String?  // Custom base URL (for Ollama, etc.)

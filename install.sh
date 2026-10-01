@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# install.sh — V17.2 — Pre-built standalone installer
+# install.sh — V18.8 — Pre-built standalone installer
 # ============================================================================
 # این نسخه:
 # - npm install نمی‌خواد (همه‌چیز pre-built هست)
@@ -17,7 +17,7 @@ set -eo pipefail
 SITE_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SITE_DIR"
 
-VERSION="V18.3"
+VERSION="V18.8"
 echo "=========================================="
 echo "  نصب سایت شخصی $VERSION (Pre-built)"
 echo "=========================================="
