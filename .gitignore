@@ -78,6 +78,11 @@ tool-results/
 download/*.zip
 public/*.zip
 
+# V18.8: keep these specific release artifacts
+!public/install-v18.8.zip
+!download/TUTORIAL_FA_V18.8.docx
+!public/TUTORIAL_FA_V18.8.docx
+
 # Database (V17.3 — critical: contains hashes + admin credentials)
 /db/*.db
 /db/*.db-journal
