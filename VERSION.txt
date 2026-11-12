@@ -1,0 +1,194 @@
+================================================================
+  PERSONAL SITE — VERSION HISTORY & DEPLOYMENT GUIDE
+  آخرین نسخه: v1.1
+================================================================
+
+## 📌 نسخه فعلی: v1.1
+
+⚠️ نکته‌ی تاریخچه: نسخه‌بندی عوض شد — «v1.1» جایگزین کل خط V17.x/V18.x
+می‌شه. هرچی قبلاً V18.3 و پایین‌تر بود، الان زیر چتر v1.1 جمع شده.
+
+================================================================
+  نصب سریع (یک دستور)
+================================================================
+
+wget https://github.com/ldrcoir/ehsan-site/raw/main/public/install-v1.1.zip
+unzip install-v1.1.zip
+cd personal-site
+sudo ./install.sh
+
+ورود ادمین:
+  http://YOUR_IP:3000/user-login
+  username: admin
+  password: (توسط install.sh چاپ می‌شه — رمز تصادفی)
+  ⚠️ رمز فقط یک بار موقع نصب نمایش داده می‌شه — یادداشتش کن!
+  ⚠️ حتماً از پنل → تنظیمات → تغییر رمز عوض کن!
+
+================================================================
+  تنظیم reCAPTCHA (بعد از نصب)
+================================================================
+
+  1. https://www.google.com/recaptcha/admin برو
+  2. یه سایت v2 ثبت کن (دامنه‌ات رو اضافه کن)
+  3. Site Key و Secret رو در .env بذار:
+       RECAPTCHA_SECRET="<secret-key>"
+       NEXT_PUBLIC_RECAPTCHA_SITEKEY="<site-key>"
+  4. sudo systemctl restart personal-site
+
+⚠️ بدون reCAPTCHA، فرم تماس کار نمی‌کنه!
+
+================================================================
+  انتقال سایت به سرور دیگر (VPS → VPS)
+================================================================
+
+روی سرور قدیمی:
+  bash scripts/export-site.sh
+  → ~/site-migration-<timestamp>.tar.gz می‌سازه (snapshot دیتابیس + .env + بک‌آپ‌ها)
+
+کپی به سرور جدید:
+  scp ~/site-migration-*.tar.gz root@NEW_SERVER_IP:/root/
+
+روی سرور جدید (اول نصب تمیز):
+  wget .../install-v1.1.zip && unzip && cd personal-site && sudo ./install.sh
+  sudo bash scripts/import-site.sh /root/site-migration-<timestamp>.tar.gz
+
+import-site.sh:
+  - دیتابیس رو با owner امن (ehsansite) نصب می‌کنه
+  - .env رو MERGE می‌کنه (DATABASE_URL جدید می‌مونه؛ secretها و tokenهای
+    قدیمی برمی‌گردن)
+  - apply_schema.py اجرا می‌شه (heal کردن schema drift)
+  - سرویس رو start می‌کنه و admin رو verify می‌کنه
+
+چک‌لیست بعد از مهاجرت:
+  □ Webhookها رو برای دامنه‌ی جدید ثبت کن (Bale/Telegram setWebhook)
+  □ sudo certbot --nginx -d YOUR_DOMAIN
+  □ دامنه‌ی جدید رو تو console گوگل reCAPTCHA اضافه کن
+
+================================================================
+  ریست رمز ادمین (اگه فراموش کردی)
+================================================================
+
+cd /home/ehsan/personal-site
+sudo bash scripts/reset-admin-password.sh
+→ یه رمز تصادفی جدید تولید و «یک بار» چاپ می‌شه.
+
+================================================================
+  بک‌آپ خودکار
+================================================================
+
+  - install.sh یه cron می‌نصبه: /etc/cron.d/personal-site-backup
+  - هر شب ساعت ۳ بامداد: scripts/auto-backup.sh
+  - خروجی: backups/db_*.db.gz — نگه‌داری ۷ نسخه‌ی آخر
+  - snapshot با sqlite3 .backup (سرویس روشن می‌مونه)
+
+================================================================
+  امنیت (v1.1)
+================================================================
+
+✅ Hardcoded default password — به‌کلی حذف شد؛ همه‌جا رمز تصادفی
+✅ XSS iframe fix — sanitize-embed برای iframeها
+✅ SSRF protection — رفع IPv6 bypass + redirect-follow bypass
+✅ middleware HMAC verify — امضای درخواست‌ها در middleware بررسی می‌شه
+✅ no-store headers — صفحات ادمین/داینامیک cache نمی‌شن
+✅ Chunked-body 413 — بدنه‌های chunked هم به body limit گیر می‌کنن
+✅ Login timing fix + IP block enforcement — زمان‌بندی ورود یکسان شد؛
+   بلاک IP واقعاً اعمال می‌شه
+✅ crypto visitorId — شناسه‌ی بازدیدکننده با crypto (قابل‌حدس نیست)
+✅ SESSION_SECRET — قوی + entropy check + lazy-load
+✅ reCAPTCHA — اجباری + fail-closed + honeypot + time-trap
+✅ timingSafeEqual — همه‌ی webhookها و sessionها
+✅ Rate limit — login (5/15د)، contact/chat، body 1MB
+✅ CSRF protection — Origin check در middleware
+✅ Webhook secrets — اجباری + HMAC-safe comparison
+✅ Cookie secure (production) + sameSite:strict + httpOnly
+✅ Security headers: CSP، X-Frame-Options، X-Content-Type-Options،
+   Referrer-Policy، Permissions-Policy، HSTS
+✅ systemd با user غیر root (ehsansite) + NoNewPrivileges
+✅ .env با chmod 600 — دیتابیس chmod 600 — بک‌آپ‌ها chmod 600
+✅ docker-compose فقط روی 127.0.0.1:3000 گوش می‌ده (never exposed)
+✅ .dockerignore: .env و db/ داخل image bake نمی‌شن
+
+================================================================
+  پنل ادمین — ۱۲ تب (v1.1)
+================================================================
+
+📊 ۱۲ تب:
+  1. داشبورد
+  2. پیام‌ها (reply/delete)
+  3. چت‌ها — دیدن و جواب‌دادن به چت‌های بازدیدکننده‌ها (جدید)
+  4. محتوا (book/article/tutorial/skill/equipment)
+  5. متن‌ها (۳ زبان + افزودن/حذف کلید)
+  6. منو (nav links)
+  7. تم‌ها (color themes + تم سفارشی — الان واقعاً اعمال می‌شه)
+  8. کاربران (access control + permissions + hours/days + expiry)
+  9. کلیپ‌ها (Aparat)
+  10. فونت
+  11. آمار — بازدیدها + رخدادهای امنیتی (جدید)
+  12. تنظیمات کامل:
+      - Password (با current password)
+      - Handle
+      - Name × ۳ زبان
+      - Tagline × ۳ زبان
+      - Email forwarding
+      - Bale bot + دکمه‌ی Test
+      - Telegram bot + دکمه‌ی Test
+      - AI Providers (۵ ارائه‌دهنده)
+      - Socials
+      - تم و فونت پیش‌فرض
+      - نمایش/عدم‌نمایش بخش‌ها (sections)
+
+🎨 همه‌چیز از پنل قابل ویرایشه (admin-editable everything):
+  - متن‌ها و ترجمه‌ها (۳ زبان)
+  - تم‌های سفارشی — wired: تغییرات live اعمال می‌شن
+  - قواعد AI (AI Rules) — wired: مستقیم system prompt چت رو تغذیه می‌کنه
+  - شبکه‌های اجتماعی (socials)
+  - بخش‌ها و ترتیب/نمایش‌شون (sections)
+  - مقادیر پیش‌فرض (default theme/font)
+  - منو، کلیپ‌ها، فونت، تنظیمات کامل
+
+🧠 AI Chat:
+  - ۵ ارائه‌دهنده + Ollama محلی
+  - AI Rules → system prompt
+  - API kill switch + fallback chain
+
+🌐 ۳ زبان: فارسی (RTL)، English (LTR)، Deutsch (LTR)
+📱 PWA (manifest + icons)
+📰 RSS + sitemap.xml
+🔒 لایه‌های امنیتی (بخش امنیت بالا)
+
+================================================================
+  مستندات
+================================================================
+
+  - TUTORIAL_FA_1.1.docx — ۱۴ فصل کامل (فارسی)
+  - VERSION.txt — همین فایل
+  - README.md (داخل پکیج) — راهنمای سریع فارسی
+  - .env.example (داخل پکیج) — کلیدهای موردنیاز
+
+================================================================
+  تاریخچه نسخه‌ها (خلاصه)
+================================================================
+
+v1.1 — نسخه‌بندی جدید؛ جایگزین و مقدم بر کل خط V17.x/V18.x:
+  + پنل ادمین ۱۲ تبی (چت‌ها و آمار اضافه شد)
+  + تم سفارشی live اعمال می‌شه؛ AI Rules به چت وصل شد
+  + امنیت: XSS iframe، SSRF (IPv6/redirect)، middleware HMAC،
+    no-store، chunked-body 413، login timing + IP block،
+    crypto visitorId
+  + رمز پیش‌فرض هاردکد برای همیشه حذف شد — همه‌جا رمز تصادفی
+  + مهاجرت VPS→VPS: export-site.sh / import-site.sh
+  + بک‌آپ شبانه با cron + apply_schema.py همیشه اجرا می‌شه
+    (heal کردن schema drift روی آپگریدها)
+  + .env: کلیدهای سفارتی (BALE_BOT_TOKEN و…) در re-run حفظ می‌شن
+  + TRUST_PROXY — پشت reverse proxy
+  + آموزش TUTORIAL_FA_1.1.docx
+
+V18.3 (2026-09-25) — ۲۰ ممیزی parallel؛ رفع بحران‌های V17.1
+V17.x (2026-09-25) — بازنویسی کامل پنل ادمین + middleware امنیتی
+V16.0 (2026-09-24) — ممیزی امنیتی اولیه
+V15.0 (2026-09-19) — حذف رمز پیش‌فرض fallback
+V14.0 (2026-09-18) — امنیت + دسترسی بخش‌بندی
+V13.0 (2026-09-17) — کلیپ آپارات + ریست رمز + SEO
+V1.0  (2026-08-10) — ساخت اولیه
+
+================================================================

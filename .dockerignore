@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+download
+upload
+skills
+*.md
+.DS_Store
+.env.local
+# v1.1: هیچ secret و دیتابی‌ای داخل image bake نشه
+.env
+db/

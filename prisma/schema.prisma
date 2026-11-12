@@ -1,0 +1,431 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  message   String
+  ip        String?
+  userAgent String?
+  status    String   @default("new") // new, read, replied, archived
+  createdAt DateTime @default(now())
+  replies   MessageReply[]
+  notes     MessageNote[]
+  tags      MessageTagRelation[]
+
+  @@index([createdAt])
+  @@index([email])
+  @@index([status])
+}
+
+model ChatSession {
+  id        String   @id @default(cuid())
+  visitorId String
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  messages  ChatMessage[]
+
+  @@index([createdAt])
+  @@index([visitorId])
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  sessionId String
+  role      String   // "user" | "assistant"
+  content   String
+  createdAt DateTime @default(now())
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([createdAt])
+}
+
+// Admin replies to contact messages (visible only to admin, optionally pushed to Bale)
+model MessageReply {
+  id        String   @id @default(cuid())
+  messageId String   // references ContactMessage.id
+  reply     String
+  createdAt DateTime @default(now())
+  message   ContactMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+}
+
+// Key-value store for site settings editable from admin panel
+// (name, tagline, status, apiEnabled, baleEnabled, etc.)
+model SiteSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// AI Provider configuration — multiple providers with API keys
+model AiProvider {
+  id        String   @id @default(cuid())
+  name      String   // "openai" | "anthropic" | "groq" | "openrouter" | "ollama" | "custom"
+  label     String   // Display name
+  apiKey    String?  // Encrypted API key (or null for local)
+  baseUrl   String?  // Custom base URL (for Ollama, etc.)
+  model     String   // Model name to use
+  enabled   Boolean  @default(false)
+  priority  Int      @default(0) // Lower = higher priority (fallback order)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enabled, priority])
+}
+
+// CRM: Tags for messages
+model MessageTag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  color     String   @default("#00ff41")
+  createdAt DateTime @default(now())
+  messages  MessageTagRelation[]
+}
+
+// Junction: messages can have multiple tags
+model MessageTagRelation {
+  messageId String
+  tagId     String
+  message   ContactMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  tag       MessageTag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, tagId])
+}
+
+// CRM: Admin notes on messages
+model MessageNote {
+  id        String   @id @default(cuid())
+  messageId String
+  note      String
+  createdAt DateTime @default(now())
+  message   ContactMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+}
+
+// CRM: Message status tracking
+// Status stored as SiteSetting key-value to avoid schema changes, but we add this for structure
+// Lab Equipment — manageable from admin panel, with live status display
+model LabEquipment {
+  id          String   @id @default(cuid())
+  name        String
+  model       String
+  category    String   @default("general") // vna, sa, sg, osc, etc.
+  status      String   @default("online") // online, standby, offline, maintenance
+  description String?
+  specs       String?  // JSON string of key specs
+  order       Int      @default(0)
+  visible     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([visible, order])
+  @@index([category])
+}
+
+// Page views — for analytics dashboard
+model PageView {
+  id        String   @id @default(cuid())
+  path      String
+  referrer  String?
+  userAgent String?
+  ip        String?
+  lang      String?
+  createdAt DateTime @default(now())
+
+  @@index([path, createdAt])
+  @@index([createdAt])
+}
+
+// ============================================================================
+//  CONTENT MODELS — editable from admin panel
+// ============================================================================
+
+model Book {
+  id          String   @id @default(cuid())
+  titleEn     String
+  titleDe     String?
+  titleFa     String?
+  year        String
+  publisherEn String
+  publisherDe String?
+  publisherFa String?
+  descEn      String
+  descDe      String?
+  descFa      String?
+  cover       String   @default("linear-gradient(135deg,#003b00,#00ff41)")
+  link        String?
+  order       Int      @default(0)
+  visible     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([visible, order])
+}
+
+model Article {
+  id        String   @id @default(cuid())
+  titleEn   String
+  titleDe   String?
+  titleFa   String?
+  venueEn   String
+  venueDe   String?
+  venueFa   String?
+  date      String
+  typeEn    String   @default("Article")
+  typeDe    String?
+  typeFa    String?
+  summaryEn String
+  summaryDe String?
+  summaryFa String?
+  link      String?
+  order     Int      @default(0)
+  visible   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([visible, order])
+}
+
+model Tutorial {
+  id          String   @id @default(cuid())
+  titleEn     String
+  titleDe     String?
+  titleFa     String?
+  duration    String   @default("00:00")
+  levelEn     String   @default("Beginner")
+  levelDe     String?
+  levelFa     String?
+  descEn      String
+  descDe      String?
+  descFa      String?
+  embedUrl   String
+  platform    String   @default("aparat")
+  playlist    String?
+  order       Int      @default(0)
+  visible     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([visible, order])
+  @@index([playlist])
+}
+
+model Skill {
+  id          String   @id @default(cuid())
+  categoryEn  String
+  categoryDe  String?
+  categoryFa  String?
+  items       String
+  order       Int      @default(0)
+  visible     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([visible, order])
+}
+
+model AiInstruction {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  content   String
+  enabled   Boolean  @default(true)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enabled, order])
+}
+
+// Custom Themes — created from admin Theme Builder
+model CustomTheme {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  bg          String   @default("#000000")
+  bgSoft      String   @default("#030303")
+  bgPanel     String   @default("#050505")
+  bgPanel2    String   @default("#080808")
+  primary     String   @default("#00ff41")
+  primaryDim  String   @default("#008f11")
+  primaryBright String @default("#39ff14")
+  text        String   @default("#c8ffc8")
+  textDim     String   @default("#4a7a4a")
+  textFaint   String   @default("#2a4a2a")
+  border      String   @default("#1a3a1a")
+  borderBright String   @default("#2a6a2a")
+  accent      String   @default("#ffb000")
+  red         String   @default("#ff0040")
+  cyan        String   @default("#00fff0")
+  scanlines   Boolean  @default(false)
+  visible     Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([visible, order])
+}
+
+// All text strings on the site — editable from admin panel
+model SiteText {
+  key       String   @id  // e.g. "hero.greeting", "about.p1", "skills.title"
+  valueEn   String   @default("")
+  valueFa   String   @default("")
+  valueDe   String   @default("")
+  updatedAt DateTime @updatedAt
+}
+
+// Navigation menu items — editable from admin panel
+model NavItem {
+  id        String   @id @default(cuid())
+  labelEn   String   @default("")
+  labelFa   String   @default("")
+  labelDe   String   @default("")
+  href      String   @default("#")
+  target    String   @default("_self")  // _self or _blank
+  visible   Boolean  @default(true)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([visible, order])
+}
+
+// ============================================================================
+// AccessUser — کاربرانی که ادمین می‌سازه با ساعت/روز دسترسی مشخص
+// ============================================================================
+// این مدل برای سیستم دسترسی مبتنی بر زمان هست. ادمین می‌تونه کاربر بسازه که:
+// - فقط در ساعت‌های مشخصی از روز دسترسی داشته باشه (مثلاً ۹ تا ۱۷)
+// - فقط در روزهای مشخصی از هفته دسترسی داشته باشه (مثلاً دوشنبه تا جمعه)
+// - در تاریخ مشخصی منقضی بشه (expiresAt)
+// - فعال/غیرفعال بشه (active)
+//
+// نحوه استفاده:
+// 1. ادمین از پنل → تب "Users" کاربر جدید می‌سازه
+// 2. username + password + ساعت شروع + ساعت پایان + روزهای مجاز رو وارد می‌کنه
+// 3. کاربر از /user-login لاگین می‌کنه
+// 4. در هر درخواست، middleware چک می‌کنه:
+//    - session معتبر باشه
+//    - زمان فعلی در بازه‌ی مجاز باشه
+//    - کاربر فعال باشه و منقضی نشده باشه
+// ============================================================================
+model AccessUser {
+  id              String   @id @default(cuid())
+  username        String   @unique           // نام کاربری یکتا
+  passwordHash    String                     // هش رمز عبور (bcrypt)
+  displayName     String   @default("")      // نام نمایشی
+  role            String   @default("user")  // user | admin
+  // لیست دسترسی‌های کاربر — با کاما جدا می‌شه
+  // مثال: "messages,clips,content" یعنی فقط به این ۳ بخش دسترسی داره
+  // اگه "*" یا null باشه یعنی همه بخش‌ها (برای ادمین)
+  permissions     String?                    // messages|clips|content|text|nav|themes|users|font|settings
+  // ساعت شروع دسترسی (0-23). اگه null یعنی بدون محدودیت ساعت.
+  allowedHourStart Int?
+  // ساعت پایان دسترسی (0-23). اگه null یعنی بدون محدودیت ساعت.
+  allowedHourEnd   Int?
+  // روزهای مجاز به‌صورت لیست جدا شده با کاما: 0=یکشنبه، 1=دوشنبه، ... 6=شنبه
+  // مثال: "1,2,3,4,5" یعنی دوشنبه تا جمعه. اگه null یعنی همه روزها.
+  allowedDays     String?
+  // تاریخ انقضا (UTC). اگه null یعنی بدون انقضا.
+  expiresAt       DateTime?
+  // آیا کاربر فعال هست؟ (ادمین می‌تونه غیرفعال کنه بدون حذف)
+  active          Boolean  @default(true)
+  // تعداد دفعات ورود موفق
+  loginCount      Int      @default(0)
+  // آخرین ورود موفق
+  lastLoginAt     DateTime?
+  // علت غیرفعال‌سازی (برای لاگ)
+  deactivatedReason String @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // رابطه با لاگ دسترسی‌ها
+  accessLogs      AccessLog[]
+
+  @@index([username])
+  @@index([active])
+}
+
+// ============================================================================
+// AccessLog — لاگ ورود/خروج کاربران برای حسابرسی امنیتی
+// ============================================================================
+model AccessLog {
+  id          String   @id @default(cuid())
+  userId      String
+  user        AccessUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action      String   // login_success | login_failed | access_denied_off_hours | access_denied_inactive | access_denied_expired | logout
+  ip          String?
+  userAgent   String?
+  // اطلاعات اضافی (مثلاً چرا دسترسی رد شد)
+  details     String   @default("")
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([action])
+}
+
+// ============================================================================
+// BlockedIp — IP های مسدود شده (خودکار یا دستی توسط ادمین)
+// ============================================================================
+model BlockedIp {
+  id        String    @id @default(cuid())
+  ip        String    @unique
+  reason    String    @default("")
+  attempts  Int       @default(0)
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+// ============================================================================
+// SecurityLog — لاگ رویدادهای امنیتی (suspicous message, blocked IP, etc.)
+// ============================================================================
+model SecurityLog {
+  id        String   @id @default(cuid())
+  type      String   // suspicious_message | blocked_ip | login_failed | rate_limit_hit | etc.
+  ip        String?
+  detail    String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([type])
+  @@index([ip])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// AparatClip — کلیپ‌های آپارات که ادمین اضافه می‌کنه
+// ============================================================================
+// ادمین کد امبد آپارات رو وارد می‌کنه و کاربران می‌تونن ببینن.
+// کاربران عادی فقط می‌تونن ببینن — اضافه‌کردن فقط توسط ادمین هست.
+// ============================================================================
+model AparatClip {
+  id          String   @id @default(cuid())
+  title       String                            // عنوان کلیپ
+  embedCode   String                            // کد امبد آپارات (مثلاً https://www.aparat.com/video/...)
+  description String   @default("")             // توضیحات
+  category    String   @default("general")      // دسته‌بندی
+  visible     Boolean  @default(true)           // آیا نمایش داده بشه؟
+  order       Int      @default(0)               // ترتیب نمایش
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([visible, order])
+}

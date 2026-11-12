@@ -1,0 +1,37 @@
+# ============================================================================
+# docker-compose.yml — فقط سایت (بدون Caddy، بدون تداخل با Nginx) — v1.1
+# ============================================================================
+# پورت فقط روی loopback منتشر می‌شه (127.0.0.1:3000) — سایت هرگز مستقیم
+# expose نمی‌شه؛ Nginx/Caddy به عنوان reverse proxy جلونش می‌شینه.
+# TRUST_PROXY=true چون پشت proxy هستیم (IP واقعی بازدیدکننده از X-Forwarded-For).
+#
+# v1.1 (security pass 2):
+#   - env_file: .env — قبلاً SESSION_SECRET به کانتینر نمی‌رسید و login کلاً
+#     fail-closed می‌شد (500 روی همه‌ی ورودها). همه‌ی secretها از .env می‌آیند.
+#   - healthcheck اضافه شد تا restart بتواند hang را تشخیص دهد.
+# ============================================================================
+
+services:
+  personal-site:
+    build: .
+    container_name: personal-site
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./db:/app/db
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: file:/app/db/custom.db
+      NODE_ENV: production
+      TRUST_PROXY: "true"
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      # SESSION_SECRET و بقیه‌ی کلیدها از .env می‌آیند (env_file بالا)
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/content').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s

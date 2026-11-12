@@ -1,0 +1,91 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (secrets — never commit)
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+local-*
+.claude
+.z-ai-config
+*.log
+dev.log
+dev.out.log
+server.log
+
+# Dev tooling — not part of the shipped site (v1.1)
+/skills/
+/.zscripts/
+/tests/
+/examples/
+/mini-services/
+worklog.md
+
+# v1.1 (fix): npm is the package manager (Dockerfile/install.sh use npm ci);
+# package-lock.json IS tracked now for reproducible installs. bun.lock deleted.
+node_modules/
+tool-results/
+# v1.1: migration/backup archives must never be committed (contain DB + secrets)
+*.tar.gz
+download/
+
+# Database (v1.1 — critical: contains hashes + admin credentials)
+/db/*.db
+/db/*.db-journal
+/db/*.db-wal
+/db/*.db-shm
+/db/
+
+# Backups
+*.bak
+*.bak.*
+backups/
+
+# ============================================================================
+# Release artifacts (v1.1):
+# - Old-release zips/tutorials stay ignored...
+# - ...but the v1.1 release artifacts are force-kept (negation rules).
+# ============================================================================
+download/*.zip
+public/*.zip
+!public/install-v1.1.zip
+
+public/TUTORIAL_FA_*.docx
+!public/TUTORIAL_FA_1.1.docx
+
+download/TUTORIAL_FA_*.docx
+!download/TUTORIAL_FA_1.1.docx

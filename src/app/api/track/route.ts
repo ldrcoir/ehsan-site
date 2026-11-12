@@ -1,0 +1,107 @@
+import { NextResponse } from "next/server";
+import { getClientIpSafe } from "@/lib/ip";
+import { db } from "@/lib/db";
+import crypto from "crypto";
+
+/**
+ * POST /api/track
+ * Body: { path, referrer, lang }
+ * Records a page view for analytics.
+ *
+ * v1.1 (security pass 2) — abuse hardening:
+ *  - route-level rate limit (10/min/IP) — قبلاً فقط middleware limit بود که با
+ *    چرخش هدر قابل دورزدن بود
+ *  - dedup: یک بازدید به‌ازای هر (IP+UA+path) در هر ۳۰ دقیقه — جلوگیری از
+ *    تورم آمار بازدید پنل ادمین و پر شدن دیسک SQLite
+ *  - شمارنده global فقط بعد از dedup و به‌صورت atomic (prisma increment)
+ */
+
+const TRACK_WINDOW_MS = 60 * 1000;
+const TRACK_MAX_PER_WINDOW = 10;
+const DEDUP_WINDOW_MS = 30 * 60 * 1000;
+
+// (ip + path) → expiry
+const recentKeys = new Map<string, number>();
+// ip → [timestamps]
+const trackHits = new Map<string, number[]>();
+
+function sweep(now: number) {
+  for (const [k, exp] of recentKeys) if (exp < now) recentKeys.delete(k);
+  for (const [k, arr] of trackHits) {
+    const kept = arr.filter(t => now - t < TRACK_WINDOW_MS);
+    if (kept.length === 0) trackHits.delete(k);
+    else trackHits.set(k, kept);
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const rawIp = getClientIpSafe(req);
+    const ip = rawIp === "unknown" ? null : rawIp;
+    const userAgent = req.headers.get("user-agent") || null;
+    const now = Date.now();
+
+    // Don't track bots
+    if (userAgent && /bot|crawl|spider|slurp/i.test(userAgent) && userAgent.length < 80) {
+      return NextResponse.json({ ok: true, tracked: false });
+    }
+
+    // v1.1: route-level rate limit (10/min/IP)
+    const hits = (trackHits.get(rawIp) || []).filter(t => now - t < TRACK_WINDOW_MS);
+    if (hits.length >= TRACK_MAX_PER_WINDOW) {
+      return NextResponse.json({ ok: true, tracked: false });
+    }
+    hits.push(now);
+    trackHits.set(rawIp, hits);
+    if ((recentKeys.size + trackHits.size) % 500 === 0) sweep(now);
+
+    // validate + clamp inputs
+    const rawPath = body.path;
+    const path =
+      typeof rawPath === "string" && rawPath.startsWith("/") && rawPath.length <= 200
+        ? rawPath
+        : "/";
+    const referrer = typeof body.referrer === "string" ? body.referrer.slice(0, 200) : null;
+    const lang = typeof body.lang === "string" ? body.lang.slice(0, 200) : null;
+
+    // v1.1: dedup per (IP + UA + path) در پنجره‌ی ۳۰ دقیقه
+    const dedupKey = `${rawIp}|${crypto
+      .createHash("sha256")
+      .update(userAgent || "")
+      .digest("hex")
+      .slice(0, 12)}|${path}`;
+    const lastSeen = recentKeys.get(dedupKey);
+    if (lastSeen && now - lastSeen < DEDUP_WINDOW_MS) {
+      return NextResponse.json({ ok: true, tracked: false, deduped: true });
+    }
+    recentKeys.set(dedupKey, now + DEDUP_WINDOW_MS);
+    if (recentKeys.size > 20000) sweep(now);
+
+    await db.pageView.create({
+      data: {
+        path,
+        referrer,
+        lang,
+        ip,
+        userAgent,
+      },
+    });
+
+    // v1.1: فقط بازدید dedup-shده شمرده می‌شه (visitorCount یک ستون String است —
+    // read-modify-write؛ dedup حجم را کم کرده و lost-update عملاً بی‌اهمیت است)
+    const current = await db.siteSetting.findUnique({ where: { key: "visitorCount" } });
+    const next = (parseInt(current?.value || "0", 10) || 0) + 1;
+    await db.siteSetting
+      .upsert({
+        where: { key: "visitorCount" },
+        update: { value: String(next) },
+        create: { key: "visitorCount", value: String(next) },
+      })
+      .catch(() => {});
+
+    return NextResponse.json({ ok: true, tracked: true });
+  } catch (err) {
+    return NextResponse.json({ ok: false }, { status: 500 });
+  }
+}
