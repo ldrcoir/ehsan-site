@@ -89,3 +89,6 @@ public/TUTORIAL_FA_*.docx
 
 download/TUTORIAL_FA_*.docx
 !download/TUTORIAL_FA_1.1.docx
+
+__pycache__/
+*.pyc

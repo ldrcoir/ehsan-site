@@ -30,8 +30,9 @@ STAGE="$STAGE_ROOT/personal-site"
 OUT="$PROJECT_DIR/public/install-v1.1.zip"
 MAX_BYTES=$((25 * 1024 * 1024))   # 25MB سقف پکیج
 
-SCRIPTS_KEEP="apply_schema.py seed_access_users.py seed_content.py seed_equipment.py seed_texts.py reset-admin-password.sh auto-backup.sh list_messages.py export-site.sh import-site.sh"
-PUBLIC_KEEP="icon-192.png icon-512.png manifest.json robots.txt TUTORIAL_FA_1.1.docx"
+SCRIPTS_KEEP="apply_schema.py seed_access_users.py seed_content.py seed_equipment.py seed_texts.py reset-admin-password.sh auto-backup.sh export-site.sh import-site.sh"
+# v1.1: list_messages.py حذف شد — ابزار dump مستقیم DB بود و دلیلی برای ارسال به نصب‌کننده نداشت
+PUBLIC_KEEP="icon-192.png icon-512.png favicon.ico manifest.json robots.txt TUTORIAL_FA_1.1.docx"
 
 echo "=========================================="
 echo "  package v$VERSION — slim packaging"
@@ -45,8 +46,13 @@ echo ""
 # ----------------------------------------------------------------------------
 if [ ! -f "$PROJECT_DIR/.next/standalone/server.js" ]; then
     echo "❌ .next/standalone/server.js پیدا نشد."
-    echo "   اول build بزن:  npm run build   (یا bun run build)"
+    echo "   اول build بزن:  npm run build"
     echo "   بعد دوباره این اسکریپت رو اجرا کن."
+    exit 1
+fi
+# v1.1 (fix): استاتیک‌ها و public باید داخل standalone باشن وگرنه سرور بدون JS/CSS بالا میاد
+if [ ! -d "$PROJECT_DIR/.next/standalone/.next/static" ]; then
+    echo "❌ .next/standalone/.next/static پیدا نشد — build ناقص است (npm run build این را کپی می‌کند)."
     exit 1
 fi
 command -v zip >/dev/null 2>&1 || { echo "❌ zip نصب نیست (apt install -y zip)"; exit 1; }
@@ -168,10 +174,11 @@ sudo ./install.sh
 
 ## ورود ادمین
 
-- آدرس: `http://YOUR_IP:3000/user-login`
+- آدرس: `https://YOUR_DOMAIN/user-login` (بعد از SSL) — برای تست اولیه: `http://SERVER_IP:3000/user-login`
 - username: `admin`
 - password: **یک رمز تصادفی که install.sh فقط یک بار چاپ می‌کنه** — یادداشتش کن!
-- بعد از ورود حتماً از پنل → تنظیمات → تغییر رمز، رمز جدید بذار.
+- بعد از ورود حتماً از پنل → تنظیمات → تغییر رمز، رمز جدید بذار
+  (با تغییر رمز همه‌ی sessionهای قبلی خودکار باطل می‌شن — v1.1).
 
 ## تنظیم reCAPTCHA (لازم برای فرم تماس)
 
