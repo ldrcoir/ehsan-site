@@ -21,7 +21,7 @@
 # ============================================================================
 set -eo pipefail
 
-VERSION="1.1"
+VERSION="1.1.2"
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_DIR"
 
@@ -30,9 +30,10 @@ STAGE="$STAGE_ROOT/personal-site"
 OUT="$PROJECT_DIR/public/install-v1.1.zip"
 MAX_BYTES=$((25 * 1024 * 1024))   # 25MB سقف پکیج
 
-SCRIPTS_KEEP="apply_schema.py seed_access_users.py seed_content.py seed_equipment.py seed_texts.py reset-admin-password.sh auto-backup.sh export-site.sh import-site.sh"
+SCRIPTS_KEEP="apply_schema.py seed_access_users.py seed_content.py seed_equipment.py seed_texts.py reset-admin-password.sh auto-backup.sh export-site.sh import-site.sh restore-db.sh"
 # v1.1: list_messages.py حذف شد — ابزار dump مستقیم DB بود و دلیلی برای ارسال به نصب‌کننده نداشت
-PUBLIC_KEEP="icon-192.png icon-512.png favicon.ico manifest.json robots.txt TUTORIAL_FA_1.1.docx"
+# v1.1.2: آموزش از dist/ هم پیدا می‌شود (از public/ خارج شد تا build لاغر بماند)
+PUBLIC_KEEP="icon-192.png icon-512.png favicon.ico manifest.json robots.txt"
 
 echo "=========================================="
 echo "  package v$VERSION — slim packaging"
@@ -86,6 +87,18 @@ for f in $PUBLIC_KEEP; do
         echo "  ⚠ public/$f تو پروژه نیست — بدون همین میریم"
     fi
 done
+
+# v1.1.2: آموزش فارسی — از dist/ به public پکیج + ریشه‌ی خروجی
+TUTORIAL_SRC=""
+if [ -f "$PROJECT_DIR/dist/TUTORIAL_FA_1.1.docx" ]; then
+    TUTORIAL_SRC="$PROJECT_DIR/dist/TUTORIAL_FA_1.1.docx"
+elif [ -f "$PROJECT_DIR/public/TUTORIAL_FA_1.1.docx" ]; then
+    TUTORIAL_SRC="$PROJECT_DIR/public/TUTORIAL_FA_1.1.docx"
+fi
+if [ -n "$TUTORIAL_SRC" ] && [ -d "$STAGE/public" ]; then
+    cp "$TUTORIAL_SRC" "$STAGE/public/TUTORIAL_FA_1.1.docx"
+    echo "✅ TUTORIAL_FA_1.1.docx به پکیج اضافه شد"
+fi
 
 # scripts — فقط زیرمجموعه‌ی allow-list (بدون ابزارهای dev)
 mkdir -p "$STAGE/scripts"
@@ -174,7 +187,7 @@ sudo ./install.sh
 
 ## ورود ادمین
 
-- آدرس: `https://YOUR_DOMAIN/user-login` (بعد از SSL) — برای تست اولیه: `http://SERVER_IP:3000/user-login`
+- آدرس: `https://YOUR_DOMAIN/user-login` — nginx روی پورت ۸۰/۴۴۳ سرو می‌کند؛ اپ روی ۱۲۷.۰.۰.۱:3000 داخلی است (پورت ۳۰۰۰ از بیرون بسته است)
 - username: `admin`
 - password: **یک رمز تصادفی که install.sh فقط یک بار چاپ می‌کنه** — یادداشتش کن!
 - بعد از ورود حتماً از پنل → تنظیمات → تغییر رمز، رمز جدید بذار
