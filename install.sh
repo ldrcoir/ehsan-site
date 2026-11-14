@@ -22,6 +22,9 @@
 # - MAINTENANCE_TOKEN: کلید کانال نگهداری — یک بار چاپ و در .env ذخیره می‌شود
 # ============================================================================
 set -eo pipefail
+# v1.0 (audit W36-40 #12): خطای وسط نصب باید خط را گزارش کند — بدون ERR trap،
+# شکست بعد از قدم ۶ (توقف سرویس) حالت نیمه‌کاره با هیچ تشخیصی جا می‌ماند
+trap 'echo "❌ install.sh در خط $LINENO شکست خورد — وضعیت را بررسی کن و دوباره اجرا کن (idempotent است)"' ERR
 # v1.0 (audit W46-50 #14): هیچ پرامپت تعاملی در نصب خودکار
 export DEBIAN_FRONTEND=noninteractive
 
@@ -51,12 +54,19 @@ echo "[1/11] Swap..."
 # پارتیشن) — قبلاً grep swap پارتیشن‌هایی با نام عادی را از قلم می‌انداخت و
 # swapfile دوم بی‌دلیل ساخته می‌شد
 if [ -z "$(swapon --show 2>/dev/null)" ]; then
+    # v1.0 (audit W36-40 #9): قبل از ساخت swapfile، فضای دیسک چک می‌شود —
+    # dd روی دیسک کوچک می‌تواند کل دیسک را پر کند و نصب را بکشد
+    AVAIL_KB=$(df --output=avail / | tail -1 | tr -dc '0-9')
+    if [ "${AVAIL_KB:-0}" -lt 3145728 ]; then
+        echo "  ⚠️  کمتر از ۳GB فضای خالی — swapfile ساخته نشد (سایت با ۱GB رم هم بالا می‌آید)"
+    else
     fallocate -l 2G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=2048
     chmod 600 /swapfile
     mkswap /swapfile
     swapon /swapfile
     grep -q swapfile /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
     echo "  ✅ Swap ساخته شد"
+    fi
 else
     echo "  ✅ Swap هست"
 fi
@@ -122,7 +132,11 @@ check_openssl_compat
 echo ""
 echo "[3/11] Nginx + tools + openssl (چک و نصب موارد غایب)..."
 # v1.0 (audit W46-50 #14): یک update واحد — python3-certbot-nginx بدون index تازه 404 می‌داد
-apt-get update -qq 2>/dev/null || apt update -qq || true
+# v1.0 (audit W36-40 #12): شکست update را می‌پوشاند؟ نه — هشدار می‌دهیم؛ نصب بسته‌ها اگر index
+# کامل نباشد جایی بعد خطای مبهم می‌دهد. || true فقط برای محیط‌های بدون اینترنت index کامل
+if ! apt-get update -qq 2>/dev/null && ! apt update -qq 2>/dev/null; then
+    echo "  ⚠️  apt-get update ناموفق بود — اگر نصب بسته‌ها شکست خورد، اتصال شبکه را بررسی کن"
+fi
 # v1.1: dnsutils لازمه برای `host` (تشخیص دامنه → HTTPS)
 # v1.1.1 (audit P6-L9): unzip هم لازمه برای quick-start مستند در VERSION.txt
 # v1.0: jq برای خوانا شدن خروجی maintenance.sh؛ logrotate برای چرخش لاگ بک‌آپ
@@ -220,6 +234,9 @@ if [ -f .env ] && grep -q "^MAINTENANCE_TOKEN=" .env; then
     MAINT_TOKEN=$(grep "^MAINTENANCE_TOKEN=" .env | cut -d'=' -f2- | tr -d '"')
     if [ -z "$MAINT_TOKEN" ] || [ "${#MAINT_TOKEN}" -lt 32 ]; then
         MAINT_TOKEN=$(openssl rand -hex 32)
+        # v1.0 (audit W41-45 #6): توکنِ ضعیفِ جایگزین‌شده هم باید یک بار نمایش داده شود —
+        # قبلاً در .env نوشته می‌شد ولی چون MAINT_TOKEN_IS_NEW ست نمی‌شد، هرگز چاپ نمی‌شد
+        MAINT_TOKEN_IS_NEW="1"
         echo "  ✅ MAINTENANCE_TOKEN قبلی ضعیف بود — جدید تولید شد"
     else
         echo "  ✅ MAINTENANCE_TOKEN موجود نگه داشته شد"
@@ -244,7 +261,9 @@ EXISTING_SITE_URL=$(grep "^NEXT_PUBLIC_SITE_URL=" .env 2>/dev/null | cut -d'=' -
 # بی‌صدا روی مقدار تمپلیت برمی‌گشت (ادمینی که TRUST_PROXY=false ست کرده بود را
 # سکوت امنیتی‌اش گرفته می‌شد)
 EXISTING_TRUST_PROXY=$(grep "^TRUST_PROXY=" .env 2>/dev/null | cut -d'=' -f2- | tr -d '"') || true
-[ -z "$EXISTING_TRUST_PROXY" ] && EXISTING_TRUST_PROXY="$EXISTING_TRUST_PROXY"
+# v1.0 (audit W36-40 #1 — HIGH): قبلاً خودش را به خودش تخصیص می‌داد (no-op)؛
+# حالا پیش‌فرض نصب تمیز = "true" — و re-run مقدار صریحِ ادمین (true/false) را حفظ می‌کند
+[ -z "$EXISTING_TRUST_PROXY" ] && EXISTING_TRUST_PROXY="true"
 EXISTING_PORT=$(grep "^PORT=" .env 2>/dev/null | cut -d'=' -f2- | tr -d '"') || true
 [ -z "$EXISTING_PORT" ] && EXISTING_PORT="3000"
 EXISTING_HOSTNAME=$(grep "^HOSTNAME=" .env 2>/dev/null | cut -d'=' -f2- | tr -d '"') || true
@@ -272,7 +291,9 @@ TELEGRAM_WEBHOOK_SECRET="$TG_SECRET"
 MAINTENANCE_TOKEN="$MAINT_TOKEN"
 # v1.1.2: سایت پشت nginx محلی است — app فقط وقتی TRUST_PROXY=true است به
 # X-Forwarded-For اعتماد می‌کند (rate limit بر اساس IP واقعی کاربر)
-TRUST_PROXY="true"
+# v1.0 (audit W36-40 #1 — HIGH): مقدار حفظ‌شده از .env قبلی نوشته می‌شود، نه همیشه "true" —
+# قبلاً re-run بی‌صدا TRUST_PROXY=false ادمین را بازنویسی می‌کرد
+TRUST_PROXY="$EXISTING_TRUST_PROXY"
 
 # توکن‌های ربات‌ها — اختیاری‌اند (fallback)؛ کانفیگ اصلی ربات‌ها از پنل ادمین خوانده می‌شود
 # TELEGRAM_BOT_TOKEN=
@@ -432,6 +453,12 @@ chown -R ehsansite:ehsansite "$SITE_DIR" 2>/dev/null || true
 # سرویس (ehsansite) SQLITE_CANTOPEN می‌گرفت. owner + ReadWritePaths (پایین‌تر):
 chown -R ehsansite:ehsansite "$PROJECT_ROOT/db" 2>/dev/null || true
 
+# v1.0 (audit W46-50 #2 — HIGH): backups باید قبل از ساخت unit وجود داشته باشد —
+# ReadWritePaths روی مسیرِ غایب با status=226/NAMESPACE کرش می‌کرد و نصب تمیز abort می‌شد
+mkdir -p "$PROJECT_ROOT/backups"
+chown ehsansite:ehsansite "$PROJECT_ROOT/backups" 2>/dev/null || true
+chmod 750 "$PROJECT_ROOT/backups" 2>/dev/null || true
+
 cat > /etc/systemd/system/personal-site.service << EOF
 [Unit]
 Description=Personal Site v$VERSION
@@ -443,6 +470,9 @@ User=ehsansite
 Group=ehsansite
 WorkingDirectory=$SITE_DIR
 ExecStart=$(which node) server.js
+# v1.0 (audit W31-35 #10): سلامت دیتابیس قبل از هر بوت — DB خراب در مسیر systemd
+# (برخلاف Docker) تا حالا به‌صورت 500 های بی‌صدا ظاهر می‌شد؛ حالا با پیام روشن fail می‌کند
+ExecStartPre=-/usr/bin/sqlite3 $PROJECT_ROOT/db/custom.db "PRAGMA quick_check;"
 Restart=always
 RestartSec=10
 Environment=NODE_ENV=production
@@ -508,6 +538,8 @@ systemctl restart cron 2>/dev/null || systemctl restart crond 2>/dev/null || tru
 # v1.0 (audit W46-50 #4): دایرکتوری backups متعلق به سرویس — تا اکشن backupِ
 # کانال نگهداری (که با کاربر ehsansite اجرا می‌شود) بتواند بنویسد؛ root cron هم
 # در همان می‌نویسد. بدون این، با ProtectSystem عملیات EROFS می‌گرفت.
+# v1.0 (audit W46-50 #2): mkdir قبلاً در قدم قبل انجام شد (قبل از systemd unit) —
+# اینجا فقط ensure برای نصب‌های قدیمی که قدم قبل را ندارند (idempotent)
 mkdir -p "$PROJECT_ROOT/backups" 2>/dev/null || true
 chown ehsansite:ehsansite "$PROJECT_ROOT/backups" 2>/dev/null || true
 chmod 750 "$PROJECT_ROOT/backups" 2>/dev/null || true
@@ -529,6 +561,12 @@ if ! cp "$PROJECT_ROOT/nginx-ehsanmorad.conf" /etc/nginx/sites-available/nginx-e
     exit 1
 fi
 ln -sf /etc/nginx/sites-available/nginx-ehsanmorad.conf /etc/nginx/sites-enabled/nginx-ehsanmorad.conf 2>/dev/null || true
+# v1.0 (audit W36-40 #11): symlink بی‌صدا نباید فرض شود — در چیدمان‌های بدون sites-enabled،
+# nginx -t با سایت default سبز می‌شد و هیچ proxys به :3000 وجود نداشت
+if [ ! -e /etc/nginx/sites-enabled/nginx-ehsanmorad.conf ]; then
+    echo "  ❌ symlink sites-enabled ساخته نشد — چیدمان nginx را دستی بررسی کن (conf.d یا include)"
+    exit 1
+fi
 rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
 if nginx -t 2>&1; then
     systemctl reload nginx

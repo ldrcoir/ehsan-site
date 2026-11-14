@@ -41,6 +41,9 @@ export default function FontSelector() {
   // مرورگر را عوض می‌کرد؛ فونت واقعی سایت (defaultFont SiteSetting) فقط از تب
   // settings قابل تغییر بود. حالا با یک دکمه از همین‌جا هم ست می‌شود.
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  // v1.0 (audit W21-25 #1 — HIGH): فرمت بدنه غلط بود — /api/admin/settings فقط
+  // { settings: { key: value } } را می‌پذیرد؛ قبلاً { defaultFont } خام می‌فرستادیم و
+  // سرور با 400 missing_settings رد می‌کرد → دکمه همیشه «❌ خطا» و هیچ‌چیز ذخیره نمی‌شد.
   async function setAsSiteDefault() {
     setSaveState("saving");
     try {
@@ -48,7 +51,7 @@ export default function FontSelector() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ defaultFont: currentFont }),
+        body: JSON.stringify({ settings: { defaultFont: currentFont } }),
       });
       const data = await res.json().catch(() => null);
       setSaveState(data?.ok ? "saved" : "error");

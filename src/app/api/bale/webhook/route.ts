@@ -24,7 +24,9 @@ export async function POST(req: Request) {
       req.headers.get("x-webhook-secret") ||
       "";
     const expectedSecret = process.env.BALE_WEBHOOK_SECRET;
-    if (!expectedSecret) {
+    // v1.0 (audit W11-15 #6): حداقل استحکام secret — کوتاه‌تر از ۳۲ کاراکتر آنلاین
+    // قابل حدس است؛ مثل MAINTENANCE_TOKEN fail-closed می‌شویم (کانال خاموش)
+    if (!expectedSecret || expectedSecret.length < 32) {
       return NextResponse.json({ ok: false, error: "webhook_not_configured" }, { status: 503 });
     }
     // v1.1.2 (audit SEC-09): مقایسه‌ی digest SHA-256 — چک طولی قبل از

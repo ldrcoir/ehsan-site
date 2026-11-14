@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { getSetting } from "@/lib/settings";
+import { readBoundedJson } from "@/lib/bounded-read";
 
 /**
  * Telegram messenger integration — backup to Bale.
@@ -39,8 +40,12 @@ function sweepSeen(): void {
 
 // v1.1 (security): strip Markdown metacharacters — جلوگیری از تزریق لینک جعلی
 // داخل نوتیفیکیشن ادمین (parse_mode: "Markdown" روی متن خام بازدیدکننده)
+// v1.0 (audit W11-15 #3): کاراکترهای کنترلی/سطر جدید هم حذف می‌شوند — خط جدید
+// تزریقی ساختار پیام را جعل می‌کرد (مثلاً footer جعلی «Reply with: /chat …»)
 function mdSafe(s: string): string {
-  return String(s).replace(/[_*`\[\]()]/g, " ");
+  return String(s)
+    .replace(/[\r\n\t\u0000-\u001f\u007f]+/g, " ")
+    .replace(/[_*`\[\]()]/g, " ");
 }
 
 async function getTelegramConfig() {
@@ -78,10 +83,11 @@ export async function sendTelegramMessage(text: string): Promise<boolean> {
       console.error("[telegram] sendMessage HTTP error:", res.status, (await res.text().catch(() => "")).slice(0, 200));
       return false;
     }
-    const cl = parseInt(res.headers.get("content-length") || "0", 10);
-    if (cl > 64 * 1024) return false;
-    const data = await res.json();
-    return !!data.ok;
+    // v1.0 (audit W11-15 #4): res.json() خام → خواندن محدودشده (پاسخ chunked بدون
+    // Content-Length قبلاً کل حافظه را می‌بلعید)
+    const parsed = await readBoundedJson(res);
+    if (!parsed) return false;
+    return !!(parsed.data as { ok?: boolean })?.ok;
   } catch (err) {
     console.error("[telegram] sendMessage error:", err);
     return false;

@@ -13,11 +13,21 @@ export async function POST(req: Request) {
     if (!body) return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
 
     // V18.3: dead password param removed (checkAdminAuth ignores it)
-    const authCheck = await checkAdminAuth(req, TAB_PERMISSIONS["/api/messages"]); if (!authCheck.ok) {
+    // v1.0 (audit W16-20 #1 / W21-25 #2 — HIGH): قبلاً کل route با تب «messages» گارد می‌شد،
+    // یعنی کاربر limited با فقط permission پیام‌ها می‌توانست chat_* (تب ادمین-only چت‌ها)
+    // و stats (تب ادمین-only آمار) را پاک کند — overgrant. حالا target-by-target:
+    //   - message/message_all → تب messages (قابل واگذاری)
+    //   - chat_session/chat_all/chat_message/stats → بدون requiredTab (فقط ادمین)
+    const target0 = String(body.target || "");
+    const ADMIN_ONLY_TARGETS = new Set(["chat_session", "chat_all", "chat_message", "stats"]);
+    const authCheck = await checkAdminAuth(
+      req,
+      ADMIN_ONLY_TARGETS.has(target0) ? undefined : TAB_PERMISSIONS["/api/messages"]
+    ); if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 
-    const target = String(body.target || "");
+    const target = target0;
     const id = String(body.id || "");
 
     switch (target) {

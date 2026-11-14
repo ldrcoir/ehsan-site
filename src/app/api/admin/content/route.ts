@@ -68,6 +68,12 @@ export async function POST(req: Request) {
     const type = String(body.type || "");
     const action = String(body.action || "");
 
+    // v1.0 (audit W11-15 #2 — MEDIUM): aiInstruction = قواعد مستقیم system prompt چت.
+    // تب content قابل واگذاری به کاربر limited است — نوشتن/تغییر/حذف قواعد AI فقط ادمین.
+    if (type === "aiInstruction" && authCheck.role !== "admin" && action !== "list") {
+      return NextResponse.json({ ok: false, error: "admin_only_type" }, { status: 403 });
+    }
+
     const models: Record<string, any> = {
       book: db.book,
       article: db.article,

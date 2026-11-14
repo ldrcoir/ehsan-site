@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { getSetting } from "@/lib/settings";
+import { readBoundedJson } from "@/lib/bounded-read";
 
 /**
  * Bale messenger integration.
@@ -65,8 +66,11 @@ function sweepSeen(): void {
 // v1.1 (security): strip Markdown metacharacters from visitor-controlled text —
 // parse_mode: "Markdown" روی متن خام یعنی بازدیدکننده می‌تونه لینک جعلی داخل
 // نوتیفیکیشن ادمین تزریق کنه (phishing داخل پیام‌رسان ادمین)
+// v1.0 (audit W11-15 #3): خط جدید/کنترل هم حذف می‌شود — جعل ساختار پیام بسته شد
 function mdSafe(s: string): string {
-  return String(s).replace(/[_*`\[\]()]/g, " ");
+  return String(s)
+    .replace(/[\r\n\t\u0000-\u001f\u007f]+/g, " ")
+    .replace(/[_*`\[\]()]/g, " ");
 }
 
 async function getBaleConfig() {
@@ -110,10 +114,10 @@ export async function sendBaleMessage(text: string): Promise<boolean> {
       console.error("[bale] sendMessage HTTP error:", res.status, (await res.text().catch(() => "")).slice(0, 200));
       return false;
     }
-    const cl = parseInt(res.headers.get("content-length") || "0", 10);
-    if (cl > 64 * 1024) return false; // پاسخ ربات API هرگز بزرگ نیست
-    const data = await res.json();
-    return !!data.ok;
+    // v1.0 (audit W11-15 #4): خواندن محدودشده — chunked بدون CL حافظه را نمی‌بلعد
+    const parsed = await readBoundedJson(res);
+    if (!parsed) return false; // پاسخ ربات API هرگز بزرگ نیست
+    return !!(parsed.data as { ok?: boolean })?.ok;
   } catch (err) {
     console.error("[bale] sendMessage error:", err);
     return false;

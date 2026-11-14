@@ -2,6 +2,16 @@ import { checkAdminAuth, TAB_PERMISSIONS } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
+// v1.0 (audit W11-15 #2 — MEDIUM): کلیدهای حساس AI — فقط ادمین. تب «متن‌ها» قابل
+// واگذاری به کاربر limited است؛ ai.system_prompt مستقیماً system prompt چت را
+// می‌سازد — یک content-editor کم‌دسترسی نباید بتواند شخصیتِ چبات‌bot سایت را
+// بازنویسی کند (prompt injection در نام دامنه‌ی خود صاحب سایت).
+const AI_ADMIN_ONLY_TEXT_PREFIXES = ["ai."];
+function isAiAdminOnlyKey(key: string): boolean {
+  const k = key.toLowerCase();
+  return AI_ADMIN_ONLY_TEXT_PREFIXES.some((p) => k.startsWith(p));
+}
+
 /**
  * GET /api/admin/text?password=xxx
  * Returns all site text strings.
@@ -42,6 +52,8 @@ export async function POST(req: Request) {
     const authCheck = await checkAdminAuth(req, TAB_PERMISSIONS["/api/admin/text"]); if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
+    // v1.0 (audit W11-15 #2): نوشتنِ کلیدهای ai.* فقط برای ادمین — کاربر limited 403 می‌گیرد
+    const isAdmin = authCheck.role === "admin";
 
     const action = String(body.action || "");
 
@@ -49,6 +61,9 @@ export async function POST(req: Request) {
       case "set": {
         const key = String(body.key || "");
         if (!key) return NextResponse.json({ ok: false, error: "missing_key" }, { status: 400 });
+        if (!isAdmin && isAiAdminOnlyKey(key)) {
+          return NextResponse.json({ ok: false, error: "admin_only_key" }, { status: 403 });
+        }
         // v1.1.2 (hardening): cap key at 200 chars and values at 10000 chars
         if (key.length > 200) {
           return NextResponse.json({ ok: false, error: "key_too_long" }, { status: 400 });
@@ -71,6 +86,10 @@ export async function POST(req: Request) {
         const items = body.items || [];
         if (!Array.isArray(items)) {
           return NextResponse.json({ ok: false, error: "no_items" }, { status: 400 });
+        }
+        // v1.0 (audit W11-15 #2): bulk هم ai.* را برای کاربر limited رد می‌کند (بدون partial write)
+        if (!isAdmin && items.some((it: { key?: unknown }) => isAiAdminOnlyKey(String(it?.key || "")))) {
+          return NextResponse.json({ ok: false, error: "admin_only_key" }, { status: 403 });
         }
         // v1.1.2 (hardening): cap batch size at 300
         if (items.length > 300) {
@@ -110,6 +129,9 @@ export async function POST(req: Request) {
       case "delete": {
         const key = String(body.key || "");
         if (!key) return NextResponse.json({ ok: false, error: "missing_key" }, { status: 400 });
+        if (!isAdmin && isAiAdminOnlyKey(key)) {
+          return NextResponse.json({ ok: false, error: "admin_only_key" }, { status: 403 });
+        }
         // deleteMany → idempotent (no error if the key doesn't exist)
         const res = await db.siteText.deleteMany({ where: { key } });
         return NextResponse.json({ ok: true, deleted: res.count });
