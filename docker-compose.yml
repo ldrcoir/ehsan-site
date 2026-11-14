@@ -19,8 +19,11 @@ services:
       - "127.0.0.1:3000:3000"
     volumes:
       - ./db:/app/db
+    # v1.1.2: long syntax با required:false — اگر .env وجود نداشته باشد
+    # compose دیگر hard-fail نمی‌شود (secretها اختیاری در dev می‌مانند)
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: file:/app/db/custom.db
       NODE_ENV: production

@@ -7,6 +7,8 @@
 # خروجی: backups/db_YYYYMMDD_HHMMSS.db.gz (نگه‌داری ۷ نسخه آخر)
 # ============================================================================
 set -eo pipefail
+# v1.1.2 (security): umask امن — فایل‌های بک‌آپ و tmp هرگز world-readable نمی‌شوند
+umask 077
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BACKUP_DIR="$PROJECT_DIR/backups"
@@ -49,11 +51,17 @@ chmod 700 "$BACKUP_DIR"
 STAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_FILE="$BACKUP_DIR/db_$STAMP.db"
 
-# v1.1: snapshot سازگار با sqlite3 (.backup) — سرویس می‌تونه روشن بمونه؛ fallback: cp
-if command -v sqlite3 >/dev/null 2>&1; then
-    sqlite3 "$DB_FILE" ".backup '$BACKUP_FILE'"
-else
-    cp "$DB_FILE" "$BACKUP_FILE"
+# v1.1.2 (fix): fallback «cp» حذف شد — کپی خام sqlite در حین نوشتن می‌تواند torn
+# (ناقص/خراب) باشد؛ اگر snapshot سازگار ممکن نباشد، بک‌آپ باید شکست بخورد نه اینکه
+# فایل خراب ذخیره کند و «موفق» جلوه کند.
+if ! command -v sqlite3 >/dev/null 2>&1; then
+    echo "[$STAMP] ❌ sqlite3 پیدا نشد — بک‌آپ سازگار ممکن نیست؛ متوقف شد"
+    exit 1
+fi
+if ! sqlite3 "$DB_FILE" ".backup '$BACKUP_FILE'"; then
+    rm -f "$BACKUP_FILE"
+    echo "[$STAMP] ❌ sqlite3 .backup ناموفق بود ($DB_FILE) — بک‌آپ ناقص ذخیره نشد؛ exit 1"
+    exit 1
 fi
 
 gzip -f "$BACKUP_FILE"

@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# install.sh — v1.1 — Pre-built standalone installer
+# install.sh — v1.1.2 — Pre-built standalone installer
 # ============================================================================
 # این نسخه:
 # - npm install نمی‌خواد (همه‌چیز pre-built هست)
@@ -12,6 +12,13 @@
 # - فایروال + Nginx
 # - reCAPTCHA placeholder + راهنما
 # - HTTPS setup با certbot (اگه دامنه ست شده)
+# ============================================================================
+# v1.1.2 (fix):
+# - Node.js >= 20.9 الزامی است (Next.js 16) + چک openssl 3 برای موتور Prisma
+# - تشخیص SSH_PORT دیگر نصب را متوقف نمی‌کند (پیش‌فرض: 22)
+# - standalone: owner دیتابیس پروژه + ReadWritePaths (fix SQLITE_CANTOPEN)
+# - nginx: شکست کپی کانفیگ یا nginx -t دیگر پوشانده نمی‌شود (exit 1)
+# - .env: توضیح TRUST_PROXY + placeholder توکن ربات‌ها؛ logrotate لاگ بک‌آپ
 # ============================================================================
 set -eo pipefail
 
@@ -27,7 +34,7 @@ SITE_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$SITE_DIR"   # ریشه‌ی پروژه — حتی اگه پایین‌تر به standalone سوئیچ کنیم
 cd "$SITE_DIR"
 
-VERSION="1.1"
+VERSION="1.1.2"
 echo "=========================================="
 echo "  نصب سایت شخصی v$VERSION (Pre-built)"
 echo "=========================================="
@@ -60,19 +67,40 @@ if ! command -v curl &> /dev/null; then
     echo "  ✅ curl نصب شد"
 fi
 if command -v node &> /dev/null; then
+    # v1.1.2: Next.js 16 به Node.js >= 20.9 نیاز دارد (نه فقط 20)
     NODE_VER=$(node -v | sed 's/v//' | cut -d. -f1)
-    if [ "$NODE_VER" -ge 20 ]; then
-        echo "  ✅ Node.js نصبه ($(node -v))"
+    NODE_MINOR=$(node -v | sed 's/v//' | cut -d. -f2)
+    if [ "$NODE_VER" -gt 20 ] || { [ "$NODE_VER" -eq 20 ] && [ "$NODE_MINOR" -ge 9 ]; }; then
+        echo "  ✅ Node.js نصبه ($(node -v)) — با Next.js 16 سازگار است (>= 20.9)"
     else
+        echo "  ⚠ Node.js $(node -v) برای Next.js 16 کم است (>= 20.9 لازم است) — آپدیت می‌کنم..."
         curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
         apt install -y nodejs
-        echo "  ✅ Node.js آپدیت شد"
+        echo "  ✅ Node.js آپدیت شد ($(node -v))"
     fi
 else
     curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
     apt install -y nodejs
     echo "  ✅ Node.js نصب شد ($(node -v))"
 fi
+
+# v1.1.2: موتور Prisma این بیلد روی openssl 3.0 کامپایل شده (Ubuntu 22.04+/Debian 12).
+# روی openssl < 3 سرویس با Prisma بالا نمی‌آید — مگر با FORCE_INSTALL=1 نصب اجباری شود.
+check_openssl_compat() {
+    # اگر openssl هنوز نصب نیست، قدم ۳ نصبش می‌کند و «بررسی نهایی» دوباره چک می‌کند
+    command -v openssl &> /dev/null || return 0
+    local OPENSSL_MAJOR
+    OPENSSL_MAJOR=$(openssl version | awk '{print $2}' | cut -d. -f1)
+    if [ "${OPENSSL_MAJOR:-0}" -lt 3 ] && [ "${FORCE_INSTALL:-0}" != "1" ]; then
+        echo ""
+        echo "  ⚠️ هشدار: موتور Prisma این بیلد به openssl 3.0 نیاز دارد (Ubuntu 22.04+ / Debian 12+)."
+        echo "  ⚠️ WARNING: the bundled Prisma engine targets openssl 3.0 (Ubuntu 22.04+ / Debian 12)."
+        echo "     این سیستم openssl $(openssl version | awk '{print $2}') دارد → Prisma اجرا نمی‌شود."
+        echo "     برای نصب اجباری:  sudo FORCE_INSTALL=1 ./install.sh"
+        exit 1
+    fi
+}
+check_openssl_compat
 
 # ============================================================================
 # قدم ۳: ابزارهای ضروری
@@ -96,6 +124,8 @@ if ! command -v openssl &> /dev/null; then
     echo "  ❌ openssl پیدا نشد! نصب دستی: apt install -y openssl"
     exit 1
 fi
+# v1.1.2: روی سیستم‌های تازه openssl همین‌جا (قدم ۳) نصب شده — چک نسخه (>= 3) هم لازم است
+check_openssl_compat
 
 # ============================================================================
 # قدم ۴: فایروال
@@ -104,7 +134,9 @@ echo ""
 echo "[4/11] فایروال..."
 # v1.1.1 (audit S10-L3): اگر SSH روی پورت دیگری است، همان را باز کن —
 # وگرنه ufw enable کلاینت SSHِ فعال را قطع می‌کند (lockout)
-SSH_PORT=$(ss -tlnp 2>/dev/null | grep sshd | grep -oP ':\K\d+(?=\s)' | head -1)
+# v1.1.2 (fix): اگر sshd پیدا نشود (یا ss نباشد)، pipeline با set -o pipefail کل نصب را
+# می‌کشت — حالا || true و اگر خالی بود، پیش‌فرض 22 (خط بعدی)
+SSH_PORT=$(ss -tlnp 2>/dev/null | grep sshd | grep -oP ':\K\d+(?=\s)' | head -1) || true
 SSH_PORT="${SSH_PORT:-22}"
 ufw allow "$SSH_PORT"/tcp 2>/dev/null || true
 ufw allow 80/tcp 2>/dev/null || true
@@ -175,7 +207,15 @@ RECAPTCHA_SECRET="$EXISTING_RECAPTCHA_SECRET"
 NEXT_PUBLIC_RECAPTCHA_SITEKEY="$EXISTING_RECAPTCHA_SITEKEY"
 BALE_WEBHOOK_SECRET="$BALE_SECRET"
 TELEGRAM_WEBHOOK_SECRET="$TG_SECRET"
+# v1.1.2: سایت پشت nginx محلی است — app فقط وقتی TRUST_PROXY=true است به
+# X-Forwarded-For اعتماد می‌کند (rate limit بر اساس IP واقعی کاربر)
 TRUST_PROXY="true"
+
+# توکن‌های ربات‌ها — اختیاری‌اند (fallback)؛ کانفیگ اصلی ربات‌ها از پنل ادمین خوانده می‌شود
+# TELEGRAM_BOT_TOKEN=
+# TELEGRAM_CHAT_ID=
+# BALE_BOT_TOKEN=
+# BALE_CHAT_ID=
 EOF
 chmod 600 .env
 echo "  ✅ Webhook secrets تولید شد"
@@ -290,6 +330,10 @@ elif [ -d .next/standalone ]; then
     cp -r public .next/standalone/ 2>/dev/null || true
     SITE_DIR="$SITE_DIR/.next/standalone"
     cd "$SITE_DIR"
+    # v1.1.2 (fix SQLITE_CANTOPEN): DATABASE_URL همچنان به $PROJECT_ROOT/db/custom.db
+    # اشاره می‌کند (مسیر مطلق در .env) — owner دایرکتوری db پروژه و ReadWritePaths آن
+    # در قدم ۸ ست می‌شوند (کاربر ehsansite آنجا ساخته می‌شود) وگرنه سرویس نمی‌توانست
+    # دیتابیس را باز کند.
     echo "  ✅ آماده شد"
 fi
 
@@ -302,6 +346,10 @@ if ! id -u ehsansite &>/dev/null; then
     useradd -r -s /bin/false -d "$SITE_DIR" ehsansite 2>/dev/null || true
 fi
 chown -R ehsansite:ehsansite "$SITE_DIR" 2>/dev/null || true
+# v1.1.2 (fix SQLITE_CANTOPEN): وقتی app از .next/standalone اجرا می‌شود، DATABASE_URL
+# به $PROJECT_ROOT/db/custom.db اشاره می‌کند — این دایرکتوری root-owned 700 بود و
+# سرویس (ehsansite) SQLITE_CANTOPEN می‌گرفت. owner + ReadWritePaths (پایین‌تر):
+chown -R ehsansite:ehsansite "$PROJECT_ROOT/db" 2>/dev/null || true
 
 cat > /etc/systemd/system/personal-site.service << EOF
 [Unit]
@@ -327,7 +375,9 @@ Environment=PORT=3000
 NoNewPrivileges=true
 ProtectSystem=full
 ProtectHome=read-only
-ReadWritePaths=$SITE_DIR
+# v1.1.2 (fix): db ممکن است در $PROJECT_ROOT/db باشد حتی وقتی WorkingDirectory
+# همان standalone است — بدون این مسیر sqlite3 خطای SQLITE_CANTOPEN می‌دهد
+ReadWritePaths=$SITE_DIR $PROJECT_ROOT/db
 PrivateTmp=true
 # v1.1.1 (audit S10-M4): hardening اضافه — مجموعه‌ی کم‌ریسک (بدون SystemCallFilter و
 # بدون MemoryDenyWriteExecute که JIT وی۸ را می‌شکند؛ با systemd-analyze security بسنجید)
@@ -361,19 +411,42 @@ cat > /etc/cron.d/personal-site-backup << EOF
 0 3 * * * root cd "$PROJECT_ROOT" && bash scripts/auto-backup.sh >> /var/log/personal-site-backup.log 2>&1
 EOF
 chmod 644 /etc/cron.d/personal-site-backup
+# v1.1.2: logrotate برای لاگ بک‌آپ — هفتگی، نگه‌داری ۷ نسخه، فشرده‌سازی
+cat > /etc/logrotate.d/personal-site-backup << EOF
+/var/log/personal-site-backup.log {
+    weekly
+    rotate 7
+    compress
+    copytruncate
+    missingok
+}
+EOF
+chmod 644 /etc/logrotate.d/personal-site-backup
 systemctl enable cron 2>/dev/null || systemctl enable crond 2>/dev/null || true
 systemctl restart cron 2>/dev/null || systemctl restart crond 2>/dev/null || true
 echo "  ✅ بک‌آپ شبانه ۳ بامداد فعال شد (/etc/cron.d/personal-site-backup)"
+echo "  ✅ logrotate لاگ بک‌آپ فعال شد (/etc/logrotate.d/personal-site-backup)"
 
 # ============================================================================
 # قدم ۱۰: Nginx
 # ============================================================================
 echo ""
 echo "[10/11] Nginx..."
-cp nginx-ehsanmorad.conf /etc/nginx/sites-available/nginx-ehsanmorad.conf 2>/dev/null || true
+# v1.1.2 (fix): || true حذف شد — خطای کپی کانفیگ یا nginx -t باید نصب را متوقف کند
+# (سایت بدون nginx کار نمی‌کند؛ پوشاندن خطا یعنی «موفق» گزارش‌کردنِ نصب خراب)
+if ! cp nginx-ehsanmorad.conf /etc/nginx/sites-available/nginx-ehsanmorad.conf; then
+    echo "  ❌ کپی nginx config ناموفق بود — فایل nginx-ehsanmorad.conf کنار install.sh هست؟"
+    exit 1
+fi
 ln -sf /etc/nginx/sites-available/nginx-ehsanmorad.conf /etc/nginx/sites-enabled/nginx-ehsanmorad.conf 2>/dev/null || true
 rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
-nginx -t 2>&1 && systemctl reload nginx
+if nginx -t 2>&1; then
+    systemctl reload nginx
+else
+    echo "  ❌ nginx -t ناموفق بود — config نامعتبر است؛ nginx reload نشد. نصب متوقف شد."
+    echo "     بررسی دستی: nginx -t   و   cat /etc/nginx/sites-available/nginx-ehsanmorad.conf"
+    exit 1
+fi
 echo "  ✅ Nginx تنظیم شد"
 
 # تست

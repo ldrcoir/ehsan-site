@@ -5,6 +5,9 @@ set -eo pipefail
 SITE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 STAMP=$(date +%Y%m%d-%H%M%S)
 TMP="$(mktemp -d)"
+# v1.1.2 (security): هر خروجی از اسکریپت (خطا/سیگنال) دایرکتوری tmp شامل db + .env را
+# پاک می‌کند — بدون این trap، رازها در /tmp باقی می‌ماندند
+trap 'rm -rf "$TMP"' EXIT
 # v1.1 (fix): دیتابیس نبود → قبلاً sqlite3 یک فایل خالی می‌ساخت و export «موفق»
 # اما خالی بود. حالا صریحاً خطا بده.
 if [ ! -f "$SITE_DIR/db/custom.db" ]; then

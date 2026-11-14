@@ -13,14 +13,16 @@
 #   3) دیتابیس رو با permission امن نصب می‌کنه (owner: ehsansite)
 #   4) .env رو MERGE می‌کنه (نه overwrite):
 #      - DATABASE_URL جدید (مبتنی بر مسیر همین سرور) حفظ می‌شه
-#      - از فایل قدیمی این کلیدها میاد: SESSION_SECRET،
-#        BALE_WEBHOOK_SECRET، TELEGRAM_WEBHOOK_SECRET، RECAPTCHA_SECRET،
-#        NEXT_PUBLIC_RECAPTCHA_SITEKEY، NEXT_PUBLIC_SITE_URL،
-#        BALE_BOT_TOKEN، BALE_CHAT_ID، TELEGRAM_BOT_TOKEN، TELEGRAM_CHAT_ID
+#      - مقادیر .env «جدید» همیشه برنده‌اند (v1.1.2)؛ از فایل قدیمی فقط
+#        کلیدهایی میاد که در .env جدید نیستن — وگرنه مقادیر قدیمیِ دامنه
+#        (NEXT_PUBLIC_SITE_URL، webhook URLها، sitekeyها) تنظیمات VPS جدید
+#        رو override می‌کردن
 #   5) apply_schema.py اجرا می‌شه (heal کردن schema drift)
 #   6) سرویس start می‌شه و admin بررسی می‌شه
 # ============================================================================
 set -eo pipefail
+# v1.1.2 (security): umask امن — فایل‌های موقت (db، .env) هرگز world-readable نمی‌شوند
+umask 077
 
 if [ "$(id -u)" != "0" ]; then
     echo "❌ این اسکریپت باید با sudo اجرا بشه:"
@@ -88,6 +90,20 @@ else
     install -m 600 "$TMP/db/custom.db" "$DB_FILE"
     chown root:root "$DB_FILE"
 fi
+# v1.1.2 (CRITICAL fix): وقتی app از .next/standalone اجرا می‌شود، db.ts مسیر cwd را
+# استفاده می‌کند → .next/standalone/db/custom.db — اگر این کپی به‌روز نشود، سایت بعد
+# از import یک دیتابیس «تازه‌ی» کهنه سرو می‌کند.
+if [ -d "$SITE_DIR/.next/standalone/db" ]; then
+    rm -f "$SITE_DIR/.next/standalone/db/custom.db-journal" \
+          "$SITE_DIR/.next/standalone/db/custom.db-wal" \
+          "$SITE_DIR/.next/standalone/db/custom.db-shm"
+    cp -f "$DB_FILE" "$SITE_DIR/.next/standalone/db/custom.db"
+    chmod 600 "$SITE_DIR/.next/standalone/db/custom.db"
+    if id -u ehsansite &>/dev/null; then
+        chown ehsansite:ehsansite "$SITE_DIR/.next/standalone/db/custom.db" 2>/dev/null || true
+    fi
+    echo "  ✅ کپی دیتابیس در .next/standalone/db/ هم به‌روز شد"
+fi
 # بک‌آپ‌های قدیمی هم برگردن (اگه تو tarball بودن)
 if [ -d "$TMP/backups" ]; then
     # v1.1 (fix): بک‌آپ‌های فعلی این سرور حذف نمی‌شوند — بایگانی می‌شوند
@@ -109,13 +125,32 @@ if [ -f "$TMP/.env" ] && [ -f "$SITE_DIR/.env" ]; then
     # بک‌آپ از .env فعلی این سرور
     cp -p "$NEW_ENV" "$SITE_DIR/.env.pre-migration"
     chmod 600 "$SITE_DIR/.env.pre-migration"
-    # v1.1 (fix): قبلاً فقط یک whitelist ثابت merge می‌شد و بقیه‌ی کلیدهای قدیمی
-    # (توکن‌ها/secretهای سفارشی که با EXIT trap حذف می‌شدند) برای همیشه از دست
-    # می‌رفتند. حالا «همه‌ی» کلیدهای فایل قدیمی برمی‌گردند؛ فقط DATABASE_URL جدید می‌ماند.
-    # DATABASE_URL جدید حفظ می‌شه (مسیر همین سرور)؛ بقیه‌ی کلیدهای جدید هم می‌مونن.
+    # v1.1.2 (fix): قبلاً «کل» فایل .env قدیمی append می‌شد و مقادیر قدیمیِ دامنه
+    # (NEXT_PUBLIC_SITE_URL، webhook URLها، sitekeyها) مقادیر جدید VPS را
+    # override می‌کردند. حالا هر کلید قدیمی فقط وقتی اضافه می‌شود که در .env جدید
+    # وجود نداشته باشد — مقادیر جدید همیشه برنده‌اند؛ کلیدهای سفارشیِ قدیمی
+    # (توکن‌ها/secretهایی که جدید نداریم) همچنان برگشت می‌خورند.
     grep -v "^DATABASE_URL=" "$NEW_ENV" > "$SITE_DIR/.env.merged" || true
-    # همه‌ی کلیدهای فایل قدیمی (به‌جز DATABASE_URL قدیمی) اضافه می‌شوند
-    grep -v "^DATABASE_URL=" "$OLD_ENV" >> "$SITE_DIR/.env.merged" || true
+    # کلیدهای فایل قدیمی: فقط اگر در .env جدید نیستند (new wins)
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in
+            ""|\#*) continue ;;
+        esac
+        case "$line" in
+            *=*) ;;
+            *) continue ;;
+        esac
+        KEY="${line%%=*}"
+        case "$KEY" in
+            [A-Za-z_]*) ;;
+            *) continue ;;
+        esac
+        # DATABASE_URL همیشه از .env جدید می‌آید (مسیر همین سرور)
+        [ "$KEY" = "DATABASE_URL" ] && continue
+        # کلیدی که .env جدید داره، مقدار جدید برنده است — دوباره اضافه نکن
+        grep -q "^$KEY=" "$NEW_ENV" && continue
+        printf '%s\n' "$line" >> "$SITE_DIR/.env.merged"
+    done < "$OLD_ENV"
     # DATABASE_URL جدید آخرِ فایل (اولویت با آخرین تعریف در صورت duplicate)
     grep "^DATABASE_URL=" "$NEW_ENV" | tail -n 1 >> "$SITE_DIR/.env.merged" || true
     mv "$SITE_DIR/.env.merged" "$NEW_ENV"
@@ -123,7 +158,7 @@ if [ -f "$TMP/.env" ] && [ -f "$SITE_DIR/.env" ]; then
     if id -u ehsansite &>/dev/null; then
         chown ehsansite:ehsansite "$NEW_ENV" 2>/dev/null || true
     fi
-    echo "  ✅ .env merge شد (DATABASE_URL جدید + همه‌ی کلیدهای قدیمی برگشتن)"
+    echo "  ✅ .env merge شد (مقادیر جدید همیشه برنده‌اند + کلیدهای سفارشی قدیمی برگشتن)"
     echo "     بک‌آپ .env قبلی: $SITE_DIR/.env.pre-migration"
 elif [ -f "$TMP/.env" ]; then
     # .env روی سرور جدید نبود — کل فایل قدیمی رو بیار (DATABASE_URL مسیر جدید رو هم می‌سازیم)
@@ -135,15 +170,39 @@ else
 fi
 
 echo "[5/6] heal کردن schema (apply_schema.py)..."
+# v1.1.2 (fix): شکست schema healing دیگر نادیده گرفته نمی‌شود — دیتابیسِ ناسازگار با
+# کد یعنی سرویس یا بالا نمی‌آید یا داده‌ها را خراب می‌کند؛ import باید متوقف شود.
 if python3 scripts/apply_schema.py; then
     echo "  ✅ schema همگام شد"
 else
-    echo "  ⚠ apply_schema.py خطا داد — ادامه می‌دیم"
+    echo "  ❌ apply_schema.py ناموفق بود — import متوقف شد (exit 1)"
+    echo "    بک‌آپ دیتابیس قبلی این سرور: $DB_FILE.pre-import (اگر وجود داشت)"
+    echo "    بررسی دستی: cd $SITE_DIR && python3 scripts/apply_schema.py"
+    exit 1
 fi
 
 echo "[6/6] start سرویس..."
 systemctl start personal-site
-sleep 5
+# v1.1.2 (fix): چک سلامت واقعی به‌جای sleep کور — وضعیت سرویس + تا ۵ تلاش curl
+if ! systemctl is-active --quiet personal-site; then
+    echo "  ❌ سرویس personal-site فعال نشد — import متوقف شد"
+    echo "    بررسی: journalctl -u personal-site -n 30"
+    exit 1
+fi
+HEALTH_OK=""
+for i in 1 2 3 4 5; do
+    if curl -sf -o /dev/null http://127.0.0.1:3000/; then
+        echo "  ✅ سایت روی http://127.0.0.1:3000/ پاسخ می‌دهد (تلاش $i)"
+        HEALTH_OK=1
+        break
+    fi
+    echo "  ... تلاش $i ناموفق بود، ۲ ثانیه صبر..."
+    sleep 2
+done
+if [ -z "$HEALTH_OK" ]; then
+    echo "  ⚠ سایت بعد از ۵ تلاش پاسخ نداد (fatal نیست — ادامه) — بررسی کن:"
+    echo "    journalctl -u personal-site -n 30"
+fi
 
 # بررسی ادمین
 ADMIN_ROWS=$(sqlite3 "$DB_FILE" "SELECT count(*) FROM AccessUser WHERE username='admin';" 2>/dev/null || echo "0")

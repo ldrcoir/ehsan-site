@@ -24,6 +24,10 @@ ehsanmorad.ir, www.ehsanmorad.ir {
     reverse_proxy personal-site:3000 {
         header_up X-Real-IP {remote_host}
     }
+    # v1.1.2: بدنه‌ی درخواست حداکثر ۱MB — هم‌راستا با body limit خود اپ
+    request_body {
+        max_size 1MB
+    }
     encode gzip zstd
     header {
         X-Content-Type-Options "nosniff"
@@ -37,6 +41,10 @@ ehsan-morad.ir, www.ehsan-morad.ir {
     reverse_proxy personal-site:3000 {
         header_up X-Real-IP {remote_host}
     }
+    # v1.1.2: بدنه‌ی درخواست حداکثر ۱MB — هم‌راستا با body limit خود اپ
+    request_body {
+        max_size 1MB
+    }
     encode gzip zstd
     header {
         X-Content-Type-Options "nosniff"
@@ -49,6 +57,10 @@ ehsan-morad.ir, www.ehsan-morad.ir {
 ehsanmorad.id.ir, www.ehsanmorad.id.ir {
     reverse_proxy personal-site:3000 {
         header_up X-Real-IP {remote_host}
+    }
+    # v1.1.2: بدنه‌ی درخواست حداکثر ۱MB — هم‌راستا با body limit خود اپ
+    request_body {
+        max_size 1MB
     }
     encode gzip zstd
     header {
