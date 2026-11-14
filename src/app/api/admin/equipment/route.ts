@@ -1,7 +1,6 @@
 import { checkAdminAuth } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { PERSONAL } from "@/lib/content";
 
 /**
  * GET /api/admin/equipment?password=xxx
@@ -51,23 +50,45 @@ export async function POST(req: Request) {
 
     const action = String(body.action || "");
 
+    // v1.1.1 (audit Q1/P5-G8): whitelist فیلدها + اعتبارسنجی specs JSON روی create/update
+    // تک‌نمونه‌ای — هم‌تراز با bulk_import (قبلاً single save بدون validate بود و
+    // specs خراب به‌صورت بی‌صدا null رندر می‌شد؛ id هم از کلاینت پذیرفته می‌شد)
+    const sanitizeEquipment = (raw: any): Record<string, unknown> | null => {
+      if (!raw || typeof raw !== "object") return null;
+      const clean: Record<string, unknown> = {};
+      if (raw.name !== undefined) clean.name = String(raw.name).slice(0, 200);
+      if (raw.model !== undefined) clean.model = String(raw.model).slice(0, 200);
+      if (raw.category !== undefined) clean.category = String(raw.category).slice(0, 100);
+      if (raw.status !== undefined) clean.status = String(raw.status).slice(0, 100);
+      if (raw.description !== undefined) clean.description = String(raw.description).slice(0, 5000);
+      if (raw.visible !== undefined) clean.visible = Boolean(raw.visible);
+      if (raw.order !== undefined) clean.order = Math.max(0, Number(raw.order) || 0);
+      if (raw.specs !== undefined) {
+        if (raw.specs && typeof raw.specs === "object") {
+          clean.specs = JSON.stringify(raw.specs);
+        } else if (typeof raw.specs === "string" && raw.specs.trim()) {
+          try { JSON.parse(raw.specs); clean.specs = raw.specs.slice(0, 10000); }
+          catch { return null; // invalid specs JSON
+          }
+        } else {
+          clean.specs = "";
+        }
+      }
+      return clean;
+    };
+
     switch (action) {
       case "create": {
-        const data = body.data || {};
-        if (data.specs && typeof data.specs === "object") {
-          data.specs = JSON.stringify(data.specs);
-        }
+        const data = sanitizeEquipment(body.data) as any;
+        if (!data) return NextResponse.json({ ok: false, error: "invalid_specs" }, { status: 400 });
         const created = await db.labEquipment.create({ data });
         return NextResponse.json({ ok: true, item: created });
       }
       case "update": {
         const id = String(body.id || "");
         if (!id) return NextResponse.json({ ok: false, error: "missing_id" }, { status: 400 });
-        const data = { ...body.data };
-        if (data.specs && typeof data.specs === "object") {
-          data.specs = JSON.stringify(data.specs);
-        }
-        delete data.id; delete data.createdAt; delete data.updatedAt;
+        const data = sanitizeEquipment(body.data) as any;
+        if (!data) return NextResponse.json({ ok: false, error: "invalid_specs" }, { status: 400 });
         const updated = await db.labEquipment.update({ where: { id }, data });
         return NextResponse.json({ ok: true, item: updated });
       }

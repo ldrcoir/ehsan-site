@@ -88,17 +88,18 @@ export async function POST(req: Request) {
       },
     });
 
-    // v1.1: فقط بازدید dedup-shده شمرده می‌شه (visitorCount یک ستون String است —
-    // read-modify-write؛ dedup حجم را کم کرده و lost-update عملاً بی‌اهمیت است)
-    const current = await db.siteSetting.findUnique({ where: { key: "visitorCount" } });
-    const next = (parseInt(current?.value || "0", 10) || 0) + 1;
-    await db.siteSetting
-      .upsert({
-        where: { key: "visitorCount" },
-        update: { value: String(next) },
-        create: { key: "visitorCount", value: String(next) },
-      })
-      .catch(() => {});
+    // v1.1: فقط بازدید dedup-shده شمرده می‌شه
+    // v1.1.1 (audit Q4): increment اتمیک — قبلاً read-modify-write بود و با درخواست‌های
+    // همزمان lost-update داشت؛ حالا در یک SQL اتمیک انجام می‌شود
+    try {
+      await db.$executeRaw`
+        INSERT INTO SiteSetting (key, value, updatedAt)
+        VALUES ('visitorCount', '1', ${new Date()})
+        ON CONFLICT(key) DO UPDATE SET
+          value = CAST(CAST(SiteSetting.value AS INTEGER) + 1 AS TEXT),
+          updatedAt = ${new Date()}
+      `;
+    } catch {}
 
     return NextResponse.json({ ok: true, tracked: true });
   } catch (err) {

@@ -22,6 +22,10 @@ interface TerminalProps {
   socials?: SocialChip[];
   /** v1.1 (admin-editable): ایمیل نمایشی از settings contact_email (terminal contact) */
   contactEmail?: string;
+  /** v1.1.1 (audit P1-G6): نام/تیتر از DB — خروجی whoami قبلاً همیشه static
+   *  PERSONAL را چاپ می‌کرد و تغییر نام از پنل در ترمینال دیده نمی‌شد */
+  siteName?: string;
+  siteTagline?: string;
 }
 
 export default function InteractiveTerminal({
@@ -32,6 +36,8 @@ export default function InteractiveTerminal({
   skills = [],
   socials = [],
   contactEmail = "",
+  siteName = "",
+  siteTagline = "",
 }: TerminalProps) {
   const tt = UI[lang];
   const [lines, setLines] = useState<Line[]>([]);
@@ -87,8 +93,9 @@ export default function InteractiveTerminal({
         return [{ kind: "system", text: tt.terminal.help }];
       case "about":
       case "whoami":
+        // v1.1.1 (audit P1-G6): نام/تیتر از DB (پنل) — fallback به PERSONAL
         return out(
-          `${PERSONAL.fullName[lang]} — ${PERSONAL.tagline[lang]}\n\n${tt.about.p1}\n\n${tt.about.p2}`
+          `${siteName || PERSONAL.fullName[lang]} — ${siteTagline || PERSONAL.tagline[lang]}\n\n${tt.about.p1}\n\n${tt.about.p2}`
         );
       case "skills": {
         // V1.1: DB skills (from admin panel) with content.ts fallback

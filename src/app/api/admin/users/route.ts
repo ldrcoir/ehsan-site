@@ -79,8 +79,13 @@ export async function POST(request: NextRequest) {
   if (!username || username.length < 3) {
     return NextResponse.json({ ok: false, error: "username_too_short" }, { status: 400 });
   }
-  if (!password || password.length < 6) {
+  // v1.1.1 (audit S1-M2): ادمین حداقل ۱۲ کاراکتر، کاربر عادی حداقل ۸ (قبل‌تر ۶ بود)
+  const minPw = role === "admin" ? 12 : 8;
+  if (!password || password.length < minPw) {
     return NextResponse.json({ ok: false, error: "password_too_short" }, { status: 400 });
+  }
+  if (password.length > 128) {
+    return NextResponse.json({ ok: false, error: "password_too_long" }, { status: 400 });
   }
   if (allowedHourStart !== null && (allowedHourStart < 0 || allowedHourStart > 23)) {
     return NextResponse.json({ ok: false, error: "invalid_hour_start" }, { status: 400 });

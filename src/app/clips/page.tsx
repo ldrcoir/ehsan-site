@@ -24,6 +24,8 @@ export default function ClipsPage() {
       .then((data) => {
         if (data.ok) setClips(data.clips || []);
       })
+      // v1.1.1 (audit Q3): خطای شبکه دیگر unhandled rejection نیست
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 

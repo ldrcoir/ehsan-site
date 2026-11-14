@@ -1,7 +1,6 @@
 import { checkAdminAuth } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { PERSONAL } from "@/lib/content";
 
 /**
  * SIMPLE EMAIL API — no SMTP complexity.
@@ -45,8 +44,10 @@ export async function POST(req: Request) {
 
     switch (action) {
       case "set_email": {
+        // v1.1.1 (audit S5-L4): اعتبارسنجی واقعی ایمیل — مقدار در URL فچ فرووارد قرار می‌گیرد؛
+        // کاراکترهای / ? # می‌توانستند مسیر/کوئری درخواست را بازنویسی کنند
         const email = String(body.email || "").trim();
-        if (!email || !email.includes("@")) {
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 254) {
           return NextResponse.json({ ok: false, error: "invalid_email" }, { status: 400 });
         }
         await db.siteSetting.upsert({
@@ -72,9 +73,12 @@ export async function POST(req: Request) {
         // Use formsubmit.co — free, no signup
         // First time: formsubmit.co sends a confirmation email to activate
         try {
-          const res = await fetch(`https://formsubmit.co/ajax/${toEmail}`, {
+          // v1.1.1 (audit S5-L4/Q3): encodeURIComponent + timeout 10s + redirect manual
+          const res = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(toEmail)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            redirect: "manual",
+            signal: AbortSignal.timeout(10_000),
             body: JSON.stringify({
               _subject: subject,
               _template: "table",

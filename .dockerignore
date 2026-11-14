@@ -6,7 +6,21 @@ upload
 skills
 *.md
 .DS_Store
-.env.local
-# v1.1: هیچ secret و دیتابی‌ای داخل image bake نشه
+# v1.1.1 (audit S7-H1/S8-M2/S10-M2): هیچ secret، دیتابیس یا بکاپی داخل image bake نشود.
+# قبلاً backups/ و .env.* مشتق‌ها exclude نبودند و بعد از اولین بکاپ شبانه،
+# docker build دیتابیس کامل (پیام‌ها + bcrypt hashes + توکن‌ها) را داخل layer کپی می‌کرد.
 .env
+.env.*
+!.env.example
 db/
+backups/
+*.db
+*.db.gz
+*.db-journal
+*.db-wal
+*.tar.gz
+*.log
+# v1.1.1 (audit Q2): zip پکیج داخل image کپی نشود (~19MB بلاک)
+public/*.zip
+tool-results/
+agent-ctx/

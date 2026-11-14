@@ -699,6 +699,9 @@ export default function Home() {
               skills={siteContent.skills}
               socials={socialChips}
               contactEmail={siteContent.settings?.contact_email || ""}
+              // v1.1.1 (audit P1-G6): whoami ترمینال هم نام/تیتر DB را نشان می‌دهد
+              siteName={siteContent.settings?.["name_" + lang] || PERSONAL.fullName[lang]}
+              siteTagline={siteContent.settings?.[`tagline_${lang}`] || PERSONAL.tagline[lang]}
             />
           </div>
         </div>

@@ -181,13 +181,19 @@ export default function AccessUserManager() {
       } else {
         const msgs: Record<string, string> = {
           username_too_short: "نام کاربری خیلی کوتاه است (حداقل ۳ کاراکتر).",
-          password_too_short: "رمز خیلی کوتاه است (حداقل ۶ کاراکتر).",
+          password_too_short: "رمز خیلی کوتاه است (ادمین: حداقل ۱۲، کاربر: حداقل ۸ کاراکتر).",
+          password_too_long: "رمز خیلی طولانی است (حداکثر ۱۲۸ کاراکتر).",
           username_exists: "این نام کاربری قبلاً گرفته شده.",
           invalid_hour_start: "ساعت شروع نامعتبر (۰-۲۳).",
           invalid_hour_end: "ساعت پایان نامعتبر (۰-۲۳).",
+          invalid_hour: "ساعت نامعتبر (۰-۲۳).",
+          invalid_date: "تاریخ انقضا نامعتبر است.",
           unauthorized: "شما دسترسی ادمین ندارید. از /user-login وارد شوید.",
           cannot_deactivate_self: "نمی‌توانید خودتان را غیرفعال کنید.",
           cannot_delete_self: "نمی‌توانید خودتان را حذف کنید.",
+          cannot_demote_self: "نمی‌توانید نقش خودتان را تنزل دهید.",
+          cannot_demote_last_admin: "آخرین ادمین فعال را نمی‌توان تنزل داد.",
+          cannot_delete_last_admin: "آخرین ادمین فعال را نمی‌توان حذف کرد.",
           user_not_found: "کاربر یافت نشد.",
         };
         setError(msgs[data.error] || data.error || "خطا");

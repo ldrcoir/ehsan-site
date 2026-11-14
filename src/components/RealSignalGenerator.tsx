@@ -224,7 +224,7 @@ export default function RealSignalGenerator({
       // === ANTI-COPY PROTECTION ===
       import("@/lib/canvas-protect").then(({ watermarkCanvas }) => {
         watermarkCanvas(ctx, w, h);
-      });
+      }).catch(() => {}); // v1.1.1 (Q3)
     };
 
     if (!reduce) {

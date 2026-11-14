@@ -1,7 +1,6 @@
 import { checkAdminAuth } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { PERSONAL } from "@/lib/content";
 
 /**
  * POST /api/admin/clear

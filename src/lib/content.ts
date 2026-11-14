@@ -343,7 +343,7 @@ export const UI = {
       level: "Level",
     },
     contact: {
-      num: "06", label: "contact",
+      num: "08", label: "contact",
       title: "Open Channel",
       subtitle: "// open a channel",
       desc: "Have a project, question, or just want to talk? Drop a message via the form below — I read everything and reply within a day or two. No email exposed; your message goes straight to my private inbox.",
@@ -460,7 +460,7 @@ export const UI = {
       level: "Niveau",
     },
     contact: {
-      num: "06", label: "kontakt",
+      num: "08", label: "kontakt",
       title: "Kanal öffnen",
       subtitle: "// Kanal öffnen",
       desc: "Projekt, Frage oder einfach Hallo? Nachricht über das Formular — ich antworte innerhalb von 1–2 Tagen. Keine E-Mail öffentlich; Nachricht geht an meinen privaten Posteingang.",
@@ -577,7 +577,7 @@ export const UI = {
       level: "سطح",
     },
     contact: {
-      num: "۰۶", label: "تماس",
+      num: "۰۸", label: "تماس",
       title: "باز کردن کانال",
       subtitle: "// باز کردن کانال",
       desc: "پروژه، سؤال یا فقط سلام؟ از طریق فرم زیر پیام بذار — همه رو می‌خونم و ظرف ۱–۲ روز جواب می‌دم. ایمیل عمومی در سایت قرار داده نشده؛ پیام مستقیم به صندوق خصوصی من می‌رسه.",

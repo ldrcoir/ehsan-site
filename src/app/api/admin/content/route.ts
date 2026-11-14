@@ -1,7 +1,6 @@
 import { checkAdminAuth } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { PERSONAL } from "@/lib/content";
 
 /**
  * /api/admin/content
@@ -80,13 +79,39 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "invalid_type", validTypes: Object.keys(models) }, { status: 400 });
     }
 
+    // v1.1.1 (audit Q1/P5): whitelist فیلدها per model — قبلاً body.data خام به
+    // Prisma می‌رفت؛ فیلد ناموجود → PrismaClientValidationError (500 خام)، و کلاینت
+    // می‌توانست id/timestamp را تزریق کند. فیلدهای مجاز دقیقاً همان ستون‌های schema هستند.
+    const FIELD_WHITELIST: Record<string, string[]> = {
+      book: ["titleEn", "titleFa", "titleDe", "year", "publisherEn", "publisherFa", "publisherDe", "descEn", "descFa", "descDe", "cover", "link", "order", "visible"],
+      article: ["titleEn", "titleFa", "titleDe", "venueEn", "venueFa", "venueDe", "date", "typeEn", "typeFa", "typeDe", "summaryEn", "summaryFa", "summaryDe", "link", "order", "visible"],
+      tutorial: ["titleEn", "titleFa", "titleDe", "duration", "levelEn", "levelFa", "levelDe", "descEn", "descFa", "descDe", "embedUrl", "platform", "playlist", "order", "visible"],
+      skill: ["categoryEn", "categoryFa", "categoryDe", "items", "order", "visible"],
+      aiInstruction: ["name", "content", "enabled", "order"],
+    };
+    const sanitize = (raw: any): Record<string, unknown> => {
+      const clean: Record<string, unknown> = {};
+      const allowed = FIELD_WHITELIST[type] || [];
+      for (const k of allowed) {
+        if (raw && raw[k] !== undefined) clean[k] = raw[k];
+      }
+      // v1.1.1: طول متن‌ها محدود شود (تزریق چند-مگابایتی ناممکن شود)
+      for (const [k, v] of Object.entries(clean)) {
+        if (typeof v === "string" && k !== "cover" && k !== "link") clean[k] = v.slice(0, 5000);
+        if (typeof v === "string" && (k === "cover" || k === "link")) clean[k] = v.slice(0, 500);
+      }
+      return clean;
+    };
+    const joinItems = (data: Record<string, unknown>): Record<string, unknown> => {
+      if (type === "skill" && Array.isArray(data.items)) {
+        data.items = (data.items as unknown[]).map(String).join(", ");
+      }
+      return data;
+    };
+
     switch (action) {
       case "create": {
-        const data = { ...body.data };
-        // Convert skill items array to string
-        if (type === "skill" && Array.isArray(data.items)) {
-          data.items = data.items.join(", ");
-        }
+        const data = joinItems(sanitize(body.data));
         const created = await model.create({ data });
         return NextResponse.json({ ok: true, item: created });
       }
@@ -94,11 +119,7 @@ export async function POST(req: Request) {
       case "update": {
         const id = String(body.id || "");
         if (!id) return NextResponse.json({ ok: false, error: "missing_id" }, { status: 400 });
-        const data = { ...body.data };
-        delete data.id; delete data.createdAt; delete data.updatedAt;
-        if (type === "skill" && Array.isArray(data.items)) {
-          data.items = data.items.join(", ");
-        }
+        const data = joinItems(sanitize(body.data));
         const updated = await model.update({ where: { id }, data });
         return NextResponse.json({ ok: true, item: updated });
       }
@@ -126,18 +147,20 @@ export async function POST(req: Request) {
           return NextResponse.json({ ok: false, error: "no_items" }, { status: 400 });
         }
         let created = 0;
+        let failed = 0;
+        const errors: string[] = [];
         for (const item of items) {
           try {
-            const data = { ...item };
-            if (type === "skill" && Array.isArray(data.items)) {
-              data.items = data.items.join(", ");
-            }
-            delete data.id;
+            const data = joinItems(sanitize(item));
             await model.create({ data });
             created++;
-          } catch {}
+          } catch (e) {
+            // v1.1.1 (audit Q1): شکست ردیف دیگر swallow نمی‌شود — شمرده و گزارش می‌شود
+            failed++;
+            if (errors.length < 5) errors.push(e instanceof Error ? e.message.slice(0, 120) : "row error");
+          }
         }
-        return NextResponse.json({ ok: true, created, total: items.length });
+        return NextResponse.json({ ok: true, created, total: items.length, failed, errors });
       }
 
       default:

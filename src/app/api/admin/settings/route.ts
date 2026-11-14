@@ -96,6 +96,9 @@ export async function POST(req: Request) {
       "contact_email",     // ایمیل نمایشی (ترمینال + پرامپت AI) — جدا از forwardEmail
       "meta_description", // توضیحات متا برای موتورهای جست‌وجو
       "og_image",          // تصویر اشتراک‌گذاری (OG/Twitter)
+      // v1.1.1 (audit P4-G1): تصحیح دستی شمارنده بازدید — بعد از سوءاستفاده/اسپم
+      // ادمین باید بتواند visitorCount را از پنل اصلاح کند (read-only بود)
+      "visitorCount",
     ];
     // V18.3: هر کلیدی به شکل section.<name>.visible پذیرفته می‌شه (کنترل نمایش بخش‌های سایت)
     const isAllowedKey = (key: string): boolean =>

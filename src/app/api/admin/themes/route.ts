@@ -43,28 +43,46 @@ export async function POST(req: Request) {
 
     switch (action) {
       case "create": {
+        // v1.1.1 (audit S3-M1/S8-M1): create هم مثل update اعتبارسنجی hex دارد —
+        // قبلاً create بدون validate بود و CSS injection روی سایت عمومی ممکن بود.
         const data = body.data || {};
+        const HEX = /^#[0-9a-fA-F]{3,8}$/;
+        const defaults: Record<string, string> = {
+          bg: "#000000", bgSoft: "#030303", bgPanel: "#050505", bgPanel2: "#080808",
+          primary: "#00ff41", primaryDim: "#008f11", primaryBright: "#39ff14",
+          text: "#c8ffc8", textDim: "#4a7a4a", textFaint: "#2a4a2a",
+          border: "#1a3a1a", borderBright: "#2a6a2a",
+          accent: "#ffb000", red: "#ff0040", cyan: "#00fff0",
+        };
+        const colors: Record<string, string> = {};
+        for (const f of Object.keys(defaults)) {
+          const v = String(data[f] ?? defaults[f]).trim();
+          if (!HEX.test(v)) {
+            return NextResponse.json({ ok: false, error: "invalid_color", field: f }, { status: 400 });
+          }
+          colors[f] = v;
+        }
         const created = await db.customTheme.create({
           data: {
-            name: String(data.name || "New Theme"),
-            bg: String(data.bg || "#000000"),
-            bgSoft: String(data.bgSoft || "#030303"),
-            bgPanel: String(data.bgPanel || "#050505"),
-            bgPanel2: String(data.bgPanel2 || "#080808"),
-            primary: String(data.primary || "#00ff41"),
-            primaryDim: String(data.primaryDim || "#008f11"),
-            primaryBright: String(data.primaryBright || "#39ff14"),
-            text: String(data.text || "#c8ffc8"),
-            textDim: String(data.textDim || "#4a7a4a"),
-            textFaint: String(data.textFaint || "#2a4a2a"),
-            border: String(data.border || "#1a3a1a"),
-            borderBright: String(data.borderBright || "#2a6a2a"),
-            accent: String(data.accent || "#ffb000"),
-            red: String(data.red || "#ff0040"),
-            cyan: String(data.cyan || "#00fff0"),
+            name: String(data.name || "New Theme").slice(0, 60),
+            bg: colors.bg,
+            bgSoft: colors.bgSoft,
+            bgPanel: colors.bgPanel,
+            bgPanel2: colors.bgPanel2,
+            primary: colors.primary,
+            primaryDim: colors.primaryDim,
+            primaryBright: colors.primaryBright,
+            text: colors.text,
+            textDim: colors.textDim,
+            textFaint: colors.textFaint,
+            border: colors.border,
+            borderBright: colors.borderBright,
+            accent: colors.accent,
+            red: colors.red,
+            cyan: colors.cyan,
             scanlines: Boolean(data.scanlines ?? false),
             visible: Boolean(data.visible ?? true),
-            order: Number(data.order) || 0,
+            order: Math.max(0, Number(data.order) || 0),
           },
         });
         return NextResponse.json({ ok: true, theme: created });

@@ -1,33 +1,40 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { PERSONAL } from "@/lib/content";
 
 /**
  * GET /sitemap.xml
  * XML sitemap for SEO.
+ * v1.1.1 (audit P2-G12/P5-G12):
+ *   - بخش‌های مخفی‌شده از پنل (section.<name>.visible=false) دیگر در sitemap
+ *     تبلیغ نمی‌شوند — قبلاً لیست ثابت بود و بخش مخفی را به موتور جست‌وجو نشان می‌داد
+ *   - queryهای مرده (articles/tutorials/books که استفاده نمی‌شدند) حذف شدند
  */
 export async function GET() {
   try {
     // V17.5: siteUrl از env متغیر (نه hardcoded placeholder)
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ehsanmorad.ir";
 
-    const [articles, tutorials, books] = await Promise.all([
-      db.article.findMany({ where: { visible: true }, select: { id: true, date: true } }),
-      db.tutorial.findMany({ where: { visible: true }, select: { id: true } }),
-      db.book.findMany({ where: { visible: true }, select: { id: true } }),
-    ]);
+    const settings = await db.siteSetting.findMany({
+      where: { key: { startsWith: "section." } },
+    });
+    const isVisible = (section: string): boolean => {
+      const row = settings.find(s => s.key === `section.${section}.visible`);
+      return row ? row.value !== "false" : true; // default: visible
+    };
 
-    const staticPages = [
-      { url: "/", priority: "1.0", changefreq: "weekly" },
-      { url: "/#about", priority: "0.8", changefreq: "monthly" },
-      { url: "/#skills", priority: "0.8", changefreq: "monthly" },
-      { url: "/#books", priority: "0.8", changefreq: "monthly" },
-      { url: "/#articles", priority: "0.9", changefreq: "weekly" },
-      { url: "/#tutorials", priority: "0.9", changefreq: "weekly" },
-      { url: "/#chat", priority: "0.6", changefreq: "monthly" },
-      { url: "/#contact", priority: "0.6", changefreq: "monthly" },
-      { url: "/clips", priority: "0.7", changefreq: "weekly" },
+    const candidates: { url: string; section: string; priority: string; changefreq: string }[] = [
+      { url: "/", section: "hero", priority: "1.0", changefreq: "weekly" },
+      { url: "/#about", section: "about", priority: "0.8", changefreq: "monthly" },
+      { url: "/#skills", section: "skills", priority: "0.8", changefreq: "monthly" },
+      { url: "/#books", section: "books", priority: "0.8", changefreq: "monthly" },
+      { url: "/#articles", section: "articles", priority: "0.9", changefreq: "weekly" },
+      { url: "/#tutorials", section: "tutorials", priority: "0.9", changefreq: "weekly" },
+      { url: "/#chat", section: "chat", priority: "0.6", changefreq: "monthly" },
+      { url: "/#contact", section: "contact", priority: "0.6", changefreq: "monthly" },
+      { url: "/clips", section: "clips", priority: "0.7", changefreq: "weekly" },
     ];
+
+    const staticPages = candidates.filter(p => isVisible(p.section));
 
     const urls = staticPages.map(p => `  <url>
     <loc>${siteUrl}${p.url}</loc>

@@ -400,6 +400,8 @@ export default function SettingsPanel() {
   const [brandContactEmail, setBrandContactEmail] = useState("");
   const [brandMetaDescription, setBrandMetaDescription] = useState("");
   const [brandOgImage, setBrandOgImage] = useState("");
+  // v1.1.1 (audit P4-G1): تصحیح دستی شمارنده بازدید
+  const [visitorCountInput, setVisitorCountInput] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -412,6 +414,10 @@ export default function SettingsPanel() {
   const [taglineDe, setTaglineDe] = useState("");
   const [currentFont, setCurrentFont] = useState("vazirmatn");
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
+  // v1.1.1 (audit P1-G3): تم‌های سفارشی برای dropdown پیش‌فرض — قبلاً dropdown فقط
+  // ۷ تم ثابت را نشان می‌داد و تم ساخته‌شده در ThemeBuilder هیچ‌وقت نمی‌توانست
+  // پیش‌فرض بازدیدکننده‌ها شود
+  const [customThemes, setCustomThemes] = useState<{ id: string; name: string }[]>([]);
 
   const t = T[panelLang];
 
@@ -428,7 +434,19 @@ export default function SettingsPanel() {
 
     loadSettings();
     loadProviders();
+    loadCustomThemes();
   }, []);
+
+  // v1.1.1 (audit P1-G3): تم‌های سفارشی از /api/admin/themes
+  async function loadCustomThemes() {
+    try {
+      const res = await fetch("/api/admin/themes", { credentials: "include" });
+      const data = await res.json().catch(() => null);
+      if (data && data.ok && Array.isArray(data.themes)) {
+        setCustomThemes(data.themes.map((th: { id: string; name: string }) => ({ id: th.id, name: th.name })));
+      }
+    } catch {}
+  }
 
   function switchPanelLang(lang: Lang) {
     setPanelLang(lang);
@@ -478,6 +496,8 @@ export default function SettingsPanel() {
         setBrandContactEmail(s.contact_email || "");
         setBrandMetaDescription(s.meta_description || "");
         setBrandOgImage(s.og_image || "");
+        // v1.1.1 (audit P4-G1): تصحیح دستی شمارنده بازدید
+        setVisitorCountInput(s.visitorCount || "0");
         // V18.3: وضعیت نمایش بخش‌ها ("" یا "true" یعنی قابل نمایش)
         setSections(prev => ({
           ...prev,
@@ -554,8 +574,8 @@ export default function SettingsPanel() {
       showMessage(t.error + ": " + (panelLang === "fa" ? "رمز فعلی الزامی" : "Current password required"), true);
       return;
     }
-    if (newPassword.length < 6) {
-      showMessage(t.error + ": " + (panelLang === "fa" ? "رمز جدید حداقل ۶ کاراکتر" : "New password min 6 chars"), true);
+    if (newPassword.length < 12) {
+      showMessage(t.error + ": " + (panelLang === "fa" ? "رمز جدید حداقل ۱۲ کاراکتر" : "New password min 12 chars"), true);
       return;
     }
     if (currentPassword === newPassword) {
@@ -725,11 +745,18 @@ export default function SettingsPanel() {
   // --- v1.1 (admin-editable everything): save brand & SEO ---
   async function saveBrand() {
     if (loadFailed) { showMessage("load failed — refresh the page before saving", true); return; }
+    // v1.1.1 (audit P4-G1): visitorCount باید عدد معتبر باشد
+    const vc = visitorCountInput.trim();
+    if (vc && !/^\d{1,9}$/.test(vc)) {
+      showMessage(t.error + ": " + (panelLang === "fa" ? "شمارنده باید عدد باشد" : "visitor count must be a number"), true);
+      return;
+    }
     const result = await postJSON("/api/admin/settings", {
       settings: {
         contact_email: brandContactEmail.trim(),
         meta_description: brandMetaDescription.trim(),
         og_image: brandOgImage.trim(),
+        ...(vc !== "" ? { visitorCount: vc } : {}),
       },
     });
     if (result.ok) {
@@ -955,6 +982,15 @@ export default function SettingsPanel() {
               {THEMES.map(th => (
                 <option key={th.id} value={th.id}>{th.label}</option>
               ))}
+              {/* v1.1.1 (audit P1-G3): تم‌های سفارشی — فرمت `custom-<id>` همان است که
+                  page.tsx در data-theme و CSS injection استفاده می‌کند */}
+              {customThemes.length > 0 && (
+                <optgroup label="— Custom —">
+                  {customThemes.map(th => (
+                    <option key={th.id} value={`custom-${th.id}`}>🎨 {th.name}</option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
           <div className="settings-field">
@@ -1191,6 +1227,18 @@ export default function SettingsPanel() {
           value={brandOgImage}
           onChange={e => setBrandOgImage(e.target.value)}
           placeholder="https://ehsanmorad.ir/og.png"
+          className="settings-input"
+          dir="ltr"
+        />
+        {/* v1.1.1 (audit P4-G1): تصحیح دستی شمارنده بازدید */}
+        <label className="settings-label">
+          {panelLang === "fa" ? "شمارنده بازدید (تصحیح دستی)" : "Visitor count (manual correction)"}
+        </label>
+        <input
+          type="number"
+          min={0}
+          value={visitorCountInput}
+          onChange={e => setVisitorCountInput(e.target.value)}
           className="settings-input"
           dir="ltr"
         />

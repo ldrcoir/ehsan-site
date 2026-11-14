@@ -20,6 +20,14 @@ const IPV4_PRIVATE_PATTERNS = [
   /^127\./,                                       // 127.0.0.0/8     — loopback
   /^0\./,                                         // 0.0.0.0/8       — "this" network
   /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./,     // 100.64.0.0/10   — CGNAT
+  // v1.1.1 (audit S5-L1): reserved/documentation/multicast/broadcast ranges
+  /^192\.0\.0\./,                                 // 192.0.0.0/24    — IETF protocol assignments
+  /^192\.0\.2\./,                                 // 192.0.2.0/24    — TEST-NET-1 (docs)
+  /^198\.51\.100\./,                              // 198.51.100.0/24 — TEST-NET-2 (docs)
+  /^203\.0\.113\./,                               // 203.0.113.0/24  — TEST-NET-3 (docs)
+  /^198\.(1[89]|2\d)\./,                          // 198.18.0.0/15   — benchmarking
+  /^2(2[3-9]|[34]\d)\./,                          // 224.0.0.0/4     — multicast
+  /^2[45]\d\./,                                   // 240.0.0.0/4     — reserved + broadcast
 ];
 
 function isPrivateHost(h: string): boolean {

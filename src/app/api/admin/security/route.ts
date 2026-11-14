@@ -56,8 +56,12 @@ export async function POST(req: Request) {
       case "change_password": {
         const newPassword = String(body.newPassword || "").trim();
         const currentPassword = String(body.currentPassword || "");
-        if (newPassword.length < 6) {
+        // v1.1.1 (audit S1-M2): رمز ادمین حداقل ۱۲ کاراکتر (قبلش ۶ بود)
+        if (newPassword.length < 12) {
           return NextResponse.json({ ok: false, error: "password_too_short" }, { status: 400 });
+        }
+        if (newPassword.length > 128) {
+          return NextResponse.json({ ok: false, error: "password_too_long" }, { status: 400 });
         }
         if (!currentPassword) {
           return NextResponse.json({ ok: false, error: "current_password_required" }, { status: 400 });
@@ -100,7 +104,7 @@ export async function POST(req: Request) {
       }
 
       case "change_handle": {
-        const newHandle = String(body.newHandle || "").trim();
+        const newHandle = String(body.newHandle || "").trim().slice(0, 60);
         if (!newHandle) {
           return NextResponse.json({ ok: false, error: "empty_handle" }, { status: 400 });
         }
@@ -115,7 +119,8 @@ export async function POST(req: Request) {
       }
 
       case "change_name": {
-        const newName = String(body.newName || "").trim();
+        // v1.1.1 (audit S3-L4): محدودیت طول — مقدار در <title>، JSON-LD، hero و footer رندر می‌شود
+        const newName = String(body.newName || "").trim().slice(0, 120);
         const lang = String(body.lang || "en").slice(0, 3);
         if (!newName) {
           return NextResponse.json({ ok: false, error: "empty_name" }, { status: 400 });
@@ -134,7 +139,8 @@ export async function POST(req: Request) {
       }
 
       case "change_tagline": {
-        const newTagline = String(body.newTagline || "").trim();
+        // v1.1.1 (audit S3-L4): محدودیت طول
+        const newTagline = String(body.newTagline || "").trim().slice(0, 200);
         const lang = String(body.lang || "en").slice(0, 3);
         if (!["fa", "en", "de"].includes(lang)) {
           return NextResponse.json({ ok: false, error: "invalid_lang" }, { status: 400 });

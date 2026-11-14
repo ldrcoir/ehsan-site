@@ -30,10 +30,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "session_stale" });
     }
 
-    const access = await checkAccess(user.id);
+    // v1.1.1 (audit S1-M1): session revocation + schedule با token expiry چک می‌شود
+    const access = await checkAccess(user.id, session.expiresAt);
     if (!access.allowed) {
-      // لاگ دسترسی رد شده
-      await logAccess(user.id, access.reason, getClientIp(request), request.headers.get("user-agent"));
+      // لاگ دسترسی رد شده — v1.1.1: رویداد session_revoked لاگ نمی‌شود (جلوگیری از
+      // پر شدن AccessLog با polling بعد از logout)
+      if (access.reason !== "session_revoked") {
+        await logAccess(user.id, access.reason, getClientIp(request), request.headers.get("user-agent"));
+      }
     }
 
     return NextResponse.json({

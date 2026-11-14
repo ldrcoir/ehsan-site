@@ -9,7 +9,6 @@
 //   - انقضا + ساعت/روز مجاز در «هر درخواست» چک می‌شه (قبلاً فقط موقع login بود)
 // ============================================================================
 
-import crypto from "crypto";
 import { db } from "@/lib/db";
 import { getSessionFromRequest, pwTagOf } from "@/lib/access-auth";
 
@@ -66,6 +65,17 @@ export async function checkAdminAuth(request: Request): Promise<{ ok: boolean; u
 
     // v1.1: توکن‌های قدیمی (قبل از تغییر رمز) — pwTag دیگر با hash فعلی نمی‌خواند
     if (pwTagOf(user.passwordHash) !== session.pwTag) {
+      return { ok: false };
+    }
+
+    // v1.1.1 (audit S1-M1): session revocation هنگام logout.
+    // توکنِ صادرشده در زمان T در زمان T+24h منقضی می‌شود، پس T = expiresAt - 24h.
+    // اگر sessionsValidAfter بعد از T باشد یعنی توکن قبل از logout صادر شده → رد.
+    const SESSION_MS = 24 * 60 * 60 * 1000;
+    if (
+      user.sessionsValidAfter &&
+      session.expiresAt - SESSION_MS < user.sessionsValidAfter.getTime()
+    ) {
       return { ok: false };
     }
 

@@ -7,7 +7,7 @@ import { validateBaseUrl } from "@/lib/ssrf";
  * with fallback chain.
  */
 
-export type ProviderType = "openai" | "anthropic" | "ollama" | "groq" | "openrouter" | "custom";
+type ProviderType = "openai" | "anthropic" | "ollama" | "groq" | "openrouter" | "custom";
 
 // V18.1: validateBaseUrl moved to lib/ssrf.ts for shared use
 
@@ -24,7 +24,7 @@ interface ProviderConfig {
 /**
  * Get all enabled providers, sorted by priority (lowest first).
  */
-export async function getEnabledProviders(): Promise<ProviderConfig[]> {
+async function getEnabledProviders(): Promise<ProviderConfig[]> {
   const providers = await db.aiProvider.findMany({
     where: { enabled: true },
     orderBy: { priority: "asc" },
@@ -118,9 +118,14 @@ async function callOpenAI(provider: ProviderConfig, messages: any[]): Promise<st
     }),
   });
   if (!res.ok) {
-    const err = await res.text();
+    // v1.1.1 (audit S5-L5): بدنه‌ی خطا هم سقف دارد — پاسخ چند-گیگابایتی حافظه را نمی‌بلعد
+    const err = (await res.text()).slice(0, 2000);
     throw new Error(`OpenAI API error: ${res.status} ${err}`);
   }
+  // v1.1.1 (audit S5-L5): سقف حجم پاسخ — provider معیوب/پیکربندی بد نمی‌تواند OOM بسازد
+  const maxBytes = 5 * 1024 * 1024;
+  const lenHeader = parseInt(res.headers.get("content-length") || "0", 10);
+  if (lenHeader > maxBytes) throw new Error("Provider response too large");
   const data = await res.json();
   return data.choices[0]?.message?.content || "";
 }
@@ -147,9 +152,12 @@ async function callAnthropic(provider: ProviderConfig, messages: any[]): Promise
     }),
   });
   if (!res.ok) {
-    const err = await res.text();
+    const err = (await res.text()).slice(0, 2000); // v1.1.1 (S5-L5): سقف بدنه خطا
     throw new Error(`Anthropic API error: ${res.status} ${err}`);
   }
+  // v1.1.1 (audit S5-L5): سقف حجم پاسخ
+  const lenHeaderA = parseInt(res.headers.get("content-length") || "0", 10);
+  if (lenHeaderA > 5 * 1024 * 1024) throw new Error("Provider response too large");
   const data = await res.json();
   return data.content?.[0]?.text || "";
 }
@@ -171,9 +179,12 @@ async function callOllama(provider: ProviderConfig, messages: any[]): Promise<st
     }),
   });
   if (!res.ok) {
-    const err = await res.text();
+    const err = (await res.text()).slice(0, 2000); // v1.1.1 (S5-L5): سقف بدنه خطا
     throw new Error(`Ollama API error: ${res.status} ${err}`);
   }
+  // v1.1.1 (audit S5-L5): سقف حجم پاسخ
+  const lenHeaderO = parseInt(res.headers.get("content-length") || "0", 10);
+  if (lenHeaderO > 5 * 1024 * 1024) throw new Error("Provider response too large");
   const data = await res.json();
   return data.message?.content || "";
 }
@@ -199,9 +210,12 @@ async function callGroq(provider: ProviderConfig, messages: any[]): Promise<stri
     }),
   });
   if (!res.ok) {
-    const err = await res.text();
+    const err = (await res.text()).slice(0, 2000); // v1.1.1 (S5-L5): سقف بدنه خطا
     throw new Error(`Groq error: ${res.status} ${err}`);
   }
+  // v1.1.1 (audit S5-L5): سقف حجم پاسخ
+  const lenHeaderG = parseInt(res.headers.get("content-length") || "0", 10);
+  if (lenHeaderG > 5 * 1024 * 1024) throw new Error("Provider response too large");
   const data = await res.json();
   return data.choices[0]?.message?.content || "";
 }

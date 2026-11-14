@@ -54,6 +54,12 @@ const T = {
     networkError: "خطای شبکه",
     sendFailed: "ارسال پاسخ ناموفق بود",
     sessionDeleted: "این جلسه دیگر وجود ندارد.",
+    deleteSession: "🗑 حذف جلسه",
+    deleteAll: "🗑 حذف همه چت‌ها",
+    confirmDeleteSession: "این جلسه چت و همه پیام‌هایش حذف شود؟",
+    confirmDeleteAll: "همه جلسات چت و پیام‌ها حذف شوند؟ قابل بازگشت نیست!",
+    deleteFailed: "حذف ناموفق بود",
+    deleted: "✅ حذف شد",
   },
   en: {
     help: "💡 AI chat sessions from site visitors. Select a session to read its messages and reply directly.",
@@ -75,6 +81,12 @@ const T = {
     networkError: "Network error",
     sendFailed: "Reply could not be sent",
     sessionDeleted: "This session no longer exists.",
+    deleteSession: "🗑 Delete session",
+    deleteAll: "🗑 Delete all chats",
+    confirmDeleteSession: "Delete this chat session and all its messages?",
+    confirmDeleteAll: "Delete ALL chat sessions and messages? This cannot be undone!",
+    deleteFailed: "Delete failed",
+    deleted: "✅ Deleted",
   },
   de: {
     help: "💡 KI-Chat-Sitzungen der Besucher. Wählen Sie eine Sitzung, um die Nachrichten zu lesen und direkt zu antworten.",
@@ -96,6 +108,12 @@ const T = {
     networkError: "Netzwerkfehler",
     sendFailed: "Antwort konnte nicht gesendet werden",
     sessionDeleted: "Diese Sitzung existiert nicht mehr.",
+    deleteSession: "🗑 Sitzung löschen",
+    deleteAll: "🗑 Alle Chats löschen",
+    confirmDeleteSession: "Diese Sitzung und alle Nachrichten löschen?",
+    confirmDeleteAll: "ALLE Sitzungen und Nachrichten löschen? Nicht rückgängig machbar!",
+    deleteFailed: "Löschen fehlgeschlagen",
+    deleted: "✅ Gelöscht",
   },
 } as const;
 
@@ -181,6 +199,53 @@ export default function ChatSessionsPanel({ lang }: { lang: Lang }) {
     }
   }
 
+  // --- v1.1.1 (audit P1-G1): حذف جلسه چت — API از قبل وجود داشت (clear chat_session)
+  // ولی هیچ دکمه‌ای در UI به آن وصل نبود
+  async function deleteSession(sessionId: string) {
+    if (!confirm(t.confirmDeleteSession)) return;
+    try {
+      const res = await fetch("/api/admin/clear", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ target: "chat_session", id: sessionId }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data && data.ok) {
+        if (selectedRef.current === sessionId) setSelectedId(null);
+        setError("");
+        await loadSessions(true);
+      } else {
+        setError((data && data.error) || t.deleteFailed);
+      }
+    } catch {
+      setError(t.networkError);
+    }
+  }
+
+  // --- v1.1.1 (audit P1-G7): حذف همه چت‌ها — clear chat_all
+  async function deleteAllChats() {
+    if (!confirm(t.confirmDeleteAll)) return;
+    try {
+      const res = await fetch("/api/admin/clear", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ target: "chat_all" }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data && data.ok) {
+        setSelectedId(null);
+        setError("");
+        await loadSessions(true);
+      } else {
+        setError((data && data.error) || t.deleteFailed);
+      }
+    } catch {
+      setError(t.networkError);
+    }
+  }
+
   const selected = sessions?.find(s => s.id === selectedId) || null;
 
   return (
@@ -230,9 +295,20 @@ export default function ChatSessionsPanel({ lang }: { lang: Lang }) {
               <strong style={{ fontSize: "12px", color: "var(--text-dim, #4a7a4a)" }}>
                 {t.sessions} {sessions !== null && `(${sessions.length})`}
               </strong>
-              <button onClick={() => loadSessions()} className="dashboard-btn" style={{ fontSize: "11px", padding: "4px 10px" }}>
-                {t.refresh}
-              </button>
+              <div style={{ display: "flex", gap: "6px" }}>
+                <button onClick={() => loadSessions()} className="dashboard-btn" style={{ fontSize: "11px", padding: "4px 10px" }}>
+                  {t.refresh}
+                </button>
+                {sessions !== null && sessions.length > 0 && (
+                  <button
+                    onClick={deleteAllChats}
+                    className="dashboard-btn"
+                    style={{ fontSize: "11px", padding: "4px 10px", borderColor: "var(--red, #ff0040)", color: "var(--red, #ff0040)" }}
+                  >
+                    {t.deleteAll}
+                  </button>
+                )}
+              </div>
             </div>
 
             {sessions !== null && sessions.length === 0 && (
@@ -269,8 +345,26 @@ export default function ChatSessionsPanel({ lang }: { lang: Lang }) {
                         {s.messages.length} {t.messagesCount}
                       </span>
                     </div>
-                    <div style={{ fontSize: "10px", color: "var(--text-dim, #4a7a4a)", marginTop: "4px" }}>
-                      {t.lastUpdate}: {new Date(s.updatedAt).toLocaleString(localeOf(lang))}
+                    <div style={{ fontSize: "10px", color: "var(--text-dim, #4a7a4a)", marginTop: "4px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "6px" }}>
+                      <span>
+                        {t.lastUpdate}: {new Date(s.updatedAt).toLocaleString(localeOf(lang))}
+                      </span>
+                      <button
+                        onClick={e => { e.stopPropagation(); deleteSession(s.id); }}
+                        title={t.deleteSession}
+                        style={{
+                          fontSize: "10px",
+                          padding: "2px 8px",
+                          cursor: "pointer",
+                          background: "transparent",
+                          border: "1px solid var(--red, #ff0040)",
+                          borderRadius: "6px",
+                          color: "var(--red, #ff0040)",
+                          flexShrink: 0,
+                        }}
+                      >
+                        🗑
+                      </button>
                     </div>
                   </button>
                 );

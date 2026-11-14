@@ -88,6 +88,8 @@ CREATE TABLE IF NOT EXISTS ChatMessage (
 );
 CREATE INDEX IF NOT EXISTS idx_chatmsg_sessionId ON ChatMessage(sessionId);
 CREATE INDEX IF NOT EXISTS idx_chatmsg_createdAt ON ChatMessage(createdAt);
+-- v1.1.1 (audit Q4): ایندکس ترکیبی برای polling چت + سقف روزانه سراسری
+CREATE INDEX IF NOT EXISTS idx_chatmsg_session_created ON ChatMessage(sessionId, createdAt);
 
 -- ============================================================================
 -- SiteSetting (key-value)
@@ -329,6 +331,7 @@ CREATE TABLE IF NOT EXISTS AccessUser (
     active BOOLEAN NOT NULL DEFAULT 1,
     loginCount INTEGER NOT NULL DEFAULT 0,
     lastLoginAt DATETIME,
+    sessionsValidAfter DATETIME,
     deactivatedReason TEXT NOT NULL DEFAULT '',
     createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -349,6 +352,8 @@ CREATE TABLE IF NOT EXISTS AccessLog (
 CREATE INDEX IF NOT EXISTS idx_accesslog_userId ON AccessLog(userId);
 CREATE INDEX IF NOT EXISTS idx_accesslog_createdAt ON AccessLog(createdAt);
 CREATE INDEX IF NOT EXISTS idx_accesslog_action ON AccessLog(action);
+-- v1.1.1 (audit Q4): ایندکس ترکیبی برای users/logs (where userId ORDER BY createdAt DESC)
+CREATE INDEX IF NOT EXISTS idx_accesslog_user_created ON AccessLog(userId, createdAt);
 
 -- ============================================================================
 -- BlockedIp + SecurityLog
@@ -373,6 +378,8 @@ CREATE TABLE IF NOT EXISTS SecurityLog (
 CREATE INDEX IF NOT EXISTS idx_seclog_type ON SecurityLog(type);
 CREATE INDEX IF NOT EXISTS idx_seclog_ip ON SecurityLog(ip);
 CREATE INDEX IF NOT EXISTS idx_seclog_createdAt ON SecurityLog(createdAt);
+-- v1.1.1 (audit Q4): ایندکس ترکیبی برای recordSuspiciousActivity (شمارش ۱ ساعت اخیر)
+CREATE INDEX IF NOT EXISTS idx_seclog_type_ip_created ON SecurityLog(type, ip, createdAt);
 
 -- ============================================================================
 -- AparatClip
@@ -391,6 +398,50 @@ CREATE TABLE IF NOT EXISTS AparatClip (
 CREATE INDEX IF NOT EXISTS idx_aparatclip_visible_order ON AparatClip(visible, "order");
 """
 
+# ---------------------------------------------------------------------------
+# v1.1.1 (audit Q4): heal ستون‌های جاافتاده — مهم‌ترین فیکس مهاجرت.
+# CREATE TABLE IF NOT EXISTS فقط جدولِ صفر می‌سازد؛ اگر دیتابیس v1.0 یک ستون
+# اضافه‌شده در v1.1.x را نداشته باشد (مثلاً AccessUser.sessionsValidAfter)،
+# Prisma در runtime با "no such column" کرش می‌کرد و ادمین قفل می‌شد.
+# حالا PRAGMA table_info هر جدول را با SCHEMA_SQL مقایسه و ALTER TABLE می‌زنیم.
+# ---------------------------------------------------------------------------
+COLUMN_HEALS = {
+    "AccessUser": [
+        ("sessionsValidAfter", "DATETIME"),
+    ],
+}
+
+def heal_columns(conn):
+    cur = conn.cursor()
+    healed = 0
+    for table, columns in COLUMN_HEALS.items():
+        try:
+            cur.execute(f"PRAGMA table_info({table})")
+            existing = {row[1] for row in cur.fetchall()}
+        except Exception:
+            continue  # جدول هنوز ساخته نشده — CREATE TABLE بالا خودش ساخت
+        for col, coltype in columns:
+            if col not in existing:
+                cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {coltype}")
+                print(f"   + column healed: {table}.{col} ({coltype})")
+                healed += 1
+    conn.commit()
+    return healed
+
+
+def enable_wal(conn):
+    # v1.1.1 (audit Q3): WAL در سطح فایل هم ست می‌شود (durable — نه فقط per-connection)
+    try:
+        cur = conn.cursor()
+        cur.execute("PRAGMA journal_mode=WAL")
+        mode = cur.fetchone()[0]
+        cur.execute("PRAGMA busy_timeout=5000")
+        if str(mode).lower() == "wal":
+            print("   + WAL mode enabled")
+    except Exception as e:
+        print(f"   ! WAL skipped: {e}")
+
+
 def main():
     db_dir = os.path.dirname(DB_PATH)
     if not os.path.exists(db_dir):
@@ -400,12 +451,18 @@ def main():
 
     try:
         conn = sqlite3.connect(DB_PATH)
+        conn.execute("PRAGMA foreign_keys=ON")
+        enable_wal(conn)
         conn.executescript(SCHEMA_SQL)
         conn.commit()
+        healed = heal_columns(conn)
         cur = conn.cursor()
         cur.execute("SELECT count(*) FROM sqlite_master WHERE type='table'")
         count = cur.fetchone()[0]
-        print(f"✅ Schema applied — {count} tables created/verified in {DB_PATH}")
+        msg = f"✅ Schema applied — {count} tables created/verified"
+        if healed:
+            msg += f", {healed} column(s) healed"
+        print(f"{msg} in {DB_PATH}")
         conn.close()
     except Exception as e:
         print(f"ERROR: {e}")

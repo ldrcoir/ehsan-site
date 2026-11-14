@@ -439,6 +439,54 @@ function MessagesPanel({ lang }: { lang: Lang }) {
     }
   }
 
+  // v1.1.1 (audit P1-G2): lifecycle وضعیت پیام — علامت‌گذاری «خوانده‌شده»
+  // (schema از قبل status داشت ولی هیچ API/UI آن را تغییر نمی‌داد)
+  async function markRead(msgId: string) {
+    try {
+      const res = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ action: "set_status", id: msgId, status: "read" }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setMessages(prev => prev ? prev.map(m => m.id === msgId ? { ...m, status: "read" } : m) : prev);
+      } else {
+        setError(data.error || "status_failed");
+      }
+    } catch {
+      setError("network");
+    }
+  }
+
+  // v1.1.1 (audit P1-G7): پاک‌سازی همه پیام‌ها — اکشن message_all در API بود ولی
+  // هیچ دکمه‌ای به آن وصل نبود
+  async function deleteAllMessages() {
+    const sure = confirm(
+      lang === "fa" ? "همه پیام‌ها و پاسخ‌ها حذف شوند؟ قابل بازگشت نیست!"
+      : lang === "en" ? "Delete ALL messages and replies? This cannot be undone!"
+      : "ALLE Nachrichten löschen? Nicht rückgängig machbar!"
+    );
+    if (!sure) return;
+    try {
+      const res = await fetch("/api/admin/clear", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ target: "message_all" }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setMessages([]);
+      } else {
+        setError(data.error || "clear_failed");
+      }
+    } catch {
+      setError("network");
+    }
+  }
+
   if (loading) {
     return <div className="dashboard-empty-state">{lang === "fa" ? "در حال بارگذاری پیام‌ها..." : lang === "en" ? "Loading messages..." : "Nachrichten laden..."}</div>;
   }
@@ -449,6 +497,14 @@ function MessagesPanel({ lang }: { lang: Lang }) {
   const cancelLabel = lang === "fa" ? "✕ انصراف" : lang === "en" ? "✕ Cancel" : "✕ Abbrechen";
   const placeholder = lang === "fa" ? "پاسخ خود را بنویسید..." : lang === "en" ? "Type your reply..." : "Antwort eingeben...";
   const emptyLabel = lang === "fa" ? "پیامی دریافت نشده." : lang === "en" ? "No messages." : "Keine Nachrichten.";
+  // v1.1.1: برچسب‌های وضعیت
+  const readLabel = lang === "fa" ? "✓ خوانده" : lang === "en" ? "✓ Mark read" : "✓ Gelesen";
+  const deleteAllLabel = lang === "fa" ? "🗑️ حذف همه پیام‌ها" : lang === "en" ? "🗑️ Delete all" : "🗑️ Alle löschen";
+  const statusLabels: Record<string, string> = lang === "fa"
+    ? { new: "🆕 جدید", read: "👁 خوانده", replied: "↩ پاسخ داده شد", archived: "📦 بایگانی" }
+    : lang === "en"
+    ? { new: "🆕 new", read: "👁 read", replied: "↩ replied", archived: "📦 archived" }
+    : { new: "🆕 neu", read: "👁 gelesen", replied: "↩ beantwortet", archived: "📦 archiviert" };
 
   return (
     <div>
@@ -462,6 +518,14 @@ function MessagesPanel({ lang }: { lang: Lang }) {
         {lang === "en" && "💡 Messages from the contact form. You can reply or delete."}
         {lang === "de" && "💡 Nachrichten vom Kontaktformular. Sie können antworten oder löschen."}
       </div>
+      {/* v1.1.1: bulk delete — فقط وقتی حداقل یک پیام هست */}
+      {messages && messages.length > 0 && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+          <button onClick={deleteAllMessages} className="dashboard-btn danger" style={{ fontSize: "11px", padding: "4px 10px" }}>
+            {deleteAllLabel} ({messages.length})
+          </button>
+        </div>
+      )}
       {messages && messages.length === 0 ? (
         <p className="dashboard-empty-state">{emptyLabel}</p>
       ) : (
@@ -473,9 +537,15 @@ function MessagesPanel({ lang }: { lang: Lang }) {
                   <strong className="dashboard-message-name">{msg.name}</strong>
                   <span className="dashboard-message-email">{msg.email}</span>
                 </div>
-                <span className="dashboard-message-date">
-                  {new Date(msg.createdAt).toLocaleString("fa-IR")}
-                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {/* v1.1.1: نشان وضعیت پیام */}
+                  <span style={{ fontSize: "10px", color: "var(--text-dim, #4a7a4a)" }}>
+                    {statusLabels[msg.status as string] || statusLabels["new"]}
+                  </span>
+                  <span className="dashboard-message-date">
+                    {new Date(msg.createdAt).toLocaleString("fa-IR")}
+                  </span>
+                </div>
               </div>
               <p className="dashboard-message-text">{msg.message}</p>
               {msg.replies && msg.replies.length > 0 && (
@@ -492,6 +562,13 @@ function MessagesPanel({ lang }: { lang: Lang }) {
                   onClick={() => { setReplyingTo(msg.id); setReplyText(""); }}
                   className="dashboard-btn"
                 >{replyLabel}</button>
+                {/* v1.1.1: علامت‌گذاری خوانده‌شده — فقط برای پیام‌های جدید */}
+                {msg.status === "new" && (
+                  <button
+                    onClick={() => markRead(msg.id)}
+                    className="dashboard-btn"
+                  >{readLabel}</button>
+                )}
                 <button
                   onClick={() => deleteMessage(msg.id)}
                   className="dashboard-btn danger"

@@ -99,8 +99,14 @@ export async function PUT(
   }
   // اگه password ارسال شده، هش کن — v1.1: رمز کوتاه دیگه بی‌صدا نادیده گرفته نمی‌شه
   if (body.password !== undefined && body.password !== "") {
-    if (typeof body.password !== "string" || body.password.length < 6) {
+    // v1.1.1 (audit S1-M2): حداقل طول بر اساس نقش هدف — ادمین ۱۲، کاربر ۸
+    const targetRole = body.role !== undefined ? (body.role === "admin" ? "admin" : "user") : existing.role;
+    const minPw = targetRole === "admin" ? 12 : 8;
+    if (typeof body.password !== "string" || body.password.length < minPw) {
       return NextResponse.json({ ok: false, error: "password_too_short" }, { status: 400 });
+    }
+    if (body.password.length > 128) {
+      return NextResponse.json({ ok: false, error: "password_too_long" }, { status: 400 });
     }
     data.passwordHash = await hashPassword(body.password);
   }

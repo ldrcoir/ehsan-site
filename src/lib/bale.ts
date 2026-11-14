@@ -24,6 +24,26 @@ import { getSetting } from "@/lib/settings";
 
 const BALE_API_BASE = "https://api.bale.ai/v1/bots";
 
+// v1.1.1 (audit S5-L2): replay protection — Bale/Telegram روی پاسخ غیر-2xx دوباره
+// می‌فرستند و با secret لو رفته می‌شود ترافیک قبلی را replay کرد. LRU ساده از
+// update_id های پردازش‌شده.
+const seenUpdates = new Map<number, number>(); // updateId → firstSeenTs
+const SEEN_TTL_MS = 10 * 60 * 1000; // 10 دقیقه کافی است (redelivery سریع است)
+function isReplay(updateId: unknown): boolean {
+  if (typeof updateId !== "number" || !isFinite(updateId)) return false;
+  const now = Date.now();
+  // پاکسازی دوره‌ای
+  if (seenUpdates.size > 500) {
+    for (const [k, ts] of seenUpdates) {
+      if (now - ts > SEEN_TTL_MS) seenUpdates.delete(k);
+    }
+  }
+  const first = seenUpdates.get(updateId);
+  if (first !== undefined && now - first < SEEN_TTL_MS) return true;
+  seenUpdates.set(updateId, now);
+  return false;
+}
+
 // v1.1 (security): strip Markdown metacharacters from visitor-controlled text —
 // parse_mode: "Markdown" روی متن خام یعنی بازدیدکننده می‌تونه لینک جعلی داخل
 // نوتیفیکیشن ادمین تزریق کنه (phishing داخل پیام‌رسان ادمین)
@@ -119,13 +139,17 @@ export async function processBaleWebhook(body: any): Promise<{ ok: boolean; repl
   const message = body?.message;
   if (!message || !message.text) return { ok: false };
 
+  // v1.1.1 (audit S5-L2): همان update دوباره پردازش نشود
+  if (isReplay(body?.update_id)) return { ok: true, reply: undefined };
+
   // v1.1 (security): sender verification — secret header فقط ثابت می‌کنه درخواست
   // از پلتفرم Bale اومده، نه از ادمین. هر کاربر تصادفی تلگرام/بیل که handle ربات رو
   // پیدا کنه می‌تونه /disable بفرسته و AI chat سایت رو بکشه. حالا فقط chat.id
   // ادمینِ پیکربندی‌شده مجاز به اجرای فرمان‌هاست.
+  // v1.1.1 (audit S5-L3): fail-closed — اگر chatId تنظیم نشده باشد هیچ فرمانی اجرا نمی‌شود
   const config = await getBaleConfig();
-  if (config.chatId && String(message.chat?.id ?? "") !== String(config.chatId)) {
-    console.error("[bale] webhook command from unauthorized chat — ignored");
+  if (!config.chatId || String(message.chat?.id ?? "") !== String(config.chatId)) {
+    console.error("[bale] webhook command rejected — no configured chatId or unauthorized chat");
     return { ok: false };
   }
 
@@ -144,7 +168,8 @@ export async function processBaleWebhook(body: any): Promise<{ ok: boolean; repl
         return { ok: true, reply: "No messages yet." };
       }
       const list = msgs
-        .map((m, i) => `${i + 1}. ${m.name} (\`${m.id}\`)\n   ${m.message.slice(0, 80)}...`)
+        // v1.1.1 (audit S3-L3): mdSafe — متن بازدیدکننده Markdown parser را نشکند
+        .map((m, i) => `${i + 1}. ${mdSafe(m.name)} (\`${m.id}\`)\n   ${mdSafe(m.message.slice(0, 80))}...`)
         .join("\n\n");
       return { ok: true, reply: `*Recent messages:*\n\n${list}` };
     }

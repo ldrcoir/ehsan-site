@@ -8,12 +8,14 @@ import { db } from "@/lib/db";
  */
 export async function GET() {
   try {
-    const [books, articles, tutorials, skills, instructions, equipment, navItems, texts, settings, customThemes] = await Promise.all([
+    // v1.1.1 (audit P5-G1): aiInstructions از خروجی عمومی حذف شد — قواعد AI
+    // (system prompt) داده‌ی داخلی است؛ هیچ مصرف‌کننده‌ای در فرانت‌اند ندارد و
+    // فقط prompt سایت را به بازدیدکننده نشت می‌داد. سرور مستقیم از جدول می‌خواند.
+    const [books, articles, tutorials, skills, equipment, navItems, texts, settings, customThemes] = await Promise.all([
       db.book.findMany({ where: { visible: true }, orderBy: { order: "asc" } }),
       db.article.findMany({ where: { visible: true }, orderBy: { order: "asc" } }),
       db.tutorial.findMany({ where: { visible: true }, orderBy: { order: "asc" } }),
       db.skill.findMany({ where: { visible: true }, orderBy: { order: "asc" } }),
-      db.aiInstruction.findMany({ where: { enabled: true }, orderBy: { order: "asc" } }),
       db.labEquipment.findMany({ where: { visible: true }, orderBy: { order: "asc" } }),
       db.navItem.findMany({ where: { visible: true }, orderBy: { order: "asc" } }),
       db.siteText.findMany(),
@@ -45,7 +47,7 @@ export async function GET() {
         ...s,
         items: s.items.split(",").map((i: string) => i.trim()).filter(Boolean),
       })),
-      aiInstructions: instructions,
+      aiInstructions: [], // v1.1.1: حذف شد — قواعد AI داخلی است (P5-G1)
       equipment: equipment.map(e => ({
         ...e,
         specs: (() => {
@@ -65,7 +67,7 @@ export async function GET() {
           .filter(s => {
             // V1.1: کلیدهای عمومی — شامل تم/فونت پیش‌فرض، سوشال‌مدیا و سوییچ‌های نمایش بخش‌ها
             const PUBLIC_KEYS = new Set([
-              "apiEnabled", "adminDisplayName", "adminTagline", "adminStatus",
+              "apiEnabled",
               "handle", "name_fa", "name_en", "name_de",
               "tagline_fa", "tagline_en", "tagline_de",
               "visitorCount",
@@ -77,7 +79,8 @@ export async function GET() {
             const isPublicKey =
               PUBLIC_KEYS.has(s.key) || /^section\.[a-z]+\.visible$/.test(s.key);
             // belt-and-suspenders: هیچ کلیدی که شبیه secret/tokens باشه هرگز برنگرده
-            const looksSecret = /token|secret|password|forwardemail|apikey/i.test(s.key);
+            // v1.1.1 (audit P4): پوشش کلیدها کامل‌تر شد (credentials/webhook/api_key/key)
+            const looksSecret = /token|secret|password|forwardemail|apikey|api_key|credential|webhook|key/i.test(s.key);
             return isPublicKey && !looksSecret;
           })
           .map(s => [s.key, s.value])

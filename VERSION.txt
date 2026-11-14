@@ -1,9 +1,9 @@
 ================================================================
   PERSONAL SITE — VERSION HISTORY & DEPLOYMENT GUIDE
-  آخرین نسخه: v1.1
+  آخرین نسخه: v1.1 (revision 1.1.1)
 ================================================================
 
-## 📌 نسخه فعلی: v1.1
+## 📌 نسخه فعلی: v1.1 (rev 1.1.1 — ممیزی ۲۰ worker + رفع کامل)
 
 ⚠️ نکته‌ی تاریخچه: نسخه‌بندی عوض شد — «v1.1» جایگزین کل خط V17.x/V18.x
 می‌شه. هرچی قبلاً V18.3 و پایین‌تر بود، الان زیر چتر v1.1 جمع شده.
@@ -18,10 +18,11 @@ cd personal-site
 sudo ./install.sh
 
 ورود ادمین:
-  http://YOUR_IP:3000/user-login
+  http://YOUR_IP/user-login          ← پورت 80 (nginx جلوی سایت است)
   username: admin
-  password: (توسط install.sh چاپ می‌شه — رمز تصادفی)
+  password: (توسط install.sh چاپ می‌شه — رمز تصادفی؛ حداقل ۱۲ کاراکتر)
   ⚠️ رمز فقط یک بار موقع نصب نمایش داده می‌شه — یادداشتش کن!
+     (کپی امن: sudo cat db/.admin-initial-password.txt)
   ⚠️ حتماً از پنل → تنظیمات → تغییر رمز عوض کن!
 
 ================================================================
@@ -68,7 +69,7 @@ import-site.sh:
   ریست رمز ادمین (اگه فراموش کردی)
 ================================================================
 
-cd /home/ehsan/personal-site
+cd /path/to/personal-site      ← مسیر نصب هر جا که zip را باز کرده‌ای
 sudo bash scripts/reset-admin-password.sh
 → یه رمز تصادفی جدید تولید و «یک بار» چاپ می‌شه.
 
@@ -168,6 +169,57 @@ sudo bash scripts/reset-admin-password.sh
 ================================================================
   تاریخچه نسخه‌ها (خلاصه)
 ================================================================
+
+v1.1 rev 1.1.1 — ممیزی دوم با ۲۰ worker (۱۰ امنیتی + ۶ پنل + ۴ کد)؛
+    همه‌ی HIGH/MEDIUMهای پیدا‌شده رفع شد:
+  + امنیت:
+    · XSS در JSON-LD (نام سایت بدون escape) — escape کامل + محدودیت طول
+    · CSS injection مسیر create تم‌ها — اعتبارسنجی hex مثل update
+    · ip.ts fail-closed — TRUST_PROXY=true صریح لازم است؛ پیش‌فرض هدرها
+      نادیده گرفته می‌شوند + نرمال‌سازی IPv6 به /64 (ضد چرخش آی‌پی)
+    · logout حالا session را واقعاً باطل می‌کند (sessionsValidAfter)
+    · سیاست رمز: ادمین ≥۱۲، کاربر ≥۸ کاراکتر
+    · سقف روزانه‌ی سراسری چت AI (۳۰۰/روز، از DB — پایدار در restart)
+    · webhookها: fail-closed بدون chatId + replay dedup + mdSafe در /list
+    · middleware: رد قطعی transfer-encoding + نرمال‌سازی مسیر rate-limit +
+      طول SESSION_SECRET + هدرهای COOP/CORP
+    · SSRF: بازه‌های reserved جدید + سقف حجم پاسخ providerها
+    · formsubmit: encodeURIComponent + timeout 10s + redirect manual
+    · .dockerignore کامل (backups/، .env.*، *.db، zips) + کانتینر با user
+      node + build داخل image + integrity_check دیتابیس در boot
+    · install.sh: bind روی 127.0.0.1، umask 077، چک root، نصب unzip،
+      certbot --redirect، پورت SSH پویا در ufw، systemd hardening،
+      رمز ادمین هم در فایل 600 ذخیره می‌شود
+    · nginx: 127.0.0.1 صریح، client_max_body_size 1m، map websocket،
+      timeout 120s
+    · حذف IP واقعی سرور از Caddyfile (info leak) + robots.txt دیگر مسیرهای
+      خصوصی را تبلیغ نمی‌کند
+  + دیتابیس:
+    · WAL + busy_timeout + connection_limit=1 + احترام به DATABASE_URL در db.ts
+    · apply_schema.py حالا ستون‌های جاافتاده را heal می‌کند (مهاجرت
+      v1.0→v1.1.1 بدون قفل‌شدن ادمین) + ۳ ایندکس ترکیبی جدید
+    · visitorCount اتمیک ($executeRaw upsert) + قابل تصحیح از پنل
+    · retention خودکار لاگ‌ها (>۳۰ روز) در بک‌آپ شبانه
+  + پنل ادمین (گاف‌های کامل بودن):
+    · حذف جلسه چت + حذف همه چت‌ها (UI به clear API وصل شد)
+    · وضعیت پیام (new/read/replied) — نشان + دکمه خواندم + reply→replied
+    · دکمه «حذف همه پیام‌ها» + بلاک دستی IP در تب آمار
+    · فیلدهای FA/DE کتاب/مقاله/آموزش/مهارت در ContentManager
+    · تم سفارشی حالا می‌تواند پیش‌فرض بازدیدکننده‌ها شود (dropdown + custom-
+      <id>)
+    · سیستم‌پرامپت AI از پنل قابل ویرایش (متن‌ها → ai.system_prompt)
+    · whoami ترمینال نام/تیتر DB را نشان می‌دهد
+    · اشکالات: specs [object Object]، پیام تکراری چت (clock skew)،
+      feedback بی‌صدای NavMenu/TextEditor/bulk import، خطاهای unmapped کاربران
+    · aiInstructions از خروجی عمومی /api/content حذف شد (نشت پرامپت)
+    · RSS نام را از DB می‌خواند؛ sitemap بخش‌های مخفی را حذف می‌کند؛
+      شماره‌گذاری بخش‌ها اصلاح شد (chat 06، clips 07، contact 08)
+  + کیفیت:
+    · whitelist فیلدها در content/equipment + bulk_import گزارش خطا می‌دهد
+    · clips update حالا patch-semantics است (full-replace حذف شد)
+    · cleanup: ۸ import مرده، ۴ export داخلی، bun.lock، کلیدهای مرده تنظیمات
+    · .env.example در ریپو + docs اصلاح شد (پورت 80، lsof→ss، webhook دستی،
+      مسیر نصب پویا)
 
 v1.1 — نسخه‌بندی جدید؛ جایگزین و مقدم بر کل خط V17.x/V18.x:
   + پنل ادمین ۱۲ تبی (چت‌ها و آمار اضافه شد)

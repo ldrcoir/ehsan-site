@@ -1,8 +1,6 @@
 import { checkAdminAuth } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { PERSONAL } from "@/lib/content";
-import { sendBaleMessage } from "@/lib/bale";
 
 /**
  * POST /api/admin/reply
@@ -42,6 +40,14 @@ export async function POST(req: Request) {
 
     const saved = await db.messageReply.create({
       data: { messageId, reply: replyText },
+    });
+
+    // v1.1.1 (audit Q4/P1): lifecycle وضعیت پیام — بعد از پاسخ ادمین، status به
+    // "replied" می‌رود (قبلاً هیچ کدی هرگز status را عوض نمی‌کرد و همه پیام‌ها
+    // برای همیشه "new" می‌ماندند)
+    await db.contactMessage.update({
+      where: { id: messageId },
+      data: { status: "replied" },
     });
 
     return NextResponse.json({

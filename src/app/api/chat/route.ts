@@ -39,8 +39,12 @@ function rateLimit(ip: string): boolean {
 // V1.1: prompt is DB-driven — name/tagline/handle come from SiteSetting and
 // the extra rules come from the AiInstruction table (admin "AI Rules" tab).
 // PERSONAL (lib/content.ts) is only the fallback when the DB is empty.
+// v1.1.1 (audit P1-G5): اگر ادمین کلید SiteText «ai.system_prompt» را ست کرده
+// باشد، همان متن به‌صورت verbatim جایگزین کل پرامپت می‌شود (فقط بلوک قواعد
+// سفارشی AiInstruction به انتهای آن چسبانده می‌شود) — قبلاً بدنه پرامپت
+// کاملاً هاردکد بود و از پنل قابل تغییر نبود.
 async function buildSystemPrompt(lang: Lang): Promise<string> {
-  const [settingRows, instructions] = await Promise.all([
+  const [settingRows, instructions, customPromptRow] = await Promise.all([
     db.siteSetting.findMany({
       where: {
         key: {
@@ -53,6 +57,7 @@ async function buildSystemPrompt(lang: Lang): Promise<string> {
       },
     }),
     db.aiInstruction.findMany({ where: { enabled: true }, orderBy: { order: "asc" } }),
+    db.siteText.findUnique({ where: { key: "ai.system_prompt" } }),
   ]);
 
   const settings: Record<string, string> = {};
@@ -76,6 +81,12 @@ async function buildSystemPrompt(lang: Lang): Promise<string> {
         .map((c) => `- ${c}`)
         .join("\n")}`
     : "";
+
+  // v1.1.1 (audit P1-G5): پرامپت سفارشی ادمین — verbatim + بلوک قواعد AiInstruction
+  const customPrompt = (customPromptRow?.valueEn || "").trim();
+  if (customPrompt) {
+    return customPrompt.slice(0, 8000) + customBlock;
+  }
 
   return `You are the AI concierge on ${name}'s personal portfolio website.
 ${name} (handle: @${handle}) is: ${tagline}.
@@ -171,10 +182,42 @@ export async function POST(req: Request) {
     // --- v1.1 (security): سقف روزانه هزینه AI — ۴۰ پیام به‌ازای هر IP در شبانه‌روز.
     // قبلاً تنها توقفِ هزینه، kill switch دستی بود؛ مهاجم می‌توانست با چرخش
     // visitorId/session توکن ارائه‌دهنده‌ها را بسوزاند.
+    // v1.1.1 (audit S6-H1): سقف «سراسری» روزانه هم اضافه شد و از DB شمرده می‌شود —
+    // شمارنده‌ی in-memory با هر restart صفر می‌شد و با چرخش IPv6 قابل دور زدن بود.
+    // حالا تعداد پیام‌های امروز از خود جدول ChatMessage شمرده می‌شود (پایدار در برابر
+    // restart) و اگر مجموع روز از GLOBAL_DAILY_CHAT_CAP گذشت، LLM کلاً خاموش می‌شود.
     const DAILY_CHAT_CAP = 40;
+    const GLOBAL_DAILY_CHAT_CAP = 300;
+    const dayStart = new Date();
+    dayStart.setUTCHours(0, 0, 0, 0);
+    const [todayUserMsgs, todayIpMsgs] = await Promise.all([
+      db.chatMessage.count({
+        where: { role: "user", createdAt: { gte: dayStart } },
+      }),
+      ip
+        ? db.chatMessage.count({
+            where: { role: "user", createdAt: { gte: dayStart }, session: { ip } },
+          })
+        : Promise.resolve(0),
+    ]);
+    if (todayUserMsgs >= GLOBAL_DAILY_CHAT_CAP) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "daily_limit",
+          message: lang === "fa"
+            ? "سقف پیام‌های روزانه سایت پر شده است. فردا دوباره تلاش کنید."
+            : lang === "de"
+            ? "Tageslimit der Website erreicht. Bitte morgen erneut versuchen."
+            : "Site-wide daily limit reached. Please try again tomorrow.",
+        },
+        { status: 429 }
+      );
+    }
     const dayBucket = new Date().toISOString().slice(0, 10);
     const dailyKey = `${dayBucket}:${ip || "unknown"}`;
-    const dailyHits = (chatDailyUsage.get(dailyKey) || 0) + 1;
+    // شمارنده in-memory فقط به‌عنوان fast-path؛ مرز واقعی = max(Map, DB count)
+    const dailyHits = Math.max((chatDailyUsage.get(dailyKey) || 0) + 1, todayIpMsgs + 1);
     if (dailyHits > DAILY_CHAT_CAP) {
       return NextResponse.json(
         {

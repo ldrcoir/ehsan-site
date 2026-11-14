@@ -136,7 +136,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // v1.1: JSON-LD name از دیتابیس (همان منبع <title>) — قبلاً "Personal Site" هاردکد بود
+  // v1.1.1 (audit S3-H1): JSON-LD name از دیتابیس (همان منبع <title>) — قبلاً "Personal Site" هاردکد بود
   let siteNameJson = FALLBACK_SITE_NAME;
   try {
     const rows = await db.siteSetting.findMany({
@@ -148,6 +148,23 @@ export default async function RootLayout({
   } catch {
     // build بدون DB — fallback
   }
+  // v1.1.1 (audit S3-H1): JSON.stringify کاراکترهای < > & را escape نمی‌کند؛
+  // یک مقدار مخرب مثل `x</script><img onerror=...>` می‌توانست تگ script را بشکند و
+  // XSS در همه‌ی صفحات بسازد. escape صریح قبل از embed.
+  const jsonLd = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: siteNameJson,
+    url: siteUrl,
+    potentialAction: {
+      "@type": "SearchAction",
+      target: `${siteUrl}/?q={search_term_string}`,
+      "query-input": "required name=search_term_string",
+    },
+  })
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026");
 
   return (
     <html lang="en" dir="ltr" suppressHydrationWarning>
@@ -165,22 +182,10 @@ export default async function RootLayout({
             `,
           }}
         />
-        {/* JSON-LD structured data برای SEO بهتر — v1.1: name از siteName (نه هاردکد) */}
+        {/* JSON-LD structured data برای SEO بهتر — v1.1.1: name از DB + escape ضد XSS */}
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              "@context": "https://schema.org",
-              "@type": "WebSite",
-              name: siteNameJson,
-              url: siteUrl,
-              potentialAction: {
-                "@type": "SearchAction",
-                target: `${siteUrl}/?q={search_term_string}`,
-                "query-input": "required name=search_term_string",
-              },
-            }),
-          }}
+          dangerouslySetInnerHTML={{ __html: jsonLd }}
         />
       </head>
       <body

@@ -2,7 +2,8 @@
 # Caddyfile — ۳ دامنه با SSL خودکار (Let's Encrypt) — v1.1
 # ============================================================================
 # Caddy خودش SSL می‌گیره — نیازی به certbot نیست
-# فقط DNS رو به 31.70.76.10 ست کن، بقیه‌ش با Caddy
+# v1.1.1 (audit S7-M1): IP واقعی سرور از فایل public حذف شد (info leak) —
+# فقط DNS خودتان را به IP سرور خودتان اشاره دهید، بقیه‌ش با Caddy
 #
 # v1.1 (security pass 2):
 #   - header_up X-Real-IP {remote_host} اضافه شد — Caddy به‌طور پیش‌فرض

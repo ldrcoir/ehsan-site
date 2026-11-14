@@ -30,10 +30,12 @@ export function sanitizeEmbed(input: string): string {
   // بررسی دامنه‌ی مجاز
   try {
     const url = new URL(src);
-    // V18.3 (security): protocol check — فقط http/https مجازه.
+    // V18.3 (security): protocol check — فقط https مجازه.
+    // v1.1.1 (audit S5-L6): http: هم حذف شد — روی سایت HTTPS، iframe HTTP به‌خاطر
+    // mixed-content بلاک می‌شود و فقط هشدار کنسول می‌سازد.
     // قبلاً فقط hostname چک می‌شد → payload مثل
     // <iframe src="javascript://aparat.com/%0a..."> پاس می‌شد (XSS).
-    if (url.protocol !== "https:" && url.protocol !== "http:") {
+    if (url.protocol !== "https:") {
       return "";
     }
     if (!ALLOWED_DOMAINS.includes(url.hostname)) {

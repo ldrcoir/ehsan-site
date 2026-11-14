@@ -26,6 +26,17 @@ if (typeof setInterval !== "undefined") {
  */
 export async function GET(req: Request) {
   try {
+    // v1.1.1 (audit S2-L3/S6-L1): rate limit قبل از هر DB lookup — قبلاً
+    // findUnique اول اجرا می‌شد و درخواست‌های نامعتبر DB را بی‌ throttle می‌خواندند
+    const ip = getClientIpSafe(req);
+    const now = Date.now();
+    const arr = (msgRateLimit.get(ip) || []).filter(t => now - t < MSG_RATE_WINDOW);
+    if (arr.length >= MSG_RATE_MAX) {
+      return NextResponse.json({ ok: false, error: "rate_limit" }, { status: 429 });
+    }
+    arr.push(now);
+    msgRateLimit.set(ip, arr);
+
     const url = new URL(req.url);
     const sessionId = url.searchParams.get("sessionId") || "";
     const since = url.searchParams.get("since") || "0";
@@ -51,17 +62,6 @@ export async function GET(req: Request) {
     if (session.visitorId !== reqVisitorId) {
       return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
     }
-
-    // V17.9: rate limit per IP (جلوگیری از sessionId enumeration)
-    // V18.2: use shared IP helper
-    const ip = getClientIpSafe(req);
-    const now = Date.now();
-    const arr = (msgRateLimit.get(ip) || []).filter(t => now - t < MSG_RATE_WINDOW);
-    if (arr.length >= MSG_RATE_MAX) {
-      return NextResponse.json({ ok: false, error: "rate_limit" }, { status: 429 });
-    }
-    arr.push(now);
-    msgRateLimit.set(ip, arr);
 
     const sinceDate = new Date(parseInt(since, 10) || 0);
 

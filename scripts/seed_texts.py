@@ -79,6 +79,9 @@ essential_texts = [
      ">> Patched through. I'm the site's AI concierge. What brings you here today?",
      ">> Verbindung hergestellt. Ich bin der KI-Concierge der Seite. Was führt dich her?",
      ">> اتصال برقرار شد. من دستیار هوش مصنوعی سایت هستم. چه چیزی امروز اینجا آوردت؟"),
+    # --- v1.1.1 (audit P1-G5): سیستم‌پرامپت AI — خالی = پرامپت پیش‌فرض؛ هر متنی
+    # که ادمین اینجا بنویسد جایگزین کامل پرامپت می‌شود (Text tab → بخش ai)
+    ("ai.system_prompt", "", "", ""),
 ]
 
 count = 0

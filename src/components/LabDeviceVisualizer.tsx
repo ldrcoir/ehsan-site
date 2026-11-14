@@ -401,7 +401,7 @@ export default function LabDeviceVisualizer({ category, specs }: Props) {
       // === ANTI-COPY PROTECTION ===
       import("@/lib/canvas-protect").then(({ watermarkCanvas }) => {
         watermarkCanvas(ctx, w, h);
-      });
+      }).catch(() => {}); // v1.1.1 (Q3)
     };
 
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;

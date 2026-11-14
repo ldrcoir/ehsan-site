@@ -195,9 +195,12 @@ export async function POST(req: Request) {
       .then(async ({ getSetting }) => {
         const forwardEmail = await getSetting("forwardEmail");
         if (forwardEmail) {
-          await fetch(`https://formsubmit.co/ajax/${forwardEmail}`, {
+          // v1.1.1 (audit S5-L4): encodeURIComponent + timeout + redirect manual
+          await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(forwardEmail)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            redirect: "manual",
+            signal: AbortSignal.timeout(10_000),
             body: JSON.stringify({
               _subject: `📨 New message from ${name}`,
               _template: "table",

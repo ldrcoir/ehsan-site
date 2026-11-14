@@ -6,6 +6,23 @@ import { getSetting } from "@/lib/settings";
  * API base: https://api.telegram.org/bot<token>/<method>
  */
 
+// v1.1.1 (audit S5-L2): replay protection — همان update دوباره پردازش نشود
+const seenUpdates = new Map<number, number>(); // updateId → firstSeenTs
+const SEEN_TTL_MS = 10 * 60 * 1000;
+function isReplay(updateId: unknown): boolean {
+  if (typeof updateId !== "number" || !isFinite(updateId)) return false;
+  const now = Date.now();
+  if (seenUpdates.size > 500) {
+    for (const [k, ts] of seenUpdates) {
+      if (now - ts > SEEN_TTL_MS) seenUpdates.delete(k);
+    }
+  }
+  const first = seenUpdates.get(updateId);
+  if (first !== undefined && now - first < SEEN_TTL_MS) return true;
+  seenUpdates.set(updateId, now);
+  return false;
+}
+
 // v1.1 (security): strip Markdown metacharacters — جلوگیری از تزریق لینک جعلی
 // داخل نوتیفیکیشن ادمین (parse_mode: "Markdown" روی متن خام بازدیدکننده)
 function mdSafe(s: string): string {
@@ -80,11 +97,15 @@ export async function processTelegramWebhook(body: any): Promise<{ ok: boolean; 
   const message = body?.message;
   if (!message || !message.text) return { ok: false };
 
+  // v1.1.1 (audit S5-L2): replay dedup
+  if (isReplay(body?.update_id)) return { ok: true, reply: undefined };
+
   // v1.1 (security): sender verification — فقط chat.id ادمینِ پیکربندی‌شده مجاز است
   // (هر کاربر تلگرامی که handle ربات را پیدا کند وگرنه می‌توانست /disable بزند)
+  // v1.1.1 (audit S5-L3): fail-closed — بدون chatId پیکربندی‌شده هیچ فرمانی اجرا نمی‌شود
   const config = await getTelegramConfig();
-  if (config.chatId && String(message.chat?.id ?? "") !== String(config.chatId)) {
-    console.error("[telegram] webhook command from unauthorized chat — ignored");
+  if (!config.chatId || String(message.chat?.id ?? "") !== String(config.chatId)) {
+    console.error("[telegram] webhook command rejected — no configured chatId or unauthorized chat");
     return { ok: false };
   }
 
@@ -99,8 +120,9 @@ export async function processTelegramWebhook(body: any): Promise<{ ok: boolean; 
         select: { id: true, name: true, message: true, createdAt: true },
       });
       if (msgs.length === 0) return { ok: true, reply: "No messages yet." };
+      // v1.1.1 (audit S3-L3): mdSafe — متن بازدیدکننده Markdown parser را نشکند
       return { ok: true, reply: "*Recent messages:*\n\n" + msgs.map((m, i) =>
-        `${i + 1}. ${m.name} (\`${m.id}\`)\n   ${m.message.slice(0, 80)}...`).join("\n\n") };
+        `${i + 1}. ${mdSafe(m.name)} (\`${m.id}\`)\n   ${mdSafe(m.message.slice(0, 80))}...`).join("\n\n") };
     }
     case "/reply": {
       const messageId = parts[1]; const replyText = parts.slice(2).join(" ");

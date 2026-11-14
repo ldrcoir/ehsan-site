@@ -375,7 +375,7 @@ export default function RealOscilloscope({
       // Anti-copy watermark
       import("@/lib/canvas-protect").then(({ watermarkCanvas }) => {
         watermarkCanvas(ctx, w, h);
-      });
+      }).catch(() => {}); // v1.1.1 (Q3): chunk-load failure → unhandled rejection نباشد
     };
 
     if (!reduce) {

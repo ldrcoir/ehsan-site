@@ -62,4 +62,26 @@ chmod 600 "$BACKUP_FILE.gz"
 # نگه‌داری ۷ نسخه‌ی آخر — بقیه حذف
 ls -t "$BACKUP_DIR"/db_*.gz 2>/dev/null | tail -n +$((MAX_BACKUPS + 1)) | xargs -r rm 2>/dev/null || true
 
+# ---------------------------------------------------------------------------
+# v1.1.1 (audit S6-M3): retention لاگ‌ها — جدول‌های PageView / SecurityLog /
+# AccessLog هر رویداد را برای همیشه نگه می‌داشتند و با سوءاستفادهی چرخش IP
+# دیسک پر می‌شد. حالا nightly، ردیف‌های قدیمی‌تر از ۳۰ روز پاک می‌شوند.
+# مقایسه با strftime epoch-ms برای ردیف‌های INTEGERِ Prisma درست است؛
+# ردیف‌های TEXT قدیمی (seed) هرگز < عدد نیستند → حذف نمی‌شوند (امن).
+# ---------------------------------------------------------------------------
+if command -v sqlite3 >/dev/null 2>&1; then
+    CUTOFF_MS=$(( $(date -u +%s) - 30*86400 ))000
+    PRUNED=$(sqlite3 "$DB_FILE" "
+        DELETE FROM PageView WHERE createdAt < $CUTOFF_MS;
+        SELECT changes();
+        DELETE FROM SecurityLog WHERE createdAt < $CUTOFF_MS;
+        SELECT changes();
+        DELETE FROM AccessLog WHERE createdAt < $CUTOFF_MS;
+        SELECT changes();
+    " 2>/dev/null | paste -sd+ - | bc 2>/dev/null || echo "?")
+    echo "[$STAMP] retention: لاگ‌های قدیمی‌تر از ۳۰ روز پاک شد ($PRUNED ردیف)"
+    # VACUUM سبک بعد از پاکسازی — فضای دیسک واقعاً آزاد شود
+    sqlite3 "$DB_FILE" "PRAGMA wal_checkpoint(TRUNCATE);" 2>/dev/null || true
+fi
+
 echo "[$STAMP] بک‌آپ ذخیره شد: $BACKUP_FILE.gz (نگه‌داری: $MAX_BACKUPS نسخه‌ی آخر)"

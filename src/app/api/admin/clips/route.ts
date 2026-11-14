@@ -69,16 +69,18 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
+      // v1.1.1 (audit P5-G7): update patch-semantics — قبلاً full-replace بود و
+      // ذخیره بدون embedCode، embed را خالی و order را صفر می‌کرد
+      const data: Record<string, unknown> = {};
+      if (body.title !== undefined) data.title = String(body.title).slice(0, 200);
+      if (rawEmbed) data.embedCode = safeEmbed;
+      if (body.description !== undefined) data.description = String(body.description).slice(0, 2000);
+      if (body.category !== undefined) data.category = String(body.category).slice(0, 60);
+      if (body.visible !== undefined) data.visible = Boolean(body.visible);
+      if (body.order !== undefined) data.order = Math.max(0, Number(body.order) || 0);
       const clip = await db.aparatClip.update({
         where: { id: String(body.id) },
-        data: {
-          title: String(body.title || "").slice(0, 200),
-          embedCode: safeEmbed,
-          description: String(body.description || "").slice(0, 2000),
-          category: String(body.category || "general").slice(0, 60),
-          visible: body.visible !== false,
-          order: Math.max(0, Number(body.order) || 0),
-        },
+        data,
       });
       return NextResponse.json({ ok: true, clip });
     }

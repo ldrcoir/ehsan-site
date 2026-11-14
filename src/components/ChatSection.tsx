@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { UI, PERSONAL, type Lang } from "@/lib/content";
+import { UI, type Lang } from "@/lib/content";
 
 type Msg = { role: "user" | "assistant"; content: string; ts: number };
 
@@ -58,31 +58,42 @@ export default function ChatSection({ lang, welcomeText, title, subtitle, callsi
     }
   }, [messages]);
 
-  // State for polling
-  const [lastPollTs, setLastPollTs] = useState(Date.now());
-
   // Poll for new messages from admin (via Bale or admin panel)
+  // v1.1.1 (audit Q1): dedupe بر اساس id پیام — قبلاً بر اساس timestamp با ساعتِ
+  // کلاینت بود؛ skew بین ساعت سرور و کلاینت باعث پیام‌های تکراری می‌شد.
+  // همچنین dependency به lastPollTs حذف شد (interval دیگر بعد از هر پاسخ
+  // teardown/build نمی‌شود).
+  const lastPollTsRef = useRef(Date.now());
+  const seenMsgIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!sessionId) return;
+    lastPollTsRef.current = Date.now();
     const pollInterval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/chat/messages?sessionId=${sessionId}&since=${lastPollTs}&visitorId=${encodeURIComponent(visitorId)}`);
+        const res = await fetch(`/api/chat/messages?sessionId=${sessionId}&since=${lastPollTsRef.current}&visitorId=${encodeURIComponent(visitorId)}`);
         const data = await res.json();
         if (data.ok && data.messages && data.messages.length > 0) {
           setMessages((prev) => {
-            const newMsgs = data.messages.map((m: any) => ({
+            // فقط پیام‌هایی که قبلاً دیده نشده‌اند (assistant های جدید)
+            const fresh = data.messages.filter((m: any) => {
+              if (!m.id || seenMsgIdsRef.current.has(m.id)) return false;
+              seenMsgIdsRef.current.add(m.id);
+              return true;
+            });
+            if (fresh.length === 0) return prev;
+            const newMsgs = fresh.map((m: any) => ({
               role: "assistant" as const,
               content: m.content,
               ts: new Date(m.createdAt).getTime(),
             }));
             return [...prev, ...newMsgs];
           });
-          setLastPollTs(data.serverTime || Date.now());
+          lastPollTsRef.current = data.serverTime || lastPollTsRef.current;
         }
       } catch {}
     }, 3000);
     return () => clearInterval(pollInterval);
-  }, [sessionId, lastPollTs]);
+  }, [sessionId, visitorId]);
 
   const send = async (e: FormEvent) => {
     e.preventDefault();
@@ -111,8 +122,10 @@ export default function ChatSection({ lang, welcomeText, title, subtitle, callsi
           ...prev,
           { role: "assistant", content: data.reply, ts: Date.now() },
         ]);
-        // Update poll timestamp to avoid re-fetching this reply
-        setLastPollTs(Date.now());
+        // v1.1.1 (audit Q1): این پاسخ AI را از dedupe poll مستثنا کن — id آن را
+        // در Set ببین‌ها ثبت می‌کنیم تا poll بعدی همان را تکرار نکند
+        if (data.messageId) seenMsgIdsRef.current.add(data.messageId);
+        lastPollTsRef.current = Date.now();
       } else {
         const err = data.error || "server_error";
         const msg =
@@ -152,7 +165,8 @@ export default function ChatSection({ lang, welcomeText, title, subtitle, callsi
     <section className="section" id="chat">
       <div className="container">
         <header className="section-head">
-          <p className="section-eyebrow">07 — {lang === "fa" ? "گفت‌وگو" : lang === "de" ? "chat" : "chat"}</p>
+          {/* v1.1.1 (audit P2): شماره ۰۶ — قبلاً chat و clips هر دو «07» بودند */}
+          <p className="section-eyebrow">06 — {lang === "fa" ? "گفت‌وگو" : lang === "de" ? "chat" : "chat"}</p>
           <h2 className="section-title">{L.title}</h2>
           <p className="section-subtitle">{L.sub}</p>
         </header>

@@ -129,29 +129,43 @@ export default function ContentManager({ lang }: { lang: string }) {
   };
 
   const bulkImport = async () => {
+    let parsed: unknown;
     try {
-      const parsed = JSON.parse(bulkText);
-      if (!Array.isArray(parsed)) { alert("Must be JSON array"); return; }
-      const endpoint = activeType === "equipment" ? "equipment" : "content";
+      parsed = JSON.parse(bulkText);
+    } catch {
+      alert("Invalid JSON");
+      return;
+    }
+    if (!Array.isArray(parsed)) { alert("Must be JSON array"); return; }
+    const endpoint = activeType === "equipment" ? "equipment" : "content";
+    try {
       const res = await fetch(`/api/admin/${endpoint}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ type: activeType, action: "bulk_import", items: parsed }),
       });
       const data = await res.json();
-      if (data.ok) {
-        alert(`Imported ${data.created} of ${data.total}`);
+      // v1.1.1 (audit P3/Q1): خطای bulk_import دیگر بی‌صدا نیست — قبلاً else
+      // هیچ کاری نمی‌کرد و catch مشترک شبکه را "Invalid JSON" گزارش می‌داد
+      if (data && data.ok) {
+        const failedInfo = data.failed > 0 ? ` — FAILED: ${data.failed}${Array.isArray(data.errors) && data.errors.length ? "\n" + data.errors.join("\n") : ""}` : "";
+        alert(`Imported ${data.created} of ${data.total}${failedInfo}`);
         setBulkText(""); setShowBulk(false); loadItems();
+      } else {
+        alert("Import failed: " + ((data && (data.error || data.detail)) || `HTTP ${res.status}`));
       }
-    } catch { alert("Invalid JSON"); }
+    } catch {
+      alert("Network error during import");
+    }
   };
 
   const getEmptyItem = (): Item => {
     if (activeType === "equipment") return { name: "", model: "", category: "general", status: "online", description: "", specs: "", visible: true, order: 0 };
-    if (activeType === "book") return { titleEn: "", year: "2025", publisherEn: "", descEn: "", cover: "linear-gradient(135deg,#003b00,#00ff41)", link: "#", visible: true, order: 0 };
-    if (activeType === "article") return { titleEn: "", venueEn: "", date: "2025-01", typeEn: "Article", summaryEn: "", link: "#", visible: true, order: 0 };
-    if (activeType === "tutorial") return { titleEn: "", duration: "00:00", levelEn: "Beginner", descEn: "", embedUrl: "", platform: "aparat", visible: true, order: 0 };
-    if (activeType === "skill") return { categoryEn: "", items: "", visible: true, order: 0 };
+    // v1.1.1 (audit P1-G4): همه‌ی فیلدهای FA/DE که سایت عمومی رندر می‌کند اضافه شدند
+    if (activeType === "book") return { titleEn: "", titleFa: "", titleDe: "", year: "2025", publisherEn: "", publisherFa: "", publisherDe: "", descEn: "", descFa: "", descDe: "", cover: "linear-gradient(135deg,#003b00,#00ff41)", link: "#", visible: true, order: 0 };
+    if (activeType === "article") return { titleEn: "", titleFa: "", titleDe: "", venueEn: "", venueFa: "", venueDe: "", date: "2025-01", typeEn: "Article", typeFa: "", typeDe: "", summaryEn: "", summaryFa: "", summaryDe: "", link: "#", visible: true, order: 0 };
+    if (activeType === "tutorial") return { titleEn: "", titleFa: "", titleDe: "", duration: "00:00", levelEn: "Beginner", levelFa: "", levelDe: "", descEn: "", descFa: "", descDe: "", embedUrl: "", platform: "aparat", visible: true, order: 0 };
+    if (activeType === "skill") return { categoryEn: "", categoryFa: "", categoryDe: "", items: "", visible: true, order: 0 };
     return { name: "", content: "", enabled: true, order: 0 };
   };
 
@@ -168,34 +182,53 @@ export default function ContentManager({ lang }: { lang: string }) {
     book: [
       { key: "titleEn", label: "Title (EN)", type: "text" },
       { key: "titleFa", label: "Title (FA)", type: "text" },
+      { key: "titleDe", label: "Title (DE)", type: "text" },
       { key: "year", label: "Year", type: "text" },
       { key: "publisherEn", label: "Publisher (EN)", type: "text" },
+      { key: "publisherFa", label: "Publisher (FA)", type: "text" },
+      { key: "publisherDe", label: "Publisher (DE)", type: "text" },
       { key: "descEn", label: "Description (EN)", type: "textarea" },
+      { key: "descFa", label: "Description (FA)", type: "textarea" },
+      { key: "descDe", label: "Description (DE)", type: "textarea" },
       { key: "cover", label: "Cover (CSS gradient)", type: "text" },
       { key: "link", label: "Link", type: "text" },
       { key: "order", label: "Order", type: "number" },
     ],
     article: [
       { key: "titleEn", label: "Title (EN)", type: "text" },
+      { key: "titleFa", label: "Title (FA)", type: "text" },
+      { key: "titleDe", label: "Title (DE)", type: "text" },
       { key: "venueEn", label: "Venue (EN)", type: "text" },
+      { key: "venueFa", label: "Venue (FA)", type: "text" },
+      { key: "venueDe", label: "Venue (DE)", type: "text" },
       { key: "date", label: "Date (YYYY-MM)", type: "text" },
       { key: "typeEn", label: "Type (EN)", type: "text" },
+      { key: "typeFa", label: "Type (FA)", type: "text" },
+      { key: "typeDe", label: "Type (DE)", type: "text" },
       { key: "summaryEn", label: "Summary (EN)", type: "textarea" },
+      { key: "summaryFa", label: "Summary (FA)", type: "textarea" },
+      { key: "summaryDe", label: "Summary (DE)", type: "textarea" },
       { key: "link", label: "Link", type: "text" },
       { key: "order", label: "Order", type: "number" },
     ],
     tutorial: [
       { key: "titleEn", label: "Title (EN)", type: "text" },
       { key: "titleFa", label: "Title (FA)", type: "text" },
+      { key: "titleDe", label: "Title (DE)", type: "text" },
       { key: "duration", label: "Duration (mm:ss)", type: "text" },
       { key: "levelEn", label: "Level (EN)", type: "text" },
+      { key: "levelFa", label: "Level (FA)", type: "text" },
+      { key: "levelDe", label: "Level (DE)", type: "text" },
       { key: "embedUrl", label: "Embed URL", type: "text" },
       { key: "descEn", label: "Description (EN)", type: "textarea" },
+      { key: "descFa", label: "Description (FA)", type: "textarea" },
+      { key: "descDe", label: "Description (DE)", type: "textarea" },
       { key: "order", label: "Order", type: "number" },
     ],
     skill: [
       { key: "categoryEn", label: "Category (EN)", type: "text" },
       { key: "categoryFa", label: "Category (FA)", type: "text" },
+      { key: "categoryDe", label: "Category (DE)", type: "text" },
       { key: "items", label: "Items (comma-separated)", type: "textarea" },
       { key: "order", label: "Order", type: "number" },
     ],
@@ -284,7 +317,24 @@ export default function ContentManager({ lang }: { lang: string }) {
                 {item.description && <div>{item.description}</div>}
               </div>
               <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                <button className="btn btn-ghost btn-sm" onClick={() => setEditing({ ...item })}>edit</button>
+                {/* v1.1.1 (audit P3): specs/items ممکن است object/array باشند (GET آن‌ها را
+                    parse کرده) — هنگام باز شدن ادیتور به string تبدیل می‌شوند؛ وگرنه
+                    textarea مقدار [object Object] می‌گرفت و ذخیره داده را خراب می‌کرد */}
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => {
+                    const copy: Item = { ...item };
+                    if (activeType === "equipment" && copy.specs && typeof copy.specs !== "string") {
+                      copy.specs = JSON.stringify(copy.specs, null, 2);
+                    }
+                    if (activeType === "skill" && Array.isArray(copy.items)) {
+                      copy.items = (copy.items as string[]).join(", ");
+                    }
+                    setEditing(copy);
+                  }}
+                >
+                  edit
+                </button>
                 <button className="btn btn-ghost btn-sm" onClick={() => toggleItem(item.id || "")}>{item.visible === false || item.enabled === false ? "show" : "hide"}</button>
                 <button className="btn btn-ghost btn-sm" onClick={() => deleteItem(item.id || "")} style={{ color: "var(--red)" }}>delete</button>
               </div>

@@ -150,12 +150,17 @@ export async function POST(request: NextRequest) {
         role: user.role,
       },
     });
-    // ست کردن cookie — httpOnly برای جلوگیری از XSS، secure بر اساس NODE_ENV
-    // در production فقط secure:true (روی HTTP نمیشه ست کرد)
-    // در development (NODE_ENV !== production) secure:false تا روی localhost کار کنه
+    // ست کردن cookie — httpOnly برای جلوگیری از XSS
+    // v1.1.1 (audit S1-L3): secure بر اساس پروتکل واقعی درخواست (نه NODE_ENV) —
+    // روی HTTPS همیشه Secure، روی HTTPِ اولیه (قبل از certbot) login کار می‌کند.
+    // قبلاً به NODE_ENV گره خورده بود و استقرار بدون NODE_ENV=production کوکی را
+    // بدون Secure می‌فرستاد حتی روی HTTPS.
+    const requestIsHttps =
+      new URL(request.url).protocol === "https:" ||
+      request.headers.get("x-forwarded-proto") === "https";
     response.cookies.set("access_session", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: requestIsHttps,
       sameSite: "strict",
       path: "/",
       maxAge: 60 * 60 * 24, // 24 ساعت

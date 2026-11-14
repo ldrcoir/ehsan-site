@@ -81,8 +81,16 @@ export default function TextEditor({ lang }: { lang: string }) {
           delete next[key];
           return next;
         });
+        setErrMsg("");
+        setSavedKey(key);
+        setTimeout(() => setSavedKey(null), 2000);
+      } else {
+        // v1.1.1 (audit P3): حذف ناموفق دیگر بی‌صدا نیست
+        setErrMsg(fa ? `حذف ناموفق (${data.error || res.status})` : `delete failed (${data.error || res.status})`);
       }
-    } catch {}
+    } catch {
+      setErrMsg(fa ? "خطای شبکه هنگام حذف" : "network error while deleting");
+    }
   };
 
   // V1.1: add a new key (editable row — saved via the row's save button)

@@ -83,7 +83,7 @@ export function createSessionToken(userId: string, passwordHash: string): string
 // برمی‌گردونه: { userId, expiresAt, pwTag } اگه امضا و ساختار معتبر باشه.
 // توجه: pwTag اینجا فقط از توکن استخراج می‌شه؛ مقایسه با passwordHash فعلی
 // کاربر (جلوگیری از توکنِ قدیمی بعد از تغییر رمز) در checkAdminAuth انجام می‌شه.
-export function verifySessionToken(token: string): { userId: string; expiresAt: number; pwTag: string } | null {
+function verifySessionToken(token: string): { userId: string; expiresAt: number; pwTag: string } | null {
   try {
     const decoded = Buffer.from(token, "base64").toString("utf8");
     const parts = decoded.split(".");
@@ -117,10 +117,18 @@ export function verifySessionToken(token: string): { userId: string; expiresAt: 
 // 4. اگه allowedHourStart/End تعریف شده و ساعت فعلی در بازه نیست → رد
 //
 // نکته: ساعت و روز بر اساس UTC بررسی می‌شه تا با سرور همخوان باشه.
-export async function checkAccess(userId: string): Promise<{ allowed: boolean; reason: string }> {
+export async function checkAccess(userId: string, tokenExpiresAt?: number): Promise<{ allowed: boolean; reason: string }> {
   const user = await db.accessUser.findUnique({ where: { id: userId } });
   if (!user) return { allowed: false, reason: "user_not_found" };
   if (!user.active) return { allowed: false, reason: "access_denied_inactive" };
+
+  // v1.1.1 (audit S1-M1): توکن‌های صادرشده قبل از logout — رد (session revocation)
+  const SESSION_MS = 24 * 60 * 60 * 1000;
+  if (tokenExpiresAt && user.sessionsValidAfter) {
+    if (tokenExpiresAt - SESSION_MS < user.sessionsValidAfter.getTime()) {
+      return { allowed: false, reason: "session_revoked" };
+    }
+  }
 
   const now = new Date();
   // بررسی انقضا

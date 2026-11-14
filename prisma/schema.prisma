@@ -351,6 +351,10 @@ model AccessUser {
   loginCount      Int      @default(0)
   // آخرین ورود موفق
   lastLoginAt     DateTime?
+  // v1.1.1 (audit S1-M1): session revocation هنگام logout — توکن‌هایی که قبل از
+  // این زمان صادر شده‌اند (expiresAt - 24h) دیگر پذیرفته نمی‌شوند. بدون این فیلد،
+  // logout فقط کوکی را پاک می‌کرد و توکن مسروقه تا ۲۴ ساعت قابل replay بود.
+  sessionsValidAfter DateTime?
   // علت غیرفعال‌سازی (برای لاگ)
   deactivatedReason String @default("")
   createdAt       DateTime @default(now())

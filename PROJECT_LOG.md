@@ -103,3 +103,29 @@
 - docker-compose: پورت فقط localhost + NODE_ENV=production
 
 ### V18.3 و قبل‌تر — تاریخچه کامل در git log
+
+---
+
+## v1.1 rev 1.1.1 (2026-11-14) — ممیزی دوم با ۲۰ worker
+
+۲۰ worker ممیزی: ۱۰ امنیتی + ۶ کامل بودن پنل + ۴ کیفیت کد.
+همه‌ی یافته‌های HIGH/MEDIUM رفع شد — جزئیات کامل در VERSION.txt (بخش rev 1.1.1).
+
+خلاصه:
+- امنیت: XSS JSON-LD، CSS injection create تم، ip.ts fail-closed + IPv6 /64،
+  logout revocation (sessionsValidAfter)، سیاست رمز ۱۲/۸، سقف سراسری چت AI،
+  webhook fail-closed + replay dedup، middleware TE/path/secret + COOP/CORP،
+  SSRF ranges + response cap، formsubmit encode/timeout، .dockerignore کامل،
+  Docker USER node + build در image، install.sh (loopback/umask/certbot --redirect/
+  systemd hardening)، nginx صریح، حذف IP از Caddyfile، robots.txt بدون مسیر خصوصی
+- دیتابیس: WAL + busy_timeout + DATABASE_URL در db.ts؛ apply_schema.py ستون‌heal
+  (مهاجرت بدون قفل) + ۳ ایندکس؛ visitorCount اتمیک؛ retention لاگ ۳۰ روزه
+- پنل: حذف چت‌سشن/همه چت‌ها، status پیام، حذف همه پیام‌ها، بلاک دستی IP،
+  فیلدهای FA/DE محتوا، تم سفارشی به‌عنوان پیش‌فرض، سیستم‌پرامپت از پنل،
+  whoami ترمینال DB-driven، فیکس specs/پیام تکراری/feedbackها، حذف نشت aiInstructions،
+  RSS/sitemap DB-driven، شماره‌گذاری بخش‌ها
+- کیفیت: whitelist فیلدها، bulk_import گزارش خطا، clips patch-semantics،
+  cleanup imports/exports، .env.example در ریپو، docs اصلاح (پورت 80/lsof/webhook)
+
+تست: tsc ۰ خطا، build تمیز، smoke-test (login/logout-revocation/themes/status) سبز،
+zip 19MB بدون secret/db.

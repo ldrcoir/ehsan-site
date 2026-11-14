@@ -91,6 +91,11 @@ const T = {
     attempts: "تلاش",
     reason: "دلیل",
     unknownReason: "—",
+    blockIp: "بلاک دستی IP",
+    blockPlaceholder: "مثلاً 203.0.113.7 یا 2001:db8::/64",
+    blockBtn: "🚫 بلاک",
+    invalidIp: "IP نامعتبر است",
+    blockDone: "IP بلاک شد",
   },
   en: {
     help: "💡 Site view & content stats plus security overview (blocked IPs, recent events). Auto-refreshes every 60 seconds.",
@@ -121,6 +126,11 @@ const T = {
     attempts: "attempts",
     reason: "Reason",
     unknownReason: "—",
+    blockIp: "Manually block IP",
+    blockPlaceholder: "e.g. 203.0.113.7 or 2001:db8::/64",
+    blockBtn: "🚫 Block",
+    invalidIp: "Invalid IP address",
+    blockDone: "IP blocked",
   },
   de: {
     help: "💡 Seiten- und Inhaltsstatistiken sowie Sicherheitsübersicht (gesperrte IPs, letzte Ereignisse). Aktualisiert sich alle 60 Sekunden automatisch.",
@@ -151,6 +161,11 @@ const T = {
     attempts: "Versuche",
     reason: "Grund",
     unknownReason: "—",
+    blockIp: "IP manuell sperren",
+    blockPlaceholder: "z.B. 203.0.113.7 oder 2001:db8::/64",
+    blockBtn: "🚫 Sperren",
+    invalidIp: "Ungültige IP-Adresse",
+    blockDone: "IP gesperrt",
   },
 } as const;
 
@@ -166,6 +181,9 @@ export default function StatsSecurityPanel({ lang }: { lang: Lang }) {
   const [error, setError] = useState("");
   const [busyIp, setBusyIp] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
+  // v1.1.1: بلاک دستی IP
+  const [blockInput, setBlockInput] = useState("");
+  const [blocking, setBlocking] = useState(false);
   const loadedRef = useRef(false);
 
   // --- Load stats + security data ---
@@ -252,6 +270,38 @@ export default function StatsSecurityPanel({ lang }: { lang: Lang }) {
       setError(t.networkError);
     } finally {
       setClearing(false);
+    }
+  }
+
+  // --- v1.1.1 (audit P1-G8): بلاک دستی IP — API اکشن block از قبل بود، UI نداشت
+  const IP_RE = /^(?:\d{1,3}(?:\.\d{1,3}){3}|[0-9a-fA-F:]{2,45}|[0-9a-fA-F:]{2,45}\:\/\d{1,3})$/;
+  async function blockIp() {
+    const ip = blockInput.trim();
+    if (!ip || blocking) return;
+    if (!IP_RE.test(ip)) {
+      setError(t.invalidIp);
+      return;
+    }
+    setBlocking(true);
+    try {
+      const res = await fetch("/api/admin/security-dashboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ action: "block", ip, reason: "Manual block (admin panel)" }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data && data.ok) {
+        setBlockInput("");
+        setError(t.blockDone);
+        await load(true);
+      } else {
+        setError((data && data.error) || "block_failed");
+      }
+    } catch {
+      setError(t.networkError);
+    } finally {
+      setBlocking(false);
     }
   }
 
@@ -362,6 +412,35 @@ export default function StatsSecurityPanel({ lang }: { lang: Lang }) {
               <strong style={{ fontSize: "12px", color: "var(--text-dim, #4a7a4a)", display: "block", marginBottom: "8px" }}>
                 🚫 {t.blockedIps}
               </strong>
+              {/* v1.1.1: بلاک دستی */}
+              <div style={{ display: "flex", gap: "6px", marginBottom: "8px", flexWrap: "wrap" }}>
+                <input
+                  value={blockInput}
+                  onChange={e => setBlockInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") blockIp(); }}
+                  placeholder={t.blockPlaceholder}
+                  dir="ltr"
+                  style={{
+                    flex: "1 1 200px",
+                    fontSize: "12px",
+                    padding: "6px 10px",
+                    background: "var(--bg-panel, #050505)",
+                    border: "1px solid var(--border, #1a3a1a)",
+                    borderRadius: "6px",
+                    color: "var(--text, #c8facc)",
+                    fontFamily: "var(--font-mono, monospace)",
+                    minWidth: "0",
+                  }}
+                />
+                <button
+                  onClick={blockIp}
+                  className="dashboard-btn danger"
+                  disabled={blocking || !blockInput.trim()}
+                  style={{ fontSize: "11px", padding: "6px 12px", opacity: blocking || !blockInput.trim() ? 0.6 : 1 }}
+                >
+                  {blocking ? t.unblocking : t.blockBtn}
+                </button>
+              </div>
               {security && security.blockedIps && security.blockedIps.length > 0 ? (
                 <div className="dashboard-messages-list" style={{ gap: "6px" }}>
                   {security.blockedIps.map(b => (

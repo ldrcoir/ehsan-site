@@ -117,8 +117,10 @@ async function hasValidSession(cookieHeader: string): Promise<boolean> {
   const token = cookies["access_session"];
   if (!token) return false;
   // V18.3: بدون secret هیچ توکنی قابل verify نیست → fail-closed
+  // v1.1.1 (audit S1-L2): طول/placeholder secret هم مثل access-auth چک می‌شود —
+  // با secret ضعیف توکن جعلی نمی‌تواند gate صفحه dashboard را رد کند
   const secret = process.env.SESSION_SECRET;
-  if (!secret) return false;
+  if (!secret || secret.length < 32) return false;
   try {
     // Edge runtime: Buffer ممکنه موجود نباشه → atob() برای base64 decode
     let tokenValue = token;
@@ -176,6 +178,9 @@ function addSecurityHeaders(res: NextResponse, pathname?: string): NextResponse 
   res.headers.set("X-Frame-Options", "DENY");
   res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
+  // v1.1.1 (audit S4-L2): isolation headers
+  res.headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  res.headers.set("Cross-Origin-Resource-Policy", "same-origin");
   res.headers.set("X-XSS-Protection", "0"); // مرورگرهای مدرن از CSP استفاده می‌کنن
   res.headers.set("X-Powered-By", ""); // مخفی کردن Next.js
   // V18.3 (security): no-store برای مسیرهای حساس
@@ -222,7 +227,10 @@ export async function middleware(req: NextRequest) {
   const cookieHeader = req.headers.get("cookie") || "";
 
   // --- 1. Rate limit برای login/contact/chat/track ---
-  const rateLimit = RATE_LIMIT_PATHS[pathname];
+  // v1.1.1 (audit S4-M2): نرمال‌سازی مسیر قبل از lookup — /api/track/ و //api/track
+  // نباید از lookup فرار کنند
+  const normalizedPath = pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+  const rateLimit = RATE_LIMIT_PATHS[normalizedPath];
   if (rateLimit) {
     // V18.2: use shared IP helper (prefer x-real-ip, then last XFF entry)
     const ip = getClientIpSafe(req);
@@ -288,9 +296,10 @@ export async function middleware(req: NextRequest) {
       );
       return addSecurityHeaders(res, pathname);
     }
-    // V18.3 (security): chunked-encoding bypass — درخواست با transfer-encoding
-    // و بدون content-length از چک بالا رد می‌شه (chunked → content-length ست نیست)
-    if (req.headers.get("transfer-encoding") && !contentLengthHeader) {
+    // V18.3 (security) + v1.1.1 (audit S4-M4): هر درخواستی با transfer-encoding
+    // روی body-methods رد می‌شه — ترکیب Content-Length کوچک + بدنه chunked بزرگ
+    // می‌توانست از چک بالا عبور کند (RFC: framing برنده TE است)
+    if (req.headers.get("transfer-encoding")) {
       const res = NextResponse.json(
         { ok: false, error: "payload_too_large" },
         { status: 413 }

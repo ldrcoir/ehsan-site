@@ -11,9 +11,8 @@ const DEFAULTS: Record<string, string> = {
   baleEnabled: "false",
   baleBotToken: "",
   baleChatId: "",
-  adminDisplayName: "",
-  adminTagline: "",
-  adminStatus: "",
+  // v1.1.1 (audit P4): کلیدهای مرده adminDisplayName/adminTagline/adminStatus حذف شدند —
+  // هیچ مصرف‌کننده و مسیر ویرایشی نداشتند و فقط PUBLIC_KEYS را آلوده می‌کردند
   visitorCount: "0",
 };
 
@@ -21,16 +20,6 @@ export async function getSetting(key: string): Promise<string> {
   const row = await db.siteSetting.findUnique({ where: { key } });
   if (row) return row.value;
   return DEFAULTS[key] ?? "";
-}
-
-export async function getSettings(keys: string[]): Promise<Record<string, string>> {
-  const rows = await db.siteSetting.findMany({ where: { key: { in: keys } } });
-  const result: Record<string, string> = {};
-  for (const k of keys) {
-    const row = rows.find((r) => r.key === k);
-    result[k] = row ? row.value : DEFAULTS[k] ?? "";
-  }
-  return result;
 }
 
 export async function setSetting(key: string, value: string): Promise<void> {
@@ -46,9 +35,5 @@ export async function isApiEnabled(): Promise<boolean> {
   return v === "true";
 }
 
-export async function incrementVisitorCount(): Promise<number> {
-  const current = parseInt(await getSetting("visitorCount"), 10) || 0;
-  const next = current + 1;
-  await setSetting("visitorCount", String(next));
-  return next;
-}
+// v1.1.1 (audit Q2): getSettings و incrementVisitorCount حذف شدند — export مرده
+// بودند (هیچ importی نداشتند) و track route منطق خودش را inline دارد.

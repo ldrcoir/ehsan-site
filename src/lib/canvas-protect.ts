@@ -29,7 +29,7 @@ const DEPLOYMENT_ID = "EHSANMORAD-V19-2026";
  * Check if running on an authorized domain.
  * Returns false if someone copies the code to another domain.
  */
-export function isAuthorizedDomain(): boolean {
+function isAuthorizedDomain(): boolean {
   if (typeof window === "undefined") return true; // SSR — allow
   const host = window.location.hostname;
   return AUTHORIZED_DOMAINS.some(d => host === d || host.endsWith("." + d));

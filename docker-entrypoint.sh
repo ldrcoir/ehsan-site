@@ -21,6 +21,14 @@ echo "[1/5] Creating db directory..."
 mkdir -p /app/db
 touch /app/db/custom.db
 
+# v1.1.1 (audit Q3-L): corrupt vs empty — با integrity_check تشخیص داده می‌شود،
+# نه شمارش جدول (فایل خراب هم «0 جدول» می‌داد و بوتِ خرابِ بی‌صدا می‌ساخت)
+DB_OK=$(sqlite3 /app/db/custom.db "PRAGMA quick_check;" 2>/dev/null || echo "corrupt")
+if [ "$DB_OK" != "ok" ]; then
+    echo "❌ FATAL: database file exists but is corrupt (quick_check=$DB_OK)"
+    echo "   Restore from backups/ or import-site.sh — refusing to boot on corrupt DB."
+    exit 1
+fi
 DB_EMPTY=$(sqlite3 /app/db/custom.db "SELECT count(*) FROM sqlite_master WHERE type='table';" 2>/dev/null || echo "0")
 
 echo ""

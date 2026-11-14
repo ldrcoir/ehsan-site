@@ -206,7 +206,8 @@ add_heading("۲. پیش‌نیازها", 1)
 add_bullet("سرور Ubuntu 22.04 یا 24.04 (VPS)")
 add_bullet("حداقل ۱ گیگابایت RAM (install.sh خودش swap می‌سازه)")
 add_bullet("دسترسی root (یا sudo)")
-add_bullet("پورت 3000 آزاد (سایت روی همین پورت بالا میاد)")
+# v1.1.1 (audit P6): متن پورت اصلاح شد — پورت 3000 فقط داخل سرور است؛ nginx پورت 80 جلو است
+add_bullet("پورت‌های 80 و 443 باز (بازدیدکنندگان از nginx وارد می‌شن؛ app فقط روی 127.0.0.1:3000 گوش می‌ده)")
 add_bullet("یک دامنه (اختیاری — برای HTTPS و reCAPTCHA)")
 add_para("نکته: اگر دامنه ندارید، سایت با IP و HTTP کار می‌کنه؛ بعداً همیشه می‌تونید دامنه اضافه کنید.")
 
@@ -236,12 +237,15 @@ add_para("install.sh خودش این کارها رو انجام می‌ده: swa
 # ۴. ورود ادمین و تغییر رمز
 # ============================================================================
 add_heading("۴. ورود ادمین و تغییر رمز", 1)
-add_para("بعد از نصب، به این آدرس برید:")
-add_code("http://YOUR_IP:3000/user-login")
+# v1.1.1 (audit P6): آدرس پورت 3000 → پورت 80 (nginx) — 3000 فایروال‌شده و loopback است
+add_para("بعد از نصب، به این آدرس برید (پورت 80 — nginx جلوی سایت است):")
+add_code("http://YOUR_IP/user-login")
 add_bullet("username: admin")
 add_bullet("password: همان رمز تصادفی که install.sh چاپ کرد")
+add_para("اگر رمز را همان لحظه ندیده‌اید، روی سرور این فایل را بخوانید (فقط root):")
+add_code("sudo cat /path/to/personal-site/db/.admin-initial-password.txt")
 add_para("بعد از اولین ورود، حتماً رمز رو عوض کنید:", bold=True)
-add_para("پنل → تب «تنظیمات» → بخش Password → رمز جدید (نیاز به current password داره).")
+add_para("پنل → تب «تنظیمات» → بخش Password → رمز جدید (حداقل ۱۲ کاراکتر — نیاز به current password داره).")
 add_para("اگر رمز رو فراموش کردید، روی سرور این رو اجرا کنید:")
 add_code("sudo bash scripts/reset-admin-password.sh")
 add_para("این اسکریپت یک رمز تصادفی جدید می‌سازه و فقط یک بار چاپش می‌کنه.")
@@ -258,7 +262,8 @@ add_bullet("Site Key و Secret Key رو بگیرید")
 add_para("بعد در فایل .env روی سرور این دو خط رو پر کنید:")
 add_code(
     """
-# nano /home/ehsan/personal-site/.env
+# مسیر نصب هر جا که zip را باز کرده‌اید (همان پوشه‌ی install.sh)
+# nano /path/to/personal-site/.env
 RECAPTCHA_SECRET="<secret-key>"
 NEXT_PUBLIC_RECAPTCHA_SITEKEY="<site-key>"
 """
@@ -277,16 +282,18 @@ add_bullet("اگر موقع نصب دامنه فعال بوده، install.sh خ�
 add_para("اگر بعداً خواستید دستی فعال کنید:")
 add_code(
     """
-sudo certbot --nginx -d YOUR_DOMAIN -d www.YOUR_DOMAIN
+sudo certbot --nginx -d YOUR_DOMAIN -d www.YOUR_DOMAIN --redirect
 """
 )
-add_para("تمدید خودکار certificate هم نصب می‌شه (systemd timer.certbot).")
+# v1.1.1 (audit P6): نام واحد systemd اصلاح شد + redirect ذکر شد
+add_para("تمدید خودکار certificate هم نصب می‌شه (certbot.timer). فلگ --redirect باعث می‌شه HTTP به HTTPS ریدایرکت بشه.")
 
 # ============================================================================
 # ۷. پنل ادمین — ۱۲ تب
 # ============================================================================
 add_heading("۷. پنل ادمین — ۱۲ تب", 1)
-add_para("ورود: http://YOUR_IP:3000/user-login → بعد از لاگین، پنل کامل باز می‌شه.")
+# v1.1.1: آدرس ورود از طریق nginx
+add_para("ورود: http://YOUR_IP/user-login → بعد از لاگین، پنل کامل باز می‌شه.")
 add_bullet("داشبورد — نمای کلی و آخرین رخدادها")
 add_bullet("پیام‌ها — دیدن/پاسخ/حذف پیامهای فرم تماس")
 add_bullet("چت‌ها — دیدن چت‌های بازدیدکننده‌ها و جواب‌دادن بهشون (جدید در v1.1)")
@@ -319,8 +326,10 @@ ollama pull llama3.2
 """
 )
 add_para("بعد در تنظیمات، provider رو روی Ollama بذارید (آدرس http://127.0.0.1:11434).")
-add_para("تب «AI Rules» قواعد رو مستقیم به system prompt چت می‌فرسته — "
-         "یعنی شخصیت و محدودیت‌های چت رو همین‌جا تعریف کنید (wired در v1.1).")
+# v1.1.1 (audit P6): AI Rules داخل تب «محتوا» است، نه تب جدا
+add_para("بخش «AI Rules» داخل تب «محتوا» قواعد رو مستقیم به system prompt چت می‌فرسته — "
+         "یعنی شخصیت و محدودیت‌های چت رو همین‌جا تعریف کنید. متن کامل پرامپت هم از "
+         "تب «متن‌ها» با کلید ai.system_prompt قابل تغییره (خالی = پرامپت پیش‌فرض).")
 
 # ============================================================================
 # ۹. ربات‌های Bale / Telegram
@@ -332,7 +341,19 @@ add_bullet("Token ربات رو کپی کنید")
 add_bullet("chatId خودتون رو بگیرید (برای Telegram: @userinfobot)")
 add_bullet("در پنل → تنظیمات → بخش Bale/Telegram، token و chatId رو وارد کنید")
 add_bullet("با دکمه‌ی «Test» ارسال رو امتحان کنید")
-add_para("Webhookها به‌صورت خودکار با secret امن تنظیم می‌شن (تو .env هست).")
+# v1.1.1 (audit P6): webhook خودکار ست نمی‌شود — دستی با هدر secret
+add_para("Webhook باید دستی ثبت بشه (یک بار):")
+add_code(
+    """
+curl -X POST "https://api.bale.ai/v1/bots<BOT_TOKEN>/setWebhook" \\
+  -H "Content-Type: application/json" \\
+  -d '{"url": "https://YOUR_DOMAIN/api/bale/webhook"}'
+
+# Secret فقط با هدر ارسال می‌شه (تو .env هست):
+#   x-webhook-secret: <BALE_WEBHOOK_SECRET از .env>
+"""
+)
+add_para("برای Telegram هم مشابه با آدرس api.telegram.org و مسیر /api/telegram/webhook.")
 
 # ============================================================================
 # ۱۰. مدیریت کاربران دسترسی
@@ -379,7 +400,8 @@ add_para("install.sh یک cron نصب می‌کنه:")
 add_code(
     """
 # /etc/cron.d/personal-site-backup
-0 3 * * * root cd /home/ehsan/personal-site && bash scripts/auto-backup.sh \\
+# مسیر نصب هر جا که zip را باز کرده‌اید (install.sh خودش مسیر واقعی را می‌نویسد)
+0 3 * * * root cd /path/to/personal-site && bash scripts/auto-backup.sh \\
   >> /var/log/personal-site-backup.log 2>&1
 """
 )
@@ -387,6 +409,8 @@ add_bullet("هر شب ساعت ۳ بامداد اجرا می‌شه")
 add_bullet("snapshot با sqlite3 .backup — سرویس روشن می‌مونه")
 add_bullet("خروجی: backups/db_*.db.gz با نگه‌داری ۷ نسخه‌ی آخر")
 add_bullet("پرمیشن فایلهای بک‌آپ: 600")
+# v1.1.1 (audit S6-M3): retention جدید
+add_bullet("حذف خودکار لاگ‌های قدیمی‌تر از ۳۰ روز (PageView/SecurityLog/AccessLog) — جلوگیری از پر شدن دیسک")
 add_para("بازیابی دستی: فایل .gz رو باز کنید و به db/custom.db برگردونید "
          "(سرویس رو اول stop کنید).")
 
@@ -418,13 +442,21 @@ add_code(
 systemctl status personal-site
 journalctl -u personal-site -n 30
 sudo nginx -t
-sudo lsof -i :3000
+# پورت 3000 فقط داخل سرور است (loopback) — از بیرون nginx روی 80/443 جواب می‌دهد:
+sudo ss -tlnp | grep :3000
+curl -I http://127.0.0.1:3000/api/content
 """
 )
 add_para("رمز ادمین فراموش شده؟")
 add_code("sudo bash scripts/reset-admin-password.sh")
-add_para("پیامها رو نمی‌بینید؟ (روی سرور)")
-add_code("python3 scripts/list_messages.py")
+# v1.1.1 (audit P6): list_messages.py داخل پکیج نیست — با sqlite3 مستقیم
+add_para("پیامها رو می‌خواید مستقیم از دیتابیس ببینید؟ (روی سرور)")
+add_code(
+    """
+sudo sqlite3 /path/to/personal-site/db/custom.db \\
+  "SELECT name, email, substr(message,1,50) FROM ContactMessage ORDER BY createdAt DESC LIMIT 10;"
+"""
+)
 add_para("دیتابیس مشکل داره؟ schema رو heal کنید:")
 add_code("python3 scripts/apply_schema.py")
 add_para("اگر مشکل حل نشد، لاگ کامل رو برای بررسی نگه دارید:")
