@@ -76,19 +76,18 @@ download/
 backups/
 
 # ============================================================================
-# Release artifacts (v1.1):
-# - Old-release zips/tutorials stay ignored...
-# - ...but the v1.1 release artifacts are force-kept (negation rules).
+# Release artifacts (v1.0):
+# - zips/docxها هرگز commit نمی‌شوند (v1.0: قوانین negation حذف شدند — یک zip
+#   19MB در repo یعنی تاریخچه‌ی متورم دائمی؛ توزیع با GitHub Releases)
 # ============================================================================
 download/*.zip
 public/*.zip
-!public/install-v1.1.zip
 
 public/TUTORIAL_FA_*.docx
-!public/TUTORIAL_FA_1.1.docx
-
 download/TUTORIAL_FA_*.docx
-!download/TUTORIAL_FA_1.1.docx
+
+# bun.lock منسق — Dockerfile/package-lock.json مرجع اصلی است (audit W51-55 #2)
+bun.lock
 
 __pycache__/
 *.pyc

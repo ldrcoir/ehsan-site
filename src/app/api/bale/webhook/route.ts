@@ -14,7 +14,15 @@ import { getSetting } from "@/lib/settings";
  */
 export async function POST(req: Request) {
   try {
-    const secret = req.headers.get("x-webhook-secret") || "";
+    // v1.0 (audit W31-35 #1 — HIGH): پلتفرم هرگز هدر x-webhook-secret را نمی‌فرستد
+    // مگر اینکه موقع setWebhook پارامتر secret_token ست شده باشد — و Telegram/Bale
+    // مقدار آن را در هدر بومی X-Telegram-Bot-Api-Secret-Token برمی‌گردانند.
+    // قبلاً فقط هدر سفارشی چک می‌شد → هیچ delivery واقعی ۴۰۳ می‌گرفت و کانال فرمان
+    // ادمین عملاً کار نمی‌کرد. الان هر دو هدر پذیرفته می‌شوند (هر دو timing-safe).
+    const secret =
+      req.headers.get("x-telegram-bot-api-secret-token") ||
+      req.headers.get("x-webhook-secret") ||
+      "";
     const expectedSecret = process.env.BALE_WEBHOOK_SECRET;
     if (!expectedSecret) {
       return NextResponse.json({ ok: false, error: "webhook_not_configured" }, { status: 503 });
@@ -24,6 +32,10 @@ export async function POST(req: Request) {
     const secretBuf = crypto.createHash("sha256").update(secret).digest();
     const expBuf = crypto.createHash("sha256").update(expectedSecret).digest();
     if (!crypto.timingSafeEqual(secretBuf, expBuf)) {
+      // v1.0 (audit W31-35 #2): تلاش ناموفق لاگ می‌شود (rate limit 60/min جلوی flood را می‌گیرد)
+      const { logSecurityEvent } = await import("@/lib/security");
+      const ip = req.headers.get("x-real-ip") || (req.headers.get("x-forwarded-for") || "").split(",").pop()?.trim() || null;
+      logSecurityEvent("webhook_bad_secret", ip && ip !== "unknown" ? ip : null, "bale webhook secret mismatch").catch(() => {});
       return NextResponse.json({ ok: false, error: "invalid_secret" }, { status: 403 });
     }
 
@@ -73,6 +85,10 @@ export async function GET(req: Request) {
       hasChatId: !!chatId,
       maskedToken: token ? "••••••••" + token.slice(-4) : null,
       webhookUrl: token ? "https://api.bale.ai/v1/bots<token>/setWebhook" : null,
+      // v1.0 (audit W31-35 #1): راهنمای ثبت webhook با secret_token — بدنه‌ی درخواست
+      // باید {"url": "...", "secret_token": "<BALE_WEBHOOK_SECRET از .env>"} باشد
+      // تا پلتفرم مقدار را در هدر X-Telegram-Bot-Api-Secret-Token برگرداند
+      setupHint: "POST body: { url, secret_token } — secret_token را از .env بخوانید (BALE_WEBHOOK_SECRET)",
     });
   } catch (err) {
     console.error("[/api/bale/webhook GET] error:", err);

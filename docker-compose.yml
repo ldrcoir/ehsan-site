@@ -21,9 +21,16 @@ services:
       - ./db:/app/db
     # v1.1.2: long syntax با required:false — اگر .env وجود نداشته باشد
     # compose دیگر hard-fail نمی‌شود (secretها اختیاری در dev می‌مانند)
+    # v1.0 (audit W46-50 #12): سینتکس ساده env_file — فرم long فقط در Compose >= 2.24
+    # پارس می‌شد و نسخه‌های قدیمی کل فایل را error می‌دادند. برای optional بودن،
+    # .env نمونه از .env.example ساخته می‌شود.
     env_file:
-      - path: .env
-        required: false
+      - .env
+    # v1.0: hardening ارزان کانتینر
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     environment:
       DATABASE_URL: file:/app/db/custom.db
       NODE_ENV: production

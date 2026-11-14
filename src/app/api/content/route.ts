@@ -32,7 +32,14 @@ export async function GET() {
       fa: {},
       de: {},
     };
+    // v1.0 (audit W26-30 #1): کلیدهای داخلی از پاسخ عمومی حذف شدند — قبلاً «همه‌ی»
+    // SiteTextها (شامل ai.system_prompt که پنل ادمین آن را می‌نویسد) قابل دانلود
+    // ناشناس بودند. کلیدهای رزرو‌شده (پیشوند ai.) فقط سمت سرور مصرف می‌شوند.
+    const INTERNAL_TEXT_PREFIXES = ["ai."];
+    const isInternalTextKey = (key: string) =>
+      INTERNAL_TEXT_PREFIXES.some(p => key.startsWith(p));
     for (const t of texts) {
+      if (isInternalTextKey(t.key)) continue;
       textsByLang.en[t.key] = t.valueEn || t.valueFa || t.valueDe || "";
       textsByLang.fa[t.key] = t.valueFa || t.valueEn || t.valueDe || "";
       textsByLang.de[t.key] = t.valueDe || t.valueEn || t.valueFa || "";

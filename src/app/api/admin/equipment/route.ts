@@ -1,4 +1,5 @@
-import { checkAdminAuth } from "@/lib/admin-auth";
+import { checkAdminAuth, TAB_PERMISSIONS } from "@/lib/admin-auth";
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
@@ -11,7 +12,7 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const password = ""; // V17.8: dead param removed (checkAdminAuth ignores it)
 
-    const authCheck = await checkAdminAuth(req); if (!authCheck.ok) {
+    const authCheck = await checkAdminAuth(req, TAB_PERMISSIONS["/api/admin/equipment"]); if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 
@@ -44,7 +45,7 @@ export async function POST(req: Request) {
     if (!body) return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
 
     // V18.3: dead password param removed (checkAdminAuth ignores it)
-    const authCheck = await checkAdminAuth(req); if (!authCheck.ok) {
+    const authCheck = await checkAdminAuth(req, TAB_PERMISSIONS["/api/admin/equipment"]); if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 
@@ -89,13 +90,29 @@ export async function POST(req: Request) {
         if (!id) return NextResponse.json({ ok: false, error: "missing_id" }, { status: 400 });
         const data = sanitizeEquipment(body.data) as any;
         if (!data) return NextResponse.json({ ok: false, error: "invalid_specs" }, { status: 400 });
-        const updated = await db.labEquipment.update({ where: { id }, data });
+        let updated;
+        try {
+          updated = await db.labEquipment.update({ where: { id }, data });
+        } catch (e) {
+          if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {
+            return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
+          }
+          throw e;
+        }
         return NextResponse.json({ ok: true, item: updated });
       }
       case "delete": {
         const id = String(body.id || "");
         if (!id) return NextResponse.json({ ok: false, error: "missing_id" }, { status: 400 });
-        await db.labEquipment.delete({ where: { id } });
+        try {
+          await db.labEquipment.delete({ where: { id } });
+        } catch (e) {
+          // v1.0 (audit W16-20 #6): id قدیمی/حذف‌شده → 404 شفاف (قبلاً 500 می‌داد)
+          if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {
+            return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
+          }
+          throw e;
+        }
         return NextResponse.json({ ok: true });
       }
       case "toggle": {

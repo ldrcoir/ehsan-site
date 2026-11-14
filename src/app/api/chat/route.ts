@@ -256,8 +256,11 @@ export async function POST(req: Request) {
     if (sessionId) {
       session = await db.chatSession.findUnique({
         where: { id: sessionId },
-        // V17.8: bound chat history to last 20 messages (prevent unbounded LLM context)
-        include: { messages: { orderBy: { createdAt: "asc" }, take: 20 } },
+        // V17.8: bound chat history to 20 messages (prevent unbounded LLM context)
+        // v1.0 (audit W21-25 #10): آخرین ۲۰ پیام (desc) — قبلاً قدیمی‌ترین ۲۰ تا
+        // گرفته می‌شد و در گفتگوهای طولانی مدل همه‌ی پیام‌های اخیر را گم می‌کرد.
+        // ترتیب بعداً در ساخت history به‌صورت asc بازسازی می‌شود.
+        include: { messages: { orderBy: { createdAt: "desc" }, take: 20 } },
       });
       // V18.0: session ownership check — sessionId باید متعلق به همون visitorId باشه
       if (session && session.visitorId !== visitorId) {
@@ -308,8 +311,10 @@ export async function POST(req: Request) {
 
     // --- Build conversation for LLM ---
     const systemPrompt = await buildSystemPrompt(lang);
+    // v1.0 (audit W21-25 #10): ترتیب زمانی واقعی (asc) — پیام‌ها desc گرفته شده‌اند
+    const ordered = [...session.messages].reverse();
     const history = [
-      ...session.messages.map((m) => ({
+      ...ordered.map((m) => ({
         role: (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
         content: m.content,
       })),
@@ -392,6 +397,9 @@ export async function GET(req: Request) {
       include: {
         messages: {
           orderBy: { createdAt: "asc" },
+          // v1.0 (audit W26-30 #4): پیام‌های هر نشست cap شد — قبلاً بدون take،
+          // یک نشست بزرگ چند-MB JSON در یک پاسخ می‌ساخت
+          take: 200,
           select: { id: true, role: true, content: true, createdAt: true },
         },
       },

@@ -17,6 +17,13 @@ import { db } from "@/lib/db";
 import { hashPassword } from "@/lib/access-auth";
 import { checkAdminAuth } from "@/lib/admin-auth";
 
+// v1.0 (audit W11-15 #1 / W1-5 #7): قاعده‌ی واحد username — مشابه PUT در [id]/route.ts
+// و login (که همیشه lowercase می‌کند). POST قبلاً فقط length چک می‌کرد: unicode،
+// فاصله و usernameهای چندمگابایتی قبول می‌شدند و بعداً قابل لاگین نبودند.
+const USERNAME_RE = /^[a-zA-Z0-9._-]{3,64}$/;
+// v1.0 (audit W16-20 #1): whitelist permission های واگذارشدنی — همان GRANTABLE_TABS
+const GRANTABLE_PERMS = new Set(["messages", "clips", "content", "text", "nav", "themes"]);
+
 // ----------------------------------------------------------------------------
 // GET /api/admin/users — لیست کاربران
 // ----------------------------------------------------------------------------
@@ -66,19 +73,30 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
+  // v1.0 (audit W11-15 #6): ورودی‌ها باید string باشند — عدد/آبجکت قبلاً در
+  // .trim() می‌ترکید و 500 مبهم می‌داد
+  if (typeof body.username !== "string" || typeof body.password !== "string") {
+    return NextResponse.json({ ok: false, error: "invalid_input" }, { status: 400 });
+  }
   const username: string = (body.username || "").trim().toLowerCase();
   const password: string = body.password || "";
-  const displayName: string = (body.displayName || "").trim();
+  const displayName: string = typeof body.displayName === "string" ? body.displayName.trim().slice(0, 100) : "";
   const role: string = body.role === "admin" ? "admin" : "user";
   const allowedHourStart = body.allowedHourStart === null || body.allowedHourStart === undefined ? null : Number(body.allowedHourStart);
   const allowedHourEnd = body.allowedHourEnd === null || body.allowedHourEnd === undefined ? null : Number(body.allowedHourEnd);
-  const allowedDays: string | null = body.allowedDays || null;
-  const permissions: string | null = body.permissions || null;
-  const expiresAt: Date | null = body.expiresAt ? new Date(body.expiresAt) : null;
-  const active: boolean = body.active !== false;
+  const allowedDays: string | null = typeof body.allowedDays === "string" && /^[0-6](,[0-6])*$/.test(body.allowedDays) ? body.allowedDays : null;
+  // v1.0: permission ها فقط از whitelist — مقادیر ناشناخته حذف می‌شوند
+  const permissions: string | null = typeof body.permissions === "string" && body.permissions
+    ? body.permissions.split(",").map((p: string) => p.trim()).filter((p: string) => GRANTABLE_PERMS.has(p)).join(",") || null
+    : null;
+  const expiresAtRaw = body.expiresAt;
+  const expiresAt: Date | null = expiresAtRaw ? new Date(expiresAtRaw) : null;
+  // v1.0 (audit W11-15 #6): strict boolean — Boolean("false") قبلاً true می‌داد
+  const active: boolean = body.active === undefined ? true : body.active === true;
 
   // اعتبارسنجی
-  if (!username || username.length < 3) {
+  // v1.0: قاعده‌ی یکسان username (charset + حداقل/حداکثر) — مشابه PUT
+  if (!username || !USERNAME_RE.test(username)) {
     return NextResponse.json({ ok: false, error: "username_too_short" }, { status: 400 });
   }
   // v1.1.1 (audit S1-M2): ادمین حداقل ۱۲ کاراکتر، کاربر عادی حداقل ۸ (قبل‌تر ۶ بود)
@@ -94,6 +112,14 @@ export async function POST(request: NextRequest) {
   }
   if (allowedHourEnd !== null && (allowedHourEnd < 0 || allowedHourEnd > 23)) {
     return NextResponse.json({ ok: false, error: "invalid_hour_end" }, { status: 400 });
+  }
+  // v1.0 (audit W1-5 #12): start == end یعنی بازه‌ی خالی — اکانت برای همیشه قفل می‌شد
+  if (allowedHourStart !== null && allowedHourEnd !== null && allowedHourStart === allowedHourEnd) {
+    return NextResponse.json({ ok: false, error: "invalid_hour_range" }, { status: 400 });
+  }
+  // v1.0 (audit W11-15 #5): تاریخ نامعتبر → 400 (فقط PUT این را داشت — POST 500 می‌داد)
+  if (expiresAt && isNaN(expiresAt.getTime())) {
+    return NextResponse.json({ ok: false, error: "invalid_date" }, { status: 400 });
   }
 
   // بررسی یکتا بودن username
@@ -135,6 +161,15 @@ export async function POST(request: NextRequest) {
         createdAt: true,
       },
     });
+    // v1.0 (audit W11-15 #4): حسابرسی اقدام ادمین روی کاربران — قبلاً ساخت/ویرایش
+    // کاربر هیچ ردی در SecurityLog نداشت
+    await db.securityLog.create({
+      data: {
+        type: "user_admin_action",
+        ip: null,
+        detail: `admin=${authCheck.userId} action=create target=${username} role=${role}`,
+      },
+    }).catch(() => {});
     return NextResponse.json({ ok: true, user });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {

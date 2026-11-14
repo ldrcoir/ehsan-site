@@ -37,8 +37,12 @@ export function useContent(lang: string = "en") {
 
     // پاک‌کردن cache قدیمی — وگرنه تغییرات پنل نشون داده نمی‌شه
     // (cache فقط ۵ دقیقه بود، ولی برای اطمینان از نمایش تغییرات، پاکش می‌کنیم)
-    localStorage.removeItem("site_content_cache");
-    localStorage.removeItem("site_content_cache_time");
+    try {
+      localStorage.removeItem("site_content_cache");
+      localStorage.removeItem("site_content_cache_time");
+    } catch {
+      // storage بلاک‌شده (private mode/quota) — cache فقط skip می‌شود
+    }
 
     // fetch از /api/content که شامل متن‌ها هم هست
     fetch("/api/content", { cache: "no-store" })

@@ -16,6 +16,7 @@ v1.1: رمز تصادفی ۱۶ کاراکتری با secrets (رمز ثابت ح
 
 import sqlite3
 import os
+import time
 import sys
 import secrets
 import string
@@ -54,7 +55,7 @@ def hash_password_bcrypt(password: str) -> str:
     result = subprocess.run(
         ["node", "-e", """
         const bcrypt = require(process.env.BCYPATH);
-        console.log(JSON.stringify(bcrypt.hashSync(process.env.SEEDPW, 10)));
+        console.log(JSON.stringify(bcrypt.hashSync(process.env.SEEDPW, 12)));
         """],
         capture_output=True, text=True, check=True, cwd=str(PROJECT_ROOT),
         env={**os.environ, "BCYPATH": bcrypt_path, "SEEDPW": password},
@@ -107,9 +108,9 @@ def main():
     if not quiet:
         print("Hashing password...")
     password_hash = hash_password_bcrypt(password)
-    # v1.1: timezone-aware (utcnow deprecated در پایتون جدید — خروجی تمیز برای install.sh)
-    from datetime import datetime as _dt, timezone
-    now = _dt.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    # v1.0 (audit W41-45 #10): Prisma DateTime را epoch-ms INTEGER ذخیره می‌کند؛
+    # ISO TEXT باعث ستون mixed-type می‌شد (retention بک‌آپ هم نمی‌توانست prune کند)
+    now = int(time.time() * 1000)
 
     cur.execute("""
         INSERT INTO AccessUser (id, username, passwordHash, displayName, role, active, loginCount, deactivatedReason, createdAt, updatedAt)

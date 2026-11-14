@@ -4,13 +4,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { checkAdminAuth } from "@/lib/admin-auth";
+import { checkAdminAuth, TAB_PERMISSIONS } from "@/lib/admin-auth";
 import { sanitizeEmbed } from "@/lib/sanitize-embed";
 
 // GET — لیست همه کلیپ‌ها (including hidden) — فقط ادمین
 export async function GET(req: NextRequest) {
   try {
-    const authCheck = await checkAdminAuth(req);
+    const authCheck = await checkAdminAuth(req, TAB_PERMISSIONS["/api/admin/clips"]);
     if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 // POST — ساخت یا ویرایش کلیپ — فقط ادمین
 export async function POST(req: NextRequest) {
   try {
-    const authCheck = await checkAdminAuth(req);
+    const authCheck = await checkAdminAuth(req, TAB_PERMISSIONS["/api/admin/clips"]);
     if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
@@ -42,7 +42,8 @@ export async function POST(req: NextRequest) {
       // که قبلاً بی‌صدا ذخیره و بعد رندرِ خالی می‌شد، حالا با خطای شفاف رد می‌شود
       const rawEmbed = String(body.embedCode || "");
       const safeEmbed = sanitizeEmbed(rawEmbed);
-      if (rawEmbed && !safeEmbed) {
+      // v1.0 (audit W16-20 #7): create بدون embed قبلاً کلیپ خالی می‌ساخت (UI required است ولی API نه)
+      if (!safeEmbed) {
         return NextResponse.json(
           { ok: false, error: "invalid_embed", detail: "Only Aparat/YouTube/Vimeo iframes are accepted" },
           { status: 400 }
@@ -73,7 +74,8 @@ export async function POST(req: NextRequest) {
       }
       const rawEmbed = String(body.embedCode || "");
       const safeEmbed = sanitizeEmbed(rawEmbed);
-      if (rawEmbed && !safeEmbed) {
+      // v1.0 (audit W16-20 #7): create بدون embed قبلاً کلیپ خالی می‌ساخت (UI required است ولی API نه)
+      if (!safeEmbed) {
         return NextResponse.json(
           { ok: false, error: "invalid_embed", detail: "Only Aparat/YouTube/Vimeo iframes are accepted" },
           { status: 400 }
@@ -105,7 +107,7 @@ export async function POST(req: NextRequest) {
 // DELETE — حذف کلیپ — فقط ادمین
 export async function DELETE(req: NextRequest) {
   try {
-    const authCheck = await checkAdminAuth(req);
+    const authCheck = await checkAdminAuth(req, TAB_PERMISSIONS["/api/admin/clips"]);
     if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }

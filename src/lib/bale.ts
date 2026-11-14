@@ -11,7 +11,10 @@ import { getSetting } from "@/lib/settings";
  * 4. Set BALE_CHAT_ID in SiteSetting
  * 5. Set baleEnabled = "true" in admin panel
  * 6. Set up webhook: POST https://api.bale.ai/v1/bots/{token}/setWebhook
- *    with { url: "https://your-domain.com/api/bale/webhook" }
+ *    with { url: "https://your-domain.com/api/bale/webhook",
+ *           secret_token: "<BALE_WEBHOOK_SECRET>" }
+ *    v1.0 (audit W31-35 #1): بدون secret_token پلتفرم هیچ هدری نمی‌فرستد و همه‌ی
+ *    deliveryها 403 می‌گیرند — کانال فرمان ادمین کار نمی‌کند
  * 
  * Commands admin can send to the bot:
  *   /list          — show recent messages
@@ -25,23 +28,38 @@ import { getSetting } from "@/lib/settings";
 const BALE_API_BASE = "https://api.bale.ai/v1/bots";
 
 // v1.1.1 (audit S5-L2): replay protection — Bale/Telegram روی پاسخ غیر-2xx دوباره
-// می‌فرستند و با secret لو رفته می‌شود ترافیک قبلی را replay کرد. LRU ساده از
-// update_id های پردازش‌شده.
+// می‌فرستند و با secret لو رفته می‌شود ترافیک قبلی را replay کرد.
+// v1.0 (audit W31-35 #3): بازطراحی — update_id فقط «بعد از» پردازش موفق mark
+// می‌شود (قبلاً قبل از آن بود؛ اگر پردازش می‌شکست، redelivery پلتفرم برای همیشه
+// به‌عنوان replay رد می‌شد و پیام ادمین گم می‌شد). TTL به ۲۴ ساعت (پنجره‌ی
+// redelivery تلگرام) و سقف ۱۰هزار کلید با evict قدیمی‌ترین.
 const seenUpdates = new Map<number, number>(); // updateId → firstSeenTs
-const SEEN_TTL_MS = 10 * 60 * 1000; // 10 دقیقه کافی است (redelivery سریع است)
-function isReplay(updateId: unknown): boolean {
-  if (typeof updateId !== "number" || !isFinite(updateId)) return false;
+const SEEN_TTL_MS = 24 * 60 * 60 * 1000;
+const SEEN_MAX = 10000;
+function hasSeen(updateId: number): boolean {
   const now = Date.now();
-  // پاکسازی دوره‌ای
-  if (seenUpdates.size > 500) {
-    for (const [k, ts] of seenUpdates) {
-      if (now - ts > SEEN_TTL_MS) seenUpdates.delete(k);
-    }
-  }
   const first = seenUpdates.get(updateId);
-  if (first !== undefined && now - first < SEEN_TTL_MS) return true;
+  return first !== undefined && now - first < SEEN_TTL_MS;
+}
+function markSeen(updateId: number): void {
+  const now = Date.now();
+  // پاکسازی وقتی به سقف رسید — قدیمی‌ترین (کوچک‌ترین ts) حذف می‌شود
+  while (seenUpdates.size >= SEEN_MAX) {
+    let victim: number | null = null;
+    let victimTs = Infinity;
+    for (const [k, ts] of seenUpdates) {
+      if (ts < victimTs) { victimTs = ts; victim = k; }
+    }
+    if (victim === null) break;
+    seenUpdates.delete(victim);
+  }
   seenUpdates.set(updateId, now);
-  return false;
+}
+function sweepSeen(): void {
+  const now = Date.now();
+  for (const [k, ts] of seenUpdates) {
+    if (now - ts > SEEN_TTL_MS) seenUpdates.delete(k);
+  }
 }
 
 // v1.1 (security): strip Markdown metacharacters from visitor-controlled text —
@@ -87,6 +105,13 @@ export async function sendBaleMessage(text: string): Promise<boolean> {
         parse_mode: "Markdown",
       }),
     });
+    // v1.0 (audit W21-25 #4): res.ok چک + بدنه‌ی خطا هم سقف دارد
+    if (!res.ok) {
+      console.error("[bale] sendMessage HTTP error:", res.status, (await res.text().catch(() => "")).slice(0, 200));
+      return false;
+    }
+    const cl = parseInt(res.headers.get("content-length") || "0", 10);
+    if (cl > 64 * 1024) return false; // پاسخ ربات API هرگز بزرگ نیست
     const data = await res.json();
     return !!data.ok;
   } catch (err) {
@@ -138,11 +163,23 @@ export async function notifyNewChat(msg: {
 
 /** Process inbound Bale webhook (admin replying via Bale) */
 export async function processBaleWebhook(body: any): Promise<{ ok: boolean; reply?: string }> {
-  const message = body?.message;
-  if (!message || !message.text) return { ok: false };
-
+  const updateId = body?.update_id;
+  sweepSeen();
   // v1.1.1 (audit S5-L2): همان update دوباره پردازش نشود
-  if (isReplay(body?.update_id)) return { ok: true, reply: undefined };
+  if (typeof updateId === "number" && isFinite(updateId) && hasSeen(updateId)) {
+    return { ok: true, reply: undefined };
+  }
+  const result = await processBaleWebhookInner(body);
+  // v1.0 (audit W31-35 #3): mark فقط بعد از پردازش موفق — اگر inner پرتاب شود،
+  // رد می‌شود و پلتفرم redelivery را دوباره می‌فرستد
+  if (typeof updateId === "number" && isFinite(updateId)) markSeen(updateId);
+  return result;
+}
+
+async function processBaleWebhookInner(body: any): Promise<{ ok: boolean; reply?: string }> {
+  const message = body?.message;
+  // v1.0 (audit W31-35 #4): typeof چک — متن عددی قبلاً در .trim() می‌ترکید
+  if (!message || typeof message.text !== "string") return { ok: false };
 
   // v1.1 (security): sender verification — secret header فقط ثابت می‌کنه درخواست
   // از پلتفرم Bale اومده، نه از ادمین. هر کاربر تصادفی تلگرام/بیل که handle ربات رو
@@ -274,6 +311,6 @@ export async function processBaleWebhook(body: any): Promise<{ ok: boolean; repl
     }
 
     default:
-      return { ok: false, reply: `Unknown command: ${cmd}. Send /help for options.` };
+      return { ok: false, reply: `Unknown command: ${mdSafe(cmd)}. Send /help for options.` };
   }
 }

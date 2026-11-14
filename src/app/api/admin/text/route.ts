@@ -1,4 +1,4 @@
-import { checkAdminAuth } from "@/lib/admin-auth";
+import { checkAdminAuth, TAB_PERMISSIONS } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
@@ -13,7 +13,7 @@ import { db } from "@/lib/db";
  */
 export async function GET(req: Request) {
   try {
-    const authCheck = await checkAdminAuth(req);
+    const authCheck = await checkAdminAuth(req, TAB_PERMISSIONS["/api/admin/text"]);
     if (!authCheck.ok) {
       // V18.3: public branch removed — was returning data without proper auth
       // Public text content is available via /api/content (which has PUBLIC_KEYS filter)
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
     if (!body) return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
 
     // V18.3: dead password param removed (checkAdminAuth ignores it)
-    const authCheck = await checkAdminAuth(req); if (!authCheck.ok) {
+    const authCheck = await checkAdminAuth(req, TAB_PERMISSIONS["/api/admin/text"]); if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 

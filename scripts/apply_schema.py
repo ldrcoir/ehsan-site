@@ -336,7 +336,7 @@ CREATE TABLE IF NOT EXISTS AccessUser (
     createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX IF NOT EXISTS idx_accessuser_username ON AccessUser(username);
+-- v1.0: CREATE INDEX IF NOT EXISTS idx_accessuser_username ON AccessUser(username);
 CREATE INDEX IF NOT EXISTS idx_accessuser_active ON AccessUser(active);
 
 CREATE TABLE IF NOT EXISTS AccessLog (

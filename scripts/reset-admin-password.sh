@@ -13,6 +13,12 @@
 # ============================================================================
 set -eo pipefail
 
+# v1.0 (audit W41-45 #5): gate دسترسی — ریست رمز ادمین عملیات حساس است
+if [ "$(id -u)" != "0" ]; then
+    echo "❌ این اسکریپت باید با sudo اجرا شود:  sudo bash scripts/reset-admin-password.sh"
+    exit 1
+fi
+
 echo "=========================================="
 echo "  ریست رمز ادمین (v1.1 — رمز تصادفی)"
 echo "=========================================="
@@ -33,6 +39,8 @@ resolve_db() {
     local candidate=""
     if [ -n "$url" ]; then
         candidate="${url#file:}"
+        # v1.0 (audit W41-45 #13): query params (?connection_limit=...) از مسیر حذف می‌شوند
+        candidate="${candidate%%\?*}"
         case "$candidate" in
             /*) ;;
             *) candidate="$PROJECT_DIR/$candidate" ;;
@@ -74,20 +82,32 @@ fi
 
 # تولید هش bcrypt — رمز از ENV VAR خونده می‌شه، نه با interpolation داخل کد JS
 echo "در حال تولید هش bcrypt..."
-HASH=$(BcryptPass="$NEW_PASSWORD" node -e "const b=require('./node_modules/bcryptjs');process.stdout.write(b.hashSync(process.env.BcryptPass,10))")
+# v1.0 (audit W1-5 #10): cost 12 — هم‌مثل hashPassword اپ (قبلاً 10 بود)
+HASH=$(BcryptPass="$NEW_PASSWORD" node -e "const b=require('./node_modules/bcryptjs');process.stdout.write(b.hashSync(process.env.BcryptPass,12))")
 if [ -z "$HASH" ]; then
     echo "❌ خطا در تولید هش. مطمئن شو bcryptjs داخل node_modules هست."
     exit 1
 fi
 echo "هش تولید شد."
+# v1.0 (audit W41-45 #5): ردپای در syslog هم می‌ماند
+logger -t personal-site "admin password reset executed" 2>/dev/null || true
 
 # آپدیت دیتابیس — SQL از stdin (heredoc) می‌ره، نه از argv (-c)
 # تا هش تو لیست پروسه‌ها (ps) دیده نشه
 echo "در حال آپدیت دیتابیس..."
+# v1.0 (audit W41-45 #5):
+# - sessionsValidAfter = الان → همه‌ی sessionهای باز ادمین بلافاصله بی‌اعتبار می‌شوند
+#   (قبلاً توکن‌های باز تا ۲۴h زنده می‌ماندند)
+# - active دیگر بی‌صدا 1 نمی‌شود — غیرفعال‌کردنِ عمدی با ریست رمز باطل نمی‌شود؛
+#   ادمین باید جداگانه از پنل فعالش کند (اگر لازم بود)
+# - ردپای حسابرسی در SecurityLog ثبت می‌شود
+NOW_MS=$(node -e "process.stdout.write(String(Date.now()))")
 sqlite3 "$DB_FILE" <<EOF
 UPDATE AccessUser
-SET passwordHash = '$HASH', active = 1
+SET passwordHash = '$HASH', sessionsValidAfter = $NOW_MS
 WHERE username = 'admin';
+INSERT INTO SecurityLog (id, type, ip, detail, createdAt)
+VALUES (lower(hex(randomblob(16))), 'admin_password_reset', NULL, 'reset-admin-password.sh executed on ' || datetime('now'), $NOW_MS);
 EOF
 
 # بررسی نهایی — هش bcrypt همیشه ۶۰ کاراکتره

@@ -1,4 +1,4 @@
-import { checkAdminAuth } from "@/lib/admin-auth";
+import { checkAdminAuth, TAB_PERMISSIONS } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -9,7 +9,7 @@ import { db } from "@/lib/db";
  */
 export async function GET(req: Request) {
   try {
-    const authCheck = await checkAdminAuth(req);
+    const authCheck = await checkAdminAuth(req, TAB_PERMISSIONS["/api/admin/themes"]);
     if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     if (!body) return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
 
     // V18.3: dead password param removed (checkAdminAuth ignores it)
-    const authCheck = await checkAdminAuth(req); if (!authCheck.ok) {
+    const authCheck = await checkAdminAuth(req, TAB_PERMISSIONS["/api/admin/themes"]); if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 
@@ -112,14 +112,30 @@ export async function POST(req: Request) {
         if (d.scanlines !== undefined) data.scanlines = Boolean(d.scanlines);
         if (d.visible !== undefined) data.visible = Boolean(d.visible);
         if (d.order !== undefined) data.order = Math.max(0, Number(d.order) || 0);
-        const updated = await db.customTheme.update({ where: { id }, data });
+        let updated;
+        try {
+          updated = await db.customTheme.update({ where: { id }, data });
+        } catch (e) {
+          if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {
+            return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
+          }
+          throw e;
+        }
         return NextResponse.json({ ok: true, theme: updated });
       }
 
       case "delete": {
         const id = String(body.id || "");
         if (!id) return NextResponse.json({ ok: false, error: "missing_id" }, { status: 400 });
-        await db.customTheme.delete({ where: { id } });
+        try {
+          await db.customTheme.delete({ where: { id } });
+        } catch (e) {
+          // v1.0 (audit W16-20 #6): id قدیمی/حذف‌شده → 404 شفاف (قبلاً 500 می‌داد)
+          if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {
+            return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
+          }
+          throw e;
+        }
         return NextResponse.json({ ok: true });
       }
 

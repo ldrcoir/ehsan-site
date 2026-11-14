@@ -424,14 +424,21 @@ export default function SettingsPanel() {
   const t = T[panelLang];
 
   useEffect(() => {
-    // Load panel language from localStorage
-    const savedLang = (localStorage.getItem("panel_lang") as Lang) || "fa";
+    // v1.0 (audit W36-40 #7): storage بلاک‌شده (private mode/quota) دیگر crash نمی‌دهد
+    let savedLang: Lang = "fa";
+    let savedFont = "vazirmatn";
+    try {
+      // Load panel language from localStorage
+      savedLang = (localStorage.getItem("panel_lang") as Lang) || "fa";
+      // Load font
+      savedFont = localStorage.getItem("site_font") || "vazirmatn";
+    } catch {
+      // مقادیر پیش‌فرض
+    }
     setPanelLang(savedLang);
     document.documentElement.lang = savedLang;
     document.documentElement.dir = savedLang === "fa" ? "rtl" : "ltr";
 
-    // Load font
-    const savedFont = localStorage.getItem("site_font") || "vazirmatn";
     setCurrentFont(savedFont);
 
     loadSettings();
@@ -452,14 +459,14 @@ export default function SettingsPanel() {
 
   function switchPanelLang(lang: Lang) {
     setPanelLang(lang);
-    localStorage.setItem("panel_lang", lang);
+    try { localStorage.setItem("panel_lang", lang); } catch {}
     document.documentElement.lang = lang;
     document.documentElement.dir = lang === "fa" ? "rtl" : "ltr";
   }
 
   function switchFont(fontId: string) {
     setCurrentFont(fontId);
-    localStorage.setItem("site_font", fontId);
+    try { localStorage.setItem("site_font", fontId); } catch {}
     document.documentElement.setAttribute("data-font", fontId);
   }
 

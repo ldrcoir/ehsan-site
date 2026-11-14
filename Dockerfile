@@ -53,7 +53,10 @@ COPY . .
 RUN npm run build
 
 # پوشه‌ی db + مالکیت برای کاربر node (uid 1000)
-RUN mkdir -p /app/db && chown -R node:node /app/db /app/.next
+RUN mkdir -p /app/db && chown -R node:node /app/db /app/.next \
+    # v1.0 (audit W46-50 #11): client پرisma برای node قابل نوشتن — entrypoint's
+    # prisma generate دیگر EACCES بی‌صدا نمی‌گیرد
+    && chown -R node:node /app/node_modules/.prisma /app/node_modules/@prisma 2>/dev/null || true
 
 USER node
 

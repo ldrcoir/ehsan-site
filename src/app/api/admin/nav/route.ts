@@ -1,11 +1,12 @@
-import { checkAdminAuth } from "@/lib/admin-auth";
+import { checkAdminAuth, TAB_PERMISSIONS } from "@/lib/admin-auth";
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
 /** GET /api/admin/nav — v1.1 (security): fail-closed؛ کاربر غیرادمین → 401 */
 export async function GET(req: Request) {
   try {
-    const authCheck = await checkAdminAuth(req);
+    const authCheck = await checkAdminAuth(req, TAB_PERMISSIONS["/api/admin/nav"]);
     if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
@@ -25,7 +26,7 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => null);
     if (!body) return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
     // V18.3: dead password param removed (checkAdminAuth ignores it)
-    const authCheck = await checkAdminAuth(req); if (!authCheck.ok) {
+    const authCheck = await checkAdminAuth(req, TAB_PERMISSIONS["/api/admin/nav"]); if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
     const action = String(body.action || "");
@@ -55,13 +56,29 @@ export async function POST(req: Request) {
         if (d.target !== undefined) data.target = String(d.target);
         if (d.visible !== undefined) data.visible = Boolean(d.visible);
         if (d.order !== undefined) data.order = Number(d.order) || 99;
-        const item = await db.navItem.update({ where: { id }, data });
+        let item;
+        try {
+          item = await db.navItem.update({ where: { id }, data });
+        } catch (e) {
+          if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {
+            return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
+          }
+          throw e;
+        }
         return NextResponse.json({ ok: true, item });
       }
       case "delete": {
         const id = String(body.id || "");
         if (!id) return NextResponse.json({ ok: false, error: "missing_id" }, { status: 400 });
-        await db.navItem.delete({ where: { id } });
+        try {
+          await db.navItem.delete({ where: { id } });
+        } catch (e) {
+          // v1.0 (audit W16-20 #6): id قدیمی/حذف‌شده → 404 شفاف (قبلاً 500 می‌داد)
+          if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {
+            return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
+          }
+          throw e;
+        }
         return NextResponse.json({ ok: true });
       }
       case "toggle": {

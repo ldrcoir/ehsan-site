@@ -2,10 +2,10 @@
 # ============================================================================
 # package-dated.sh — خروجی نهایی انتشار با تاریخ شمسی در نام فایل
 # ============================================================================
-# خروجی: download/ehsan-site-v1.1-<Shamsi date>.zip
+# خروجی: download/ehsan-site-v1.0-<Shamsi date>.zip
 #   personal-site/  → پکیج کامل نصب (standalone + install.sh + scripts + docs)
 #   source/         → snapshot کامل سورس (از git archive HEAD)
-#   TUTORIAL_FA_1.1.docx → آموزش کامل فارسی
+#   TUTORIAL_FA_1.0.docx → آموزش کامل فارسی
 #   DELIVERY-README.txt  → راهنمای محتویات و نصب
 # ============================================================================
 set -eo pipefail
@@ -37,7 +37,7 @@ jy, jm, jd = g2j(now.year, now.month, now.day)
 print(jy, f"{jm:02d}", f"{jd:02d}")
 PYEOF
 )"
-OUT_ZIP="$OUT_DIR/ehsan-site-v1.1-${JY}-${JM}-${JD}.zip"
+OUT_ZIP="$OUT_DIR/ehsan-site-v1.0-${JY}-${JM}-${JD}.zip"
 
 echo "=========================================="
 echo "  خروجی نهایی v1.1 — تاریخ شمسی ${JY}/${JM}/${JD}"
@@ -47,7 +47,7 @@ echo "=========================================="
 # --- 1) پکیج نصب (stage + install zip) ---------------------------------------
 bash "$PROJECT_DIR/scripts/package-v1.1.sh"
 
-STAGE="/tmp/install-v1.1/personal-site"
+STAGE="/tmp/install-v1.0/personal-site"
 if [ ! -d "$STAGE" ] || [ ! -f "$STAGE/server.js" ]; then
     echo "❌ stage پکیج نصب پیدا نشد"; exit 1
 fi
@@ -60,21 +60,22 @@ git archive HEAD | tar -x -C "$SRC_ROOT/source"
 echo "✅ سورس snapshot از HEAD ساخته شد ($(find "$SRC_ROOT/source" -type f | wc -l | tr -d ' ') فایل)"
 
 # --- 3) README تحویل ----------------------------------------------------------
-TUTORIAL="$STAGE/public/TUTORIAL_FA_1.1.docx"
+TUTORIAL="$STAGE/public/TUTORIAL_FA_1.0.docx"
 cat > "$SRC_ROOT/DELIVERY-README.txt" << EOF
-Ehsan Morad Personal Site — v1.1  (rev 1.1.2)
+Ehsan Morad Personal Site — نسخه ۱ (v1.0)
 Delivery date (Shamsi): ${JY}/${JM}/${JD}
 ====================================================
 
 محتویات:
   personal-site/           پکیج کامل نصب روی VPS (بدون نیاز به npm install)
                            — standalone build + install.sh + scripts + nginx conf
-  source/                  snapshot کامل سورس‌کد (git HEAD، همین نسخه)
-  TUTORIAL_FA_1.1.docx     آموزش کامل فارسی (۱۴ فصل)
+  source/                  snapshot کامل سورس‌کد (git HEAD، همین نسخه — کامنت‌دار)
+  TUTORIAL_FA_1.0.docx     آموزش کامل فارسی (۱۴ فصل — ساخت و کار با سایت)
+  AUDIT-REPORT-v1.0.md     گزارش کامل ممیزی ۶۰ کارگر (امنیت/پنل/کد/استقرار)
   DELIVERY-README.txt      همین فایل
 
 نصب سریع (Ubuntu 22/24، دسترسی sudo):
-  unzip ehsan-site-v1.1-${JY}-${JM}-${JD}.zip
+  unzip ehsan-site-v1.0-${JY}-${JM}-${JD}.zip
   cd personal-site
   sudo ./install.sh
 
@@ -82,12 +83,17 @@ Delivery date (Shamsi): ${JY}/${JM}/${JD}
   https://YOUR_DOMAIN/user-login   (username: admin — رمز تصادفی که install.sh
   فقط یک بار چاپ می‌کند؛ بعد از ورود از پنل رمز را عوض کنید)
 
+کانال نگهداری اختصاصی (v1.0):
+  روی خود سرور:   cd personal-site && bash scripts/maintenance.sh status
+  action ها: status | db-stats | security-logs | messages | chats | backup | help
+  توکن: db/.maintenance-token.txt (chmod 600) یا خروجی install.sh
+
 مهاجرت VPS به VPS:
   سرور قدیمی:  bash scripts/export-site.sh
   سرور جدید (بعد از install):  sudo bash scripts/import-site.sh <tarball>
   بازیابی بکاپ شبانه:  sudo bash scripts/restore-db.sh [backup.gz]
 
-این نسخه (rev 1.1.2) نتیجه‌ی ممیزی ۶۰ کاراکِ موازی است:
+این نسخه (v1.0) نتیجه‌ی ممیزی ۶۰ کارگرِ موازی است:
   امنیت (SSRF/DNS-rebinding، rate-limit، webhook timing، session revocation،
   XSS/URL validation، سقف بدنه‌ها)، تکمیل پنل ادمین (جست‌وجوی پیام‌ها، مسدودسازی
   IP چت، حذف تکی پیام چت، آمار هفته/referrer/CSV/پاک‌سازی، ویرایش username،
@@ -101,12 +107,15 @@ rm -f "$OUT_ZIP"
 STAGE_PARENT=$(dirname "$STAGE")
 ( cd "$STAGE_PARENT" && zip -r -q -9 "$OUT_ZIP" personal-site )
 ( cd "$SRC_ROOT" && zip -r -q -9 "$OUT_ZIP" source )
+# v1.0: گزارش ممیزی ۶۰ کارگر در ریشه‌ی zip
+cp "$PROJECT_DIR/AUDIT-REPORT-v1.0.md" "$SRC_ROOT/AUDIT-REPORT-v1.0.md"
+( cd "$SRC_ROOT" && zip -r -q -9 "$OUT_ZIP" AUDIT-REPORT-v1.0.md )
 # tutorial در ریشه (فقط اگر موجود بود — داخل پکیج هم هست)
 if [ -f "$TUTORIAL" ]; then
     TMPD=$(mktemp -d)
-    cp "$TUTORIAL" "$TMPD/TUTORIAL_FA_1.1.docx"
+    cp "$TUTORIAL" "$TMPD/TUTORIAL_FA_1.0.docx"
     cp "$SRC_ROOT/DELIVERY-README.txt" "$TMPD/"
-    ( cd "$TMPD" && zip -r -q -9 "$OUT_ZIP" TUTORIAL_FA_1.1.docx DELIVERY-README.txt )
+    ( cd "$TMPD" && zip -r -q -9 "$OUT_ZIP" TUTORIAL_FA_1.0.docx DELIVERY-README.txt )
     rm -rf "$TMPD"
 else
     ( cd "$SRC_ROOT" && zip -r -q -9 "$OUT_ZIP" DELIVERY-README.txt )

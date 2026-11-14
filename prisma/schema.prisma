@@ -54,6 +54,9 @@ model ChatMessage {
 
   @@index([sessionId])
   @@index([createdAt])
+  // v1.0 (audit W41-45 #1): ایندکس ترکیبی polling چت — فقط در apply_schema.py بود
+  // و مسیر نصب prisma db push آن را نمی‌ساخت (drift بین دو مسیر نصب)
+  @@index([sessionId, createdAt])
 }
 
 // Admin replies to contact messages (visible only to admin, optionally pushed to Bale)
@@ -80,7 +83,9 @@ model AiProvider {
   id        String   @id @default(cuid())
   name      String   // "openai" | "anthropic" | "groq" | "openrouter" | "ollama" | "custom"
   label     String   // Display name
-  apiKey    String?  // Encrypted API key (or null for local)
+  // v1.0 (audit W41-45 #2): نکته‌ی امنیتی — apiKey «بدون رمزنگاری» ذخیره می‌شود؛
+  // حفاظت واقعی = chmod 600 روی db/custom.db + بک‌آپ‌های 600. مستند شده در VERSION.txt.
+  apiKey    String?  // API key (plaintext at rest — file-permission protected; see audit note) (or null for local)
   baseUrl   String?  // Custom base URL (for Ollama, etc.)
   model     String   // Model name to use
   enabled   Boolean  @default(false)
@@ -363,7 +368,7 @@ model AccessUser {
   // رابطه با لاگ دسترسی‌ها
   accessLogs      AccessLog[]
 
-  @@index([username])
+  // v1.0 (audit W41-45 #8): @@index([username]) حذف شد — @unique خودش ایندکس دارد
   @@index([active])
 }
 
@@ -384,6 +389,8 @@ model AccessLog {
   @@index([userId])
   @@index([createdAt])
   @@index([action])
+  // v1.0 (audit W41-45 #1): ایندکس ترکیبی لاگ‌های هر کاربر — هم‌ترازسازی apply_schema.py
+  @@index([userId, createdAt])
 }
 
 // ============================================================================
@@ -412,6 +419,9 @@ model SecurityLog {
   @@index([type])
   @@index([ip])
   @@index([createdAt])
+  // v1.0 (audit W41-45 #1): ایندکس ترکیبی شمارش فعالیت مشکوک (type+ip+createdAt)
+  // — هم‌ترازسازی apply_schema.py
+  @@index([type, ip, createdAt])
 }
 
 // ============================================================================

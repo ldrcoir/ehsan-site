@@ -1,6 +1,6 @@
 {
   "name": "ehsan-site",
-  "version": "1.1.2",
+  "version": "1.0.0",
   "private": true,
   "engines": {
     "node": ">=20.9.0"

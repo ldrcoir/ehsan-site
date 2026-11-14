@@ -86,9 +86,17 @@ export default function ChatSection({ lang, welcomeText, title, subtitle, callsi
   useEffect(() => {
     if (!sessionId) return;
     lastPollTsRef.current = Date.now();
+    // v1.0 (audit W36-40 #6): در-flight guard + AbortController — پاسخِ کند که
+    // از tick قبلی مانده با tick بعدی overlap می‌کرد و unmount هم setMessages
+    // بعد از detach را صدا می‌زد
+    let inFlight = false;
+    let controller: AbortController | null = null;
     const pollInterval = setInterval(async () => {
+      if (inFlight) return;
+      inFlight = true;
+      controller = new AbortController();
       try {
-        const res = await fetch(`/api/chat/messages?sessionId=${sessionId}&since=${lastPollTsRef.current}&visitorId=${encodeURIComponent(visitorId)}`);
+        const res = await fetch(`/api/chat/messages?sessionId=${sessionId}&since=${lastPollTsRef.current}&visitorId=${encodeURIComponent(visitorId)}`, { signal: controller.signal });
         const data = await res.json();
         if (data.ok && data.messages && data.messages.length > 0) {
           setMessages((prev) => {
@@ -108,9 +116,17 @@ export default function ChatSection({ lang, welcomeText, title, subtitle, callsi
           });
           lastPollTsRef.current = data.serverTime || lastPollTsRef.current;
         }
-      } catch {}
+      } catch {
+        // abort یا شبکه — بی‌صدا؛ tick بعدی دوباره تلاش می‌کند
+      } finally {
+        inFlight = false;
+        controller = null;
+      }
     }, 3000);
-    return () => clearInterval(pollInterval);
+    return () => {
+      clearInterval(pollInterval);
+      controller?.abort();
+    };
   }, [sessionId, visitorId]);
 
   const send = async (e: FormEvent) => {

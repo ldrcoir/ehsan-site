@@ -7,10 +7,34 @@
 //   - session token به passwordHash گره خورده (pwTag) → بعد از تغییر/ریست رمز،
 //     همه‌ی توکن‌های قدیمی فوراً بی‌اعتبار می‌شن (session revocation)
 //   - انقضا + ساعت/روز مجاز در «هر درخواست» چک می‌شه (قبلاً فقط موقع login بود)
+// v1.0 (audit W16-20 #1 / W11-15 #10):
+//   - سیستم permissions واقعی شد — قبلاً فیلد permissions در DB ذخیره و در UI
+//     نمایش داده می‌شد ولی هیچ API آن را چک نمی‌کرد (dead feature گمراه‌کننده).
+//     حالا checkAdminAuth(request, requiredTab?) برای تب‌های غیرمتمرکز (پیام‌ها،
+//     کلیپ‌ها، محتوا، متن، منو، تم‌ها) دسترسی کاربر limited را بر اساس همین فیلد
+//     می‌سنجد. تب‌های حساس (users، stats، settings، …) همچنان فقط ادمین‌اند.
 // ============================================================================
 
+import crypto from "crypto";
 import { db } from "@/lib/db";
-import { getSessionFromRequest, pwTagOf } from "@/lib/access-auth";
+import { getSessionFromRequest, pwTagOf, SESSION_DURATION_MS } from "@/lib/access-auth";
+
+// تب‌هایی که با permissions کاربر limited قابل واگذاری‌اند (این لیست باید با
+// PERMISSION_SECTIONS در AccessUserManager.tsx و TAB_PERMISSIONS پایین همخوان بماند)
+const GRANTABLE_TABS = new Set(["messages", "clips", "content", "text", "nav", "themes"]);
+
+// نقشه‌ی API → تب — هر مسیر admin که قابل واگذاری است به تب خودش اشاره می‌کند
+export const TAB_PERMISSIONS: Record<string, string> = {
+  "/api/messages": "messages",
+  "/api/admin/reply": "messages",
+  "/api/admin/clear": "messages",
+  "/api/admin/clips": "clips",
+  "/api/admin/content": "content",
+  "/api/admin/equipment": "content",
+  "/api/admin/text": "text",
+  "/api/admin/nav": "nav",
+  "/api/admin/themes": "themes",
+};
 
 // ----------------------------------------------------------------------------
 // checkScheduleWindow — بررسی انقضا + روز/ساعت مجاز روی آبجکت کاربر (بدون query اضافه)
@@ -50,31 +74,46 @@ function checkScheduleWindow(user: {
 }
 
 // ----------------------------------------------------------------------------
+// pwTagMatches — مقایسه‌ی timing-safe دو pwTag (v1.0 — audit W1-5 #5)
+// قبلاً !== معمولی بود؛ عملگرها با استاندارد timing-safe بقیه‌ی کد یکسان شدند
+// ----------------------------------------------------------------------------
+function pwTagMatches(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, "utf8");
+  const bufB = Buffer.from(b, "utf8");
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+// ----------------------------------------------------------------------------
 // checkAdminAuth — بررسی session cookie ادمین (تنها روش احراز هویت)
 // این تابع برای API routes استفاده می‌شه.
 // فقط session cookie رو چک می‌کنه — هیچ password fallback نیست.
+//
+// v1.0: پارامتر اختیاری requiredTab — اگر مسیرهای واگذارشدنی صدا بزنند، کاربر
+// limited که permissions آن شامل تب است هم قبول می‌شود. بدون requiredTab فقط ادمین.
 // ----------------------------------------------------------------------------
-export async function checkAdminAuth(request: Request): Promise<{ ok: boolean; userId?: string }> {
+export async function checkAdminAuth(
+  request: Request,
+  requiredTab?: string
+): Promise<{ ok: boolean; userId?: string; role?: string }> {
   try {
     const session = getSessionFromRequest(request);
     if (!session) return { ok: false };
 
     const user = await db.accessUser.findUnique({ where: { id: session.userId } });
     if (!user || !user.active) return { ok: false };
-    if (user.role !== "admin") return { ok: false };
 
-    // v1.1: توکن‌های قدیمی (قبل از تغییر رمز) — pwTag دیگر با hash فعلی نمی‌خواند
-    if (pwTagOf(user.passwordHash) !== session.pwTag) {
+    // v1.0: توکن‌های قدیمی (قبل از تغییر رمز) — pwTag دیگر با hash فعلی نمی‌خواند
+    if (!pwTagMatches(pwTagOf(user.passwordHash), session.pwTag)) {
       return { ok: false };
     }
 
     // v1.1.1 (audit S1-M1): session revocation هنگام logout.
     // توکنِ صادرشده در زمان T در زمان T+24h منقضی می‌شود، پس T = expiresAt - 24h.
     // اگر sessionsValidAfter بعد از T باشد یعنی توکن قبل از logout صادر شده → رد.
-    const SESSION_MS = 24 * 60 * 60 * 1000;
     if (
       user.sessionsValidAfter &&
-      session.expiresAt - SESSION_MS < user.sessionsValidAfter.getTime()
+      session.expiresAt - SESSION_DURATION_MS < user.sessionsValidAfter.getTime()
     ) {
       return { ok: false };
     }
@@ -83,7 +122,22 @@ export async function checkAdminAuth(request: Request): Promise<{ ok: boolean; u
     const schedule = checkScheduleWindow(user);
     if (!schedule.ok) return { ok: false };
 
-    return { ok: true, userId: user.id };
+    if (user.role === "admin") {
+      return { ok: true, userId: user.id, role: "admin" };
+    }
+
+    // v1.0: کاربر limited — فقط اگر مسیر واگذارشدنی باشد و permission داشته باشد.
+    // requiredTab باید از GRANTABLE_TABS باشد؛ تب‌های حساس هرگز از این رد نمی‌شوند.
+    if (
+      requiredTab &&
+      GRANTABLE_TABS.has(requiredTab) &&
+      user.permissions &&
+      user.permissions.split(",").map(p => p.trim()).includes(requiredTab)
+    ) {
+      return { ok: true, userId: user.id, role: "user" };
+    }
+
+    return { ok: false };
   } catch {
     return { ok: false };
   }

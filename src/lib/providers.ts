@@ -72,6 +72,54 @@ export async function callLLMWithFallback(
   throw new Error(`All providers failed. Last error: ${lastError?.message}`);
 }
 
+// v1.0 (audit W21-25 #3): خواندن bounded بدنه‌ی پاسخ — سقفِ قبلی فقط روی هدر
+// content-length بود؛ پاسخ chunked بدون هدر تا سقف timeout کامل در حافظه buffer
+// می‌شد. حالا هر ۴ مسیر از این helper استفاده می‌کنند: بیش از 5MB → خطا.
+const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
+async function readBoundedJson(res: Response): Promise<unknown> {
+  const lenHeader = parseInt(res.headers.get("content-length") || "0", 10);
+  if (lenHeader > MAX_RESPONSE_BYTES) throw new Error("Provider response too large");
+  if (!res.body) return null;
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_RESPONSE_BYTES) {
+      try { await reader.cancel(); } catch { /* ignore */ }
+      throw new Error("Provider response too large");
+    }
+    chunks.push(value);
+  }
+  const buf = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) { buf.set(c, off); off += c.byteLength; }
+  try {
+    return JSON.parse(new TextDecoder().decode(buf));
+  } catch {
+    throw new Error("Provider returned invalid JSON");
+  }
+}
+
+// v1.0 (audit W21-25 #5): استثنای loopback:11434 فقط برای provider نوع ollama —
+// قبلاً هر providerای می‌توانست به localhost:11434 اشاره کند (credential لو می‌رفت)
+function assertNotLoopbackForNonOllama(provider: ProviderConfig): void {
+  if (provider.type === "ollama") return;
+  try {
+    const u = new URL(provider.baseUrl || "");
+    const host = u.hostname.replace(/^\[|\]$/g, "").replace(/\.$/, "").toLowerCase();
+    const isLoopback =
+      host === "localhost" || host.endsWith(".localhost") || host === "127.0.0.1" ||
+      host === "::1" || host.startsWith("::ffff:127.") || host === "[::1]";
+    if (isLoopback) throw new Error("Loopback baseUrl is only allowed for the ollama provider type");
+  } catch (e) {
+    if (e instanceof Error && e.message.includes("Loopback")) throw e;
+    // URL parse error → validateBaseUrlAsync خودش رد می‌کند
+  }
+}
+
 /**
  * Call a specific provider's LLM API.
  */
@@ -79,6 +127,7 @@ async function callProvider(
   provider: ProviderConfig,
   messages: { role: string; content: string }[]
 ): Promise<string> {
+  assertNotLoopbackForNonOllama(provider);
   switch (provider.type) {
     case "openai":
       return callOpenAI(provider, messages);
@@ -108,7 +157,8 @@ async function callOpenAI(provider: ProviderConfig, messages: any[]): Promise<st
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${provider.apiKey}`,
+      // v1.0 (audit W21-25 #9): provider بدون apiKey دیگر "Bearer undefined" نمی‌فرستد
+      ...(provider.apiKey ? { "Authorization": `Bearer ${provider.apiKey}` } : {}),
     },
     body: JSON.stringify({
       model: provider.model,
@@ -122,11 +172,8 @@ async function callOpenAI(provider: ProviderConfig, messages: any[]): Promise<st
     const err = (await res.text()).slice(0, 2000);
     throw new Error(`OpenAI API error: ${res.status} ${err}`);
   }
-  // v1.1.1 (audit S5-L5): سقف حجم پاسخ — provider معیوب/پیکربندی بد نمی‌تواند OOM بسازد
-  const maxBytes = 5 * 1024 * 1024;
-  const lenHeader = parseInt(res.headers.get("content-length") || "0", 10);
-  if (lenHeader > maxBytes) throw new Error("Provider response too large");
-  const data = await res.json();
+  // v1.0 (audit W21-25 #3): bounded read — سقف 5MB روی کل بدنه (نه فقط هدر)
+  const data = (await readBoundedJson(res)) as { choices?: { message?: { content?: string } }[] };
   return data?.choices?.[0]?.message?.content || "";
 }
 
@@ -155,10 +202,8 @@ async function callAnthropic(provider: ProviderConfig, messages: any[]): Promise
     const err = (await res.text()).slice(0, 2000); // v1.1.1 (S5-L5): سقف بدنه خطا
     throw new Error(`Anthropic API error: ${res.status} ${err}`);
   }
-  // v1.1.1 (audit S5-L5): سقف حجم پاسخ
-  const lenHeaderA = parseInt(res.headers.get("content-length") || "0", 10);
-  if (lenHeaderA > 5 * 1024 * 1024) throw new Error("Provider response too large");
-  const data = await res.json();
+  // v1.0 (audit W21-25 #3): bounded read — سقف 5MB روی کل بدنه
+  const data = (await readBoundedJson(res)) as { content?: { text?: string }[] };
   return data?.content?.[0]?.text || "";
 }
 
@@ -183,10 +228,8 @@ async function callOllama(provider: ProviderConfig, messages: any[]): Promise<st
     const err = (await res.text()).slice(0, 2000); // v1.1.1 (S5-L5): سقف بدنه خطا
     throw new Error(`Ollama API error: ${res.status} ${err}`);
   }
-  // v1.1.1 (audit S5-L5): سقف حجم پاسخ
-  const lenHeaderO = parseInt(res.headers.get("content-length") || "0", 10);
-  if (lenHeaderO > 5 * 1024 * 1024) throw new Error("Provider response too large");
-  const data = await res.json();
+  // v1.0 (audit W21-25 #3): bounded read — سقف 5MB روی کل بدنه
+  const data = (await readBoundedJson(res)) as { message?: { content?: string } };
   return data?.message?.content || "";
 }
 
@@ -202,7 +245,8 @@ async function callGroq(provider: ProviderConfig, messages: any[]): Promise<stri
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${provider.apiKey}`,
+      // v1.0 (audit W21-25 #9): بدون apiKey هدر Authorization فرستاده نمی‌شود
+      ...(provider.apiKey ? { "Authorization": `Bearer ${provider.apiKey}` } : {}),
     },
     body: JSON.stringify({
       model: provider.model,
@@ -215,10 +259,8 @@ async function callGroq(provider: ProviderConfig, messages: any[]): Promise<stri
     const err = (await res.text()).slice(0, 2000); // v1.1.1 (S5-L5): سقف بدنه خطا
     throw new Error(`Groq error: ${res.status} ${err}`);
   }
-  // v1.1.1 (audit S5-L5): سقف حجم پاسخ
-  const lenHeaderG = parseInt(res.headers.get("content-length") || "0", 10);
-  if (lenHeaderG > 5 * 1024 * 1024) throw new Error("Provider response too large");
-  const data = await res.json();
+  // v1.0 (audit W21-25 #3): bounded read — سقف 5MB روی کل بدنه
+  const data = (await readBoundedJson(res)) as { choices?: { message?: { content?: string } }[] };
   return data?.choices?.[0]?.message?.content || "";
 }
 

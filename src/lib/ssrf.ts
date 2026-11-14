@@ -58,6 +58,12 @@ function isPrivateHost(h: string): boolean {
   if (/^fe[89ab][0-9a-f]:/.test(h)) return true;
   // NAT64 well-known prefix 64:ff9b::/96 — embeds an IPv4 literal in the last 32 bits
   if (/^64:ff9b:/i.test(h)) return true;
+  // v1.0 (audit W21-25 #6): محدوده‌های transition IPv6 — 6to4 (2002::/16) آدرس
+  // IPv4 را در بیت‌ها جاسازی می‌کند (مثل 2002:a9fe:a9fe:: = 169.254.169.254) و
+  // Teredo (2001:0::/32)؛ هر دو deprecated ولی حذفشان هزینه‌ای ندارد
+  if (/^2002:/i.test(h)) return true;
+  if (/^2001:0:/i.test(h)) return true;
+  if (/^2001:db8:/i.test(h)) return true; // documentation range
   return false;
 }
 
@@ -127,6 +133,7 @@ export function validateBaseUrl(baseUrl: string): { valid: boolean; sanitized: s
     // block cloud metadata hostnames
     const blockedHosts = new Set([
       "metadata.google.internal", "metadata", "169.254.169.254", "metadata.azure.com",
+      "metadata.goog", // v1.0 (audit W21-25 #7): دامنه‌ی کوتاه گوگل برای metadata
     ]);
     if (blockedHosts.has(host)) return fail;
 
@@ -177,6 +184,14 @@ export function validateBaseUrl(baseUrl: string): { valid: boolean; sanitized: s
 export async function validateBaseUrlAsync(baseUrl: string): Promise<{ valid: boolean; sanitized: string }> {
   const sync = validateBaseUrl(baseUrl);
   if (!sync.valid) return { valid: false, sanitized: "" };
+  // v1.0 (audit W21-25 #1): استثنای Ollama — sync لایه localhost:11434 را قبول می‌کند
+  // ولی async بعداً چون DNS آن به 127.0.0.1 resolve می‌شد رد می‌کرد ( contradictions؛
+  // provider پیش‌فرض seed شده دقیقاً http://localhost:11434 است و همیشه fail می‌شد).
+  // محدودیت پورت 11434 در sync اعمال شده — اینجا فقط ردِ private-IP را برای همین
+  // استثنای خاص رد می‌کنیم.
+  const isOllamaLoopbackException =
+    (sync.host === "localhost" || sync.host.endsWith(".localhost")) ;
+  if (isOllamaLoopbackException) return { valid: true, sanitized: sync.sanitized };
   // IP literal ها (dotted-decimal یا IPv6 با :) توسط چک‌های متنی بالا پوشش داده شده‌اند
   const isIpLiteral = /^\d{1,3}(\.\d{1,3}){3}$/.test(sync.host) || sync.host.includes(":");
   if (isIpLiteral) return { valid: true, sanitized: sync.sanitized };

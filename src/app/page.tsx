@@ -27,7 +27,9 @@ const langLabel: Record<Lang, string> = { en: "EN", de: "DE", fa: "FA" };
 // javascript:/data: injection coming from the admin panel.
 const safeHref = (raw: unknown): string => {
   const h = String(raw || "#").trim();
-  if (h.startsWith("#") || h.startsWith("/") || h.startsWith("mailto:") || h.startsWith("tel:")) return h;
+  // v1.0 (audit W36-40 #9): //evil.com مسیر protocol-relative است و به دامنه‌ی
+  // دیگر می‌رود — مثل بقیه‌ی مسیرهای نسبی از / شروع می‌شود ولی باید رد شود
+  if (h.startsWith("#") || (h.startsWith("/") && !h.startsWith("//")) || h.startsWith("mailto:") || h.startsWith("tel:")) return h;
   try {
     const u = new URL(h);
     if (u.protocol === "http:" || u.protocol === "https:") return h;
@@ -136,7 +138,20 @@ export default function Home() {
   const [aparatClips, setAparatClips] = useState<any[]>([]);
   useEffect(() => {
     setMounted(true);
-    setFormLoadTime(Date.now()); // V17.4: یکبار ست می‌شه — نه روی هر render
+    // v1.0 (audit W36-40 #2): زمانِ شروع فرم دیگر mount صفحه نیست — اولین
+    // تعامل کاربر با فرم است. قبلاً یک انسانِ سریع (autofill) در <۲ ثانیه از
+    // mount پیام می‌فرستاد و time-trap آن را بی‌صدا دور می‌ریخت در حالی که
+    // «موفق» نشان داده می‌شد.
+    // setFormLoadTime(Date.now()); — حذف شد؛ پایین‌تر با event listener ست می‌شود
+    const initFormLoadTime = () => {
+      setFormLoadTime((prev) => (prev === 0 ? Date.now() : prev));
+    };
+    const form = document.querySelector<HTMLFormElement>(".contact-form");
+    if (form) {
+      form.addEventListener("focusin", initFormLoadTime, { once: true });
+      form.addEventListener("input", initFormLoadTime, { once: true });
+      form.addEventListener("submit", initFormLoadTime, { once: true });
+    }
     // Load reCAPTCHA script only on client, after mount
     if (!document.getElementById("recaptcha-api-script")) {
       const s = document.createElement("script");
@@ -405,6 +420,10 @@ export default function Home() {
   }, [lang]);
 
   // reveal on scroll
+  // v1.0 (audit W36-40 #1 — HIGH): قبلاً observer فقط یک بار روی mount اجرا می‌شد؛
+  // کارت‌های skill که بعد از رسیدن /api/content رندر می‌شدند هیچ‌وقت observe نمی‌شدند
+  // و چون .reveal با opacity:0 شروع می‌شود، برای همیشه نامرئی می‌ماندند. حالا
+  // observer با هر تغییرِ طول محتوا دوباره راه می‌افتد و عناصر تازه را می‌گیرد.
   useEffect(() => {
     const els = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"));
     const io = new IntersectionObserver(
@@ -421,7 +440,7 @@ export default function Home() {
     );
     els.forEach((el) => io.observe(el));
     return () => io.disconnect();
-  }, []);
+  }, [siteContent.skills?.length, aparatClips.length]);
 
   // lock body when menu/modal open
   useEffect(() => {
@@ -1083,7 +1102,9 @@ export default function Home() {
                   try {
                     const u = new URL(url);
                     const allowed = ["www.aparat.com", "aparat.com", "www.youtube.com", "youtube.com", "youtu.be", "player.vimeo.com"];
-                    if ((u.protocol === "https:" || u.protocol === "http:") && allowed.includes(u.hostname)) {
+                    // v1.0 (audit W36-40 #4): فقط https — روی سایت HTTPS، iframe http
+                    // به‌عنوان mixed-content بلاک می‌شود (ناحیه‌ی مرده‌ی ویدیو)
+                    if (u.protocol === "https:" && allowed.includes(u.hostname)) {
                       return url;
                     }
                   } catch {

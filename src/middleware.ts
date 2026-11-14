@@ -26,6 +26,11 @@ const RATE_LIMIT_PATHS: Record<string, { max: number; windowMs: number }> = {
   "/api/contact": { max: 8, windowMs: 15 * 60 * 1000 },
   "/api/chat": { max: 8, windowMs: 15 * 60 * 1000 },
   "/api/track": { max: 30, windowMs: 60 * 1000 },
+  // v1.0: کانال نگهداری — ۲۰ درخواست در ۵ دقیقه برای هر IP
+  "/api/maintenance": { max: 20, windowMs: 5 * 60 * 1000 },
+  // v1.0 (audit W31-35 #2): webhook ها — بدون محدودیت، CPU-DoS با بدنه‌ی ۱MB ممکن بود
+  "/api/bale/webhook": { max: 60, windowMs: 60 * 1000 },
+  "/api/telegram/webhook": { max: 60, windowMs: 60 * 1000 },
 };
 
 // مسیرهای عمومی که نباید session چک شوند
@@ -33,6 +38,9 @@ const RATE_LIMIT_PATHS: Record<string, { max: number; windowMs: number }> = {
 // از لیست معافیت CSRF حذف شدن — همه‌شون POST هم‌مبدأ می‌فرستن (Origin داره)،
 // پس Origin check حالا روشون اعمال می‌شه (بستن login CSRF + cross-site spam).
 // فقط webhookها معاف می‌مونن (auth خودشون با X-Webhook-Secret + timingSafeEqual).
+// v1.0: /api/maintenance هم معاف است — auth آن فقط با هدر X-Maintenance-Token
+// و timingSafeEqual است (هیچ cookie/session در کار نیست)؛ CSRF که به cookie
+// متکی است اینجا ذاتاً بی‌اثر است. محدودیت rate-limit و لاگ داخل route/middleware:
 const PUBLIC_API_PREFIXES = [
   "/api/content",
   "/api/clips",
@@ -40,6 +48,7 @@ const PUBLIC_API_PREFIXES = [
   // V18.0: /api/user/logout از PUBLIC_API_PREFIXES حذف شد (CSRF protection)
   "/api/bale/webhook",
   "/api/telegram/webhook",
+  "/api/maintenance",
 ];
 
 // ---------------------------------------------------------------------------
@@ -54,7 +63,9 @@ function checkRateLimit(key: string, max: number, windowMs: number): boolean {
     // v1.1 (security): سقف سخت روی تعداد کلیدها — جلوگیری از memory-DoS با
     // چرخش IP/مسیر بین دو پاکسازی دوره‌ای
     if (!entry && rateLimitMap.size >= 10000) {
-      // قدیمی‌ترین کلیدهای منقضی را حذف کن؛ اگر باز هم پر بود، قدیمی‌ترین را حذف کن
+      // قدیمی‌ترین منقضی‌ها حذف می‌شوند؛ اگر باز هم پر بود، bucket با نزدیک‌ترین
+      // resetAt حذف می‌شود — v1.0 (audit W6-10 #7): قبلاً first-inserted حذف می‌شد که
+      // bucket های فعال کاربران دیگر را زیر flood ریست می‌کرد
       let evicted = false;
       for (const [k, v] of rateLimitMap) {
         if (v.resetAt < now) {
@@ -64,8 +75,16 @@ function checkRateLimit(key: string, max: number, windowMs: number): boolean {
         }
       }
       if (!evicted && rateLimitMap.size >= 10000) {
-        const firstKey = rateLimitMap.keys().next().value;
-        if (firstKey !== undefined) rateLimitMap.delete(firstKey);
+        // smallest resetAt = نزدیک‌ترین به انقضا — کم‌ترین آسیب به bucket های فعال
+        let victimKey: string | undefined;
+        let victimReset = Infinity;
+        for (const [k, v] of rateLimitMap) {
+          if (v.resetAt < victimReset) {
+            victimReset = v.resetAt;
+            victimKey = k;
+          }
+        }
+        if (victimKey !== undefined) rateLimitMap.delete(victimKey);
       }
     }
     rateLimitMap.set(key, { count: 1, resetAt: now + windowMs });
@@ -169,6 +188,11 @@ function isSensitivePath(pathname: string): boolean {
   return (
     pathname.startsWith(ADMIN_API_PREFIX) ||
     pathname === "/api/messages" ||
+    pathname === "/api/maintenance" || // v1.0: کانال نگهداری — هرگز cache نشود
+    // v1.0 (audit W26-30 #2 / W6-10 #9): این سه GET هم داده‌ی حساس/شخصی برمی‌گردانند
+    pathname === "/api/user/verify" ||
+    pathname === "/api/chat" ||
+    pathname === "/api/chat/messages" ||
     ADMIN_PANEL_PATHS.some(p => pathname === p || pathname.startsWith(p + "/"))
   );
 }
@@ -218,8 +242,9 @@ const CSP = [
   "object-src 'none'",
   // base-uri — جلوگیری از hijack
   "base-uri 'self'",
-  // form-action — فقط به خودمون + formsubmit.co
-  "form-action 'self' https://formsubmit.co",
+  // form-action — فقط به خودمون (v1.0: formsubmit فقط سمت سرور استفاده می‌شود؛
+  // audit W6-10 #10 — سطح exfil اشخاص ثالث از CSP حذف شد)
+  "form-action 'self'",
   // frame-ancestors — جلوگیری از clickjacking
   "frame-ancestors 'none'",
 ].join("; ");
@@ -228,7 +253,21 @@ const CSP = [
 // MAIN MIDDLEWARE
 // ===========================================================================
 export async function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
+  // v1.0 (audit W6-10 #1): نرمال‌سازی مسیر — Next روی مسیرِ decode شده رِزولو می‌کند
+  // ولی req.nextUrl.pathname percent-encoded می‌ماند؛ پس POST /%61pi/maintenance یا
+  // //api/maintenance به هندلر واقعی می‌رسید ولی همه‌ی چک‌های مسیر‌محور (rate limit،
+  // gate های session، لیست public، sensitive) را رد می‌شد. الان یک مقدار نرمال‌شده
+  // برای «همه‌ی» چک‌ها استفاده می‌شود.
+  let pathname = req.nextUrl.pathname;
+  try {
+    const decoded = decodeURIComponent(pathname);
+    if (!decoded.includes("%")) pathname = decoded; // decode دوم را رد کن (input عجیب)
+  } catch {
+    // مسیر با encoding خراب — همان raw می‌ماند و پایین‌تر رد می‌شود
+  }
+  pathname = pathname.replace(/\/{2,}/g, "/"); // //api/x → /api/x
+  if (pathname.length > 1 && pathname.endsWith("/")) pathname = pathname.slice(0, -1);
+
   const method = req.method;
   const cookieHeader = req.headers.get("cookie") || "";
   const isHttps =
@@ -259,12 +298,11 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  // --- 2. Rate limit برای login/contact/chat/track ---
-  // v1.1.1 (audit S4-M2): نرمال‌سازی مسیر قبل از lookup — /api/track/ و //api/track
-  // نباید از lookup فرار کنند
-  const normalizedPath = pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+  // --- 2. Rate limit برای login/contact/chat/track/webhook/maintenance ---
+  // (نرمال‌سازی مسیر بالاتر انجام شد — v1.1.1 audit S4-M2)
   // v1.1.2 (audit SEC-14-M): rate-limit فقط روی متدهای mutation — قبلاً GET پنل ادمین
   // (/api/chat polling) سهمیه‌ی عمومی 8/15min همان مسیر را می‌سوزاند و پنل ادمین 429 می‌گرفت.
+  const normalizedPath = pathname;
   const isMutating = method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE";
   const rateLimit = isMutating ? RATE_LIMIT_PATHS[normalizedPath] : undefined;
   if (rateLimit) {
@@ -303,13 +341,16 @@ export async function middleware(req: NextRequest) {
   // V17.8: DELETE هم اضافه شد (قبلاً missing بود)
   if (method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE") {
     const contentLengthHeader = req.headers.get("content-length");
-    const contentLength = parseInt(contentLengthHeader || "0", 10);
-    if (contentLength > 1024 * 1024) { // 1MB limit
-      const res = NextResponse.json(
-        { ok: false, error: "payload_too_large" },
-        { status: 413 }
-      );
-      return addSecurityHeaders(res, pathname, isHttps);
+    if (contentLengthHeader !== null) {
+      const contentLength = Number(contentLengthHeader);
+      // v1.0 (audit W6-10 #8): مقدار غیرعددی (NaN) قبلاً از چک رد می‌شد — الان 413
+      if (!Number.isFinite(contentLength) || contentLength > 1024 * 1024) { // 1MB limit
+        const res = NextResponse.json(
+          { ok: false, error: "payload_too_large" },
+          { status: 413 }
+        );
+        return addSecurityHeaders(res, pathname, isHttps);
+      }
     }
     // V18.3 (security) + v1.1.1 (audit S4-M4): هر درخواستی با transfer-encoding
     // روی body-methods رد می‌شه — ترکیب Content-Length کوچک + بدنه chunked بزرگ
@@ -334,10 +375,11 @@ export async function middleware(req: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * همه مسیرها به جز:
-     * - فایل‌های استاتیک (_next/static, _next/image, favicon.ico)
-     * - فایل‌های عمومی (png, jpg, svg, etc.)
+     * v1.0 (audit W6-10 #6): همه‌ی مسیرهای API مستقیم match می‌شوند تا هیچ درخواست
+     * API با پسوند فایل (مثل /api/admin/users/foo.png) از middleware و rate limit
+     * و CSRF فرار نکند. بقیه‌ی مسیرها مثل قبل به‌جز فایل‌های استاتیک.
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|webp|svg|ico|txt|xml|css|js|woff|woff2|ttf|eot)$).*)",
+    "/api/:path*",
+    "/((?!_next/static|_next/image|favicon.ico|api(?:/|$).*\\.(?:png|jpg|jpeg|gif|webp|svg|ico|txt|xml|css|js|woff|woff2|ttf|eot)$|.*\\.(?:png|jpg|jpeg|gif|webp|svg|ico|txt|xml|css|js|woff|woff2|ttf|eot)$).*)",
   ],
 };

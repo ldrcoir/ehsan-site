@@ -1,4 +1,4 @@
-import { checkAdminAuth } from "@/lib/admin-auth";
+import { checkAdminAuth, TAB_PERMISSIONS } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     }
 
     // V18.3: dead password param removed (checkAdminAuth ignores it)
-    const authCheck = await checkAdminAuth(req); if (!authCheck.ok) {
+    const authCheck = await checkAdminAuth(req, TAB_PERMISSIONS["/api/messages"]); if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 

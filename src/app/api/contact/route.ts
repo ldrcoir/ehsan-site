@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { getClientIpSafe } from "@/lib/ip";
 import { db } from "@/lib/db";
-import { logSecurityEvent } from "@/lib/security";
+import { logSecurityEvent, isIpBlocked } from "@/lib/security";
 
 // Simple in-memory rate limiter: max 3 messages per IP per 10 minutes
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 const RATE_LIMIT_MAX = 3;
 const hits = new Map<string, number[]>();
+// v1.0 (audit W26-30 #6): سقف سخت روی کلیدها — IP rotation بین دو پاکسازی
+// می‌توانست Map را بی‌رویه بزرگ کند (هم‌الگو با middleware)
+const HITS_MAP_MAX = 10000;
 
 // V17.4: پاکسازی دوره‌ای Map برای جلوگیری از memory leak
 if (typeof setInterval !== "undefined") {
@@ -30,6 +33,11 @@ function rateLimit(ip: string): boolean {
   if (arr.length >= RATE_LIMIT_MAX) return false;
   arr.push(now);
   hits.set(ip, arr);
+  // v1.0 (audit W26-30 #6): سقف سخت تعداد کلیدها
+  if (hits.size > HITS_MAP_MAX) {
+    const oldestKey = hits.keys().next().value;
+    if (oldestKey !== undefined) hits.delete(oldestKey);
+  }
   return true;
 }
 
@@ -59,7 +67,12 @@ export async function POST(req: Request) {
     }
     // V18.2: use shared IP helper
     const ip = getClientIpSafe(req);
-    const userAgent = req.headers.get("user-agent") || "";
+    // v1.0 (audit W16-20 #3): IP مسدودشده حق ارسال فرم تماس ندارد — هم‌مثل login/chat
+    if (ip !== "unknown" && (await isIpBlocked(ip))) {
+      return NextResponse.json({ ok: false, error: "ip_blocked" }, { status: 403 });
+    }
+    // v1.0 (audit W41-45 #12): UA clamp — قبلاً هدر خام تا 16KB در DB ذخیره می‌شد
+    const userAgent = (req.headers.get("user-agent") || "").slice(0, 300);
 
     // Bot detection
     if (/bot|crawl|spider|slurp|wget|curl/i.test(userAgent) && userAgent.length < 80) {
@@ -140,6 +153,8 @@ export async function POST(req: Request) {
         body: new URLSearchParams({
           secret: process.env.RECAPTCHA_SECRET || "",
           response: recaptchaToken,
+          // v1.0 (audit W26-30 #7): اتصال توکن به IP درخواست‌کننده (defense-in-depth)
+          ...(ip !== "unknown" ? { remoteip: ip } : {}),
         }).toString(),
       });
       const verifyData = await verifyRes.json();

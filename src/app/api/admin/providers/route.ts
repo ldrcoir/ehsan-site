@@ -1,4 +1,5 @@
 import { checkAdminAuth } from "@/lib/admin-auth";
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { seedDefaultProviders } from "@/lib/providers";
@@ -122,7 +123,15 @@ export async function POST(req: Request) {
         if (!id) {
           return NextResponse.json({ ok: false, error: "missing_id" }, { status: 400 });
         }
-        await db.aiProvider.delete({ where: { id } });
+        try {
+          await db.aiProvider.delete({ where: { id } });
+        } catch (e) {
+          // v1.0 (audit W16-20 #6): id قدیمی/حذف‌شده → 404 شفاف (قبلاً 500 می‌داد)
+          if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {
+            return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
+          }
+          throw e;
+        }
         return NextResponse.json({ ok: true });
       }
 

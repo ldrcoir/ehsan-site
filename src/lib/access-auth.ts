@@ -42,6 +42,9 @@ function getSecret(): string {
   return _SECRET;
 }
 const SESSION_DURATION_HOURS = 24;
+// v1.0 (audit W1-5 #9): ثابت واحد مدت session — قبلاً در ۴ جا تکرار شده بود و
+// اگر یکی عوض می‌شد، محاسبه‌ی session revocation (expiresAt - SESSION_MS) خاموش می‌شد
+export const SESSION_DURATION_MS = SESSION_DURATION_HOURS * 60 * 60 * 1000;
 
 // ----------------------------------------------------------------------------
 // hashPassword — هش کردن رمز عبور با bcrypt
@@ -72,7 +75,7 @@ export function pwTagOf(passwordHash: string): string {
 }
 
 export function createSessionToken(userId: string, passwordHash: string): string {
-  const expiresAt = Date.now() + SESSION_DURATION_HOURS * 60 * 60 * 1000;
+  const expiresAt = Date.now() + SESSION_DURATION_MS;
   const payload = `${userId}.${expiresAt}.${pwTagOf(passwordHash)}`;
   const sig = hmac(payload);
   return Buffer.from(`${payload}.${sig}`).toString("base64");
@@ -124,9 +127,8 @@ export async function checkAccess(userId: string, tokenExpiresAt?: number): Prom
   if (!user.active) return { allowed: false, reason: "access_denied_inactive" };
 
   // v1.1.1 (audit S1-M1): توکن‌های صادرشده قبل از logout — رد (session revocation)
-  const SESSION_MS = 24 * 60 * 60 * 1000;
   if (tokenExpiresAt && user.sessionsValidAfter) {
-    if (tokenExpiresAt - SESSION_MS < user.sessionsValidAfter.getTime()) {
+    if (tokenExpiresAt - SESSION_DURATION_MS < user.sessionsValidAfter.getTime()) {
       return { allowed: false, reason: "session_revoked" };
     }
   }

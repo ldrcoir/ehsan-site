@@ -135,6 +135,14 @@ export async function POST(req: Request) {
             { status: 400 }
           );
         }
+        // v1.0 (audit W16-20 #5): visitorCount باید عدد باشد — کلید از /api/content
+        // عمومی برمی‌گردد و به‌عنوان شمارنده رندر می‌شود؛ قبلاً هر رشته‌ای ذخیره می‌شد
+        if (key === "visitorCount" && !/^\d{1,9}$/.test(strValue)) {
+          return NextResponse.json(
+            { ok: false, error: "invalid_value", key },
+            { status: 400 }
+          );
+        }
         if (SOCIAL_KEYS.has(key)) {
           const okVal = safeUrl(strValue);
           if (okVal === null) {

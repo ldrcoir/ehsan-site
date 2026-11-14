@@ -85,8 +85,9 @@ essential_texts = [
 ]
 
 count = 0
-import datetime
-now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+# v1.0 (audit W41-45 #10): epoch-ms مثل فرمت Prisma — نه ISO TEXT
+import time
+now = int(time.time() * 1000)
 for key, en, de, fa in essential_texts:
     cur.execute("SELECT key FROM SiteText WHERE key = ?", (key,))
     if not cur.fetchone():

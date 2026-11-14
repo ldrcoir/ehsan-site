@@ -15,13 +15,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
-import { verifyPassword, createSessionToken, logAccess, getClientIp } from "@/lib/access-auth";
+import { verifyPassword, createSessionToken, logAccess, getClientIp, SESSION_DURATION_MS } from "@/lib/access-auth";
 import { isIpBlocked, recordSuspiciousActivity } from "@/lib/security";
 
 // V18.3 (security): هش bcrypt ثابت برای مقایسه‌ی زمان-برابر وقتی کاربر وجود نداره
 // (anti user-enumeration — بدون این، مسیر «کاربر ناموجود» سریع‌تر جواب می‌داد)
+// v1.0 (audit W1-5 #1): با ارتقای hashPassword به cost 12، این hash هنوز cost 10 بود
+// و شکاف ~۴× زمانی مسیر «کاربر ناموجود»/«کاربر موجود» دوباره قابل اندازه‌گیری می‌شد.
+// hash زیر با bcrypt.hashSync("dummy-anti-enumeration", 12) تولید شده (cost = 12 مثل واقعی).
 const DUMMY_HASH =
-  "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
+  "$2b$12$yKKZ4gkQvNi0K4WasjGlWe/WcIuwfBP9./rDbNH3SrPL4mIni/ZRS";
 
 // Rate limiting — ۵ تلاش در ۱۵ دقیقه (per-IP + v1.1: per-username)
 const RATE_LIMIT_WINDOW = 15 * 60 * 1000;
@@ -49,9 +52,18 @@ function checkRateLimit(map: Map<string, { count: number; resetAt: number }>, ke
   const record = map.get(key);
   if (!record || now > record.resetAt) {
     if (!record && map.size >= 10000) {
+      // v1.0 (audit W1-5 #8): هم‌مثل middleware — منقضی‌ها + smallest-resetAt eviction
+      let evicted = false;
       for (const [k, v] of map) {
-        if (v.resetAt < now) map.delete(k);
-        if (map.size < 10000) break;
+        if (v.resetAt < now) { map.delete(k); evicted = true; if (map.size < 10000) break; }
+      }
+      if (!evicted && map.size >= 10000) {
+        let victimKey: string | undefined;
+        let victimReset = Infinity;
+        for (const [k, v] of map) {
+          if (v.resetAt < victimReset) { victimReset = v.resetAt; victimKey = k; }
+        }
+        if (victimKey !== undefined) map.delete(victimKey);
       }
     }
     map.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
@@ -62,7 +74,18 @@ function checkRateLimit(map: Map<string, { count: number; resetAt: number }>, ke
   return true;
 }
 
+// v1.0 (audit W1-5 #4): لاگین موفق باید سهمیه‌ی per-username را نسوزاند —
+// قبلاً ۵ لاگین موفق در ۱۵ دقیقه، اکانت را برای تلاش بعدی قفل می‌کرد (NAT/اسکریپت)
+function resetRateLimit(map: Map<string, { count: number; resetAt: number }>, key: string): void {
+  map.delete(key);
+}
+
 export async function POST(request: NextRequest) {
+  // v1.0 (audit W1-5 #3): هشدار کانفیگ — وقتی TRUST_PROXY فعال نیست، همه‌ی IPها
+  // «unknown» می‌شوند و rate limit عمومی و مسدودسازی خودکار عملاً کور می‌شوند
+  if (process.env.NODE_ENV === "production" && process.env.TRUST_PROXY !== "true") {
+    console.warn("[security] TRUST_PROXY != true — per-IP rate limiting and IP blocking are degraded (all clients share one 'unknown' bucket)");
+  }
   try {
     // V18.3 (security): IP block check — قبل از هر کاری (حتی parse کردن body)
     const ip = getClientIp(request);
@@ -131,6 +154,8 @@ export async function POST(request: NextRequest) {
     }
 
     // ورود موفق — ساخت session و آپدیت آمار
+    // v1.0 (audit W1-5 #4): bucket per-username موفق → ریست (سهمیه برای تلاش‌های خراب می‌ماند)
+    resetRateLimit(usernameAttempts, username);
     // v1.1: token به passwordHash گره خورده (pwTag) → تغییر رمز همه sessionهای قدیمی را می‌کشد
     const token = createSessionToken(user.id, user.passwordHash);
     await db.accessUser.update({
@@ -163,7 +188,8 @@ export async function POST(request: NextRequest) {
       secure: requestIsHttps,
       sameSite: "strict",
       path: "/",
-      maxAge: 60 * 60 * 24, // 24 ساعت
+      // v1.0 (audit W1-5 #9): از ثابت واحد session — قبلاً مقدار خام 24h بود
+      maxAge: SESSION_DURATION_MS / 1000,
     });
     return response;
   } catch (e) {

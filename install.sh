@@ -1,10 +1,13 @@
 #!/bin/bash
 # ============================================================================
-# install.sh — v1.1.2 — Pre-built standalone installer
+# install.sh — v1.0 — Pre-built standalone installer
 # ============================================================================
 # این نسخه:
 # - npm install نمی‌خواد (همه‌چیز pre-built هست)
+# - هر وابستگی (node/nginx/sqlite/python/certbot/jq/…) جداگانه چک می‌شه و هر
+#   چی نبود نصب می‌شه (v1.0: چک آیتم‌به‌آیتم به‌جای نصب کورکورانه)
 # - SESSION_SECRET قوی تولید می‌کنه
+# - MAINTENANCE_TOKEN هم تولید می‌کنه — کانال نگهداری امن (scripts/maintenance.sh)
 # - Webhook secrets هم تولید می‌کنه
 # - کلیدهای سفارشی .env (BALE_BOT_TOKEN و …) در اجرای مجدد حفظ می‌شن
 # - دیتابیس با permissions امن
@@ -13,14 +16,14 @@
 # - reCAPTCHA placeholder + راهنما
 # - HTTPS setup با certbot (اگه دامنه ست شده)
 # ============================================================================
-# v1.1.2 (fix):
-# - Node.js >= 20.9 الزامی است (Next.js 16) + چک openssl 3 برای موتور Prisma
-# - تشخیص SSH_PORT دیگر نصب را متوقف نمی‌کند (پیش‌فرض: 22)
-# - standalone: owner دیتابیس پروژه + ReadWritePaths (fix SQLITE_CANTOPEN)
-# - nginx: شکست کپی کانفیگ یا nginx -t دیگر پوشانده نمی‌شود (exit 1)
-# - .env: توضیح TRUST_PROXY + placeholder توکن ربات‌ها؛ logrotate لاگ بک‌آپ
+# v1.0 (تغییرات از 1.1.2):
+# - چک وابستگی‌ها آیتم‌به‌آیتم: هر ابزار که نیست، فقط همان نصب می‌شود
+# - jq هم نصب می‌شود (خروجی خوانا برای scripts/maintenance.sh)
+# - MAINTENANCE_TOKEN: کلید کانال نگهداری — یک بار چاپ و در .env ذخیره می‌شود
 # ============================================================================
 set -eo pipefail
+# v1.0 (audit W46-50 #14): هیچ پرامپت تعاملی در نصب خودکار
+export DEBIAN_FRONTEND=noninteractive
 
 # v1.1.1 (audit S10-L9/S8-L3): باید با root اجرا شود + umask امن —
 # هر فایلی که این اسکریپت می‌سازد (مخصوصاً .env و رمز ادمین) بلافاصله 600 می‌ماند
@@ -34,7 +37,7 @@ SITE_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$SITE_DIR"   # ریشه‌ی پروژه — حتی اگه پایین‌تر به standalone سوئیچ کنیم
 cd "$SITE_DIR"
 
-VERSION="1.1.2"
+VERSION="1.0"
 echo "=========================================="
 echo "  نصب سایت شخصی v$VERSION (Pre-built)"
 echo "=========================================="
@@ -44,7 +47,10 @@ echo ""
 # قدم ۱: Swap (اگه رم کمه)
 # ============================================================================
 echo "[1/11] Swap..."
-if ! swapon --show | grep -q swap; then
+# v1.0 (audit W46-50 #14): خروجی خالی swapon --show یعنی هیچ swap ای (فایل یا
+# پارتیشن) — قبلاً grep swap پارتیشن‌هایی با نام عادی را از قلم می‌انداخت و
+# swapfile دوم بی‌دلیل ساخته می‌شد
+if [ -z "$(swapon --show 2>/dev/null)" ]; then
     fallocate -l 2G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=2048
     chmod 600 /swapfile
     mkswap /swapfile
@@ -60,12 +66,19 @@ fi
 # ============================================================================
 echo ""
 echo "[2/11] Node.js..."
+# v1.0: ابزار کمکی — هر بسته‌ای که نبود فقط همان نصب می‌شود
+ensure_pkg() {
+    local cmd="$1" pkg="$2"
+    if command -v "$cmd" &> /dev/null; then
+        echo "  ✅ $pkg نصبه"
+    else
+        apt-get update -qq 2>/dev/null || apt update -qq
+        apt-get install -y "$pkg"
+        echo "  ✅ $pkg نصب شد (نبود)"
+    fi
+}
 # v1.1: curl باید قبل از NodeSource نصب باشه
-if ! command -v curl &> /dev/null; then
-    apt-get update -qq
-    apt-get install -y curl
-    echo "  ✅ curl نصب شد"
-fi
+ensure_pkg curl curl
 if command -v node &> /dev/null; then
     # v1.1.2: Next.js 16 به Node.js >= 20.9 نیاز دارد (نه فقط 20)
     NODE_VER=$(node -v | sed 's/v//' | cut -d. -f1)
@@ -74,12 +87,13 @@ if command -v node &> /dev/null; then
         echo "  ✅ Node.js نصبه ($(node -v)) — با Next.js 16 سازگار است (>= 20.9)"
     else
         echo "  ⚠ Node.js $(node -v) برای Next.js 16 کم است (>= 20.9 لازم است) — آپدیت می‌کنم..."
-        curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+        # v1.0 (audit W46-50 #14): شکست network با پیام شفاف — قبلاً set -e بی‌صدا می‌کشت
+        curl -fsSL https://deb.nodesource.com/setup_22.x | bash - || { echo "  ❌ NodeSource در دسترس نیست — اتصال اینترنت/فیلتر را چک کن"; exit 1; }
         apt install -y nodejs
         echo "  ✅ Node.js آپدیت شد ($(node -v))"
     fi
 else
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - || { echo "  ❌ NodeSource در دسترس نیست — اتصال اینترنت/فیلتر را چک کن"; exit 1; }
     apt install -y nodejs
     echo "  ✅ Node.js نصب شد ($(node -v))"
 fi
@@ -103,21 +117,35 @@ check_openssl_compat() {
 check_openssl_compat
 
 # ============================================================================
-# قدم ۳: ابزارهای ضروری
+# قدم ۳: ابزارهای ضروری — v1.0: چک آیتم‌به‌آیتم و نصب فقط موارد غایب
 # ============================================================================
 echo ""
-echo "[3/11] Nginx + tools + openssl..."
+echo "[3/11] Nginx + tools + openssl (چک و نصب موارد غایب)..."
+# v1.0 (audit W46-50 #14): یک update واحد — python3-certbot-nginx بدون index تازه 404 می‌داد
+apt-get update -qq 2>/dev/null || apt update -qq || true
 # v1.1: dnsutils لازمه برای `host` (تشخیص دامنه → HTTPS)
 # v1.1.1 (audit P6-L9): unzip هم لازمه برای quick-start مستند در VERSION.txt
-if ! command -v nginx &> /dev/null; then
-    apt update
-    apt install -y nginx sqlite3 python3 ufw certbot python3-certbot-nginx openssl curl dnsutils unzip
+# v1.0: jq برای خوانا شدن خروجی maintenance.sh؛ logrotate برای چرخش لاگ بک‌آپ
+ensure_pkg nginx nginx
+ensure_pkg sqlite3 sqlite3
+ensure_pkg python3 python3
+ensure_pkg ufw ufw
+ensure_pkg certbot certbot
+ensure_pkg openssl openssl
+ensure_pkg dig dnsutils
+ensure_pkg unzip unzip
+ensure_pkg jq jq
+ensure_pkg logrotate logrotate
+if ! dpkg -s python3-certbot-nginx &>/dev/null 2>&1; then
+    apt-get install -y python3-certbot-nginx
+    echo "  ✅ python3-certbot-nginx نصب شد"
+else
+    echo "  ✅ python3-certbot-nginx نصبه"
+fi
+if command -v nginx &>/dev/null && ! systemctl is-active --quiet nginx 2>/dev/null; then
     systemctl enable nginx
     systemctl start nginx
-    echo "  ✅ Nginx نصب شد"
-else
-    apt install -y sqlite3 python3 ufw certbot python3-certbot-nginx openssl curl dnsutils unzip 2>/dev/null || true
-    echo "  ✅ Nginx نصبه"
+    echo "  ✅ سرویس nginx استارت شد"
 fi
 # بررسی نهایی openssl (مهم برای تولید SESSION_SECRET)
 if ! command -v openssl &> /dev/null; then
@@ -136,7 +164,15 @@ echo "[4/11] فایروال..."
 # وگرنه ufw enable کلاینت SSHِ فعال را قطع می‌کند (lockout)
 # v1.1.2 (fix): اگر sshd پیدا نشود (یا ss نباشد)، pipeline با set -o pipefail کل نصب را
 # می‌کشت — حالا || true و اگر خالی بود، پیش‌فرض 22 (خط بعدی)
-SSH_PORT=$(ss -tlnp 2>/dev/null | grep sshd | grep -oP ':\K\d+(?=\s)' | head -1) || true
+# v1.0 (audit W46-50 #9): تشخیص پورت SSH کامل‌تر — socket-activated sshd و
+# کانفیگ صریح؛ وگرنه ufw enable می‌توانست session ادمین را قطع کند
+SSH_PORT=$(ss -tlnp 2>/dev/null | grep -E 'sshd|openssh' | grep -oP ':\K\d+(?=\s)' | head -1) || true
+if [ -z "$SSH_PORT" ]; then
+    SSH_PORT=$(awk '/^\s*Port\s+/{print $2; exit}' /etc/ssh/sshd_config 2>/dev/null) || true
+fi
+if [ -z "$SSH_PORT" ]; then
+    SSH_PORT=$(systemctl cat ssh.socket 2>/dev/null | grep -oP 'ListenStream=\K\d+' | head -1) || true
+fi
 SSH_PORT="${SSH_PORT:-22}"
 ufw allow "$SSH_PORT"/tcp 2>/dev/null || true
 ufw allow 80/tcp 2>/dev/null || true
@@ -151,7 +187,7 @@ echo ""
 echo "[5/11] SESSION_SECRET و .env..."
 # Idempotent: اگه .env از قبل هست، SESSION_SECRET رو نگه دار
 if [ -f .env ] && grep -q "^SESSION_SECRET=" .env; then
-    EXISTING_SECRET=$(grep "^SESSION_SECRET=" .env | cut -d'"' -f2)
+    EXISTING_SECRET=$(grep "^SESSION_SECRET=" .env | cut -d'=' -f2- | tr -d '"')
     if [ -n "$EXISTING_SECRET" ] && [ "$EXISTING_SECRET" != "build-placeholder" ]; then
         SECRET="$EXISTING_SECRET"
         echo "  ✅ SESSION_SECRET موجود نگه داشته شد (idempotent)"
@@ -166,28 +202,53 @@ fi
 
 # Webhook secrets — اگه هستن نگه دار
 if [ -f .env ] && grep -q "^BALE_WEBHOOK_SECRET=" .env; then
-    BALE_SECRET=$(grep "^BALE_WEBHOOK_SECRET=" .env | cut -d'"' -f2)
+    BALE_SECRET=$(grep "^BALE_WEBHOOK_SECRET=" .env | cut -d'=' -f2- | tr -d '"')
     [ -z "$BALE_SECRET" ] && BALE_SECRET=$(openssl rand -hex 16)
 else
     BALE_SECRET=$(openssl rand -hex 16)
 fi
 if [ -f .env ] && grep -q "^TELEGRAM_WEBHOOK_SECRET=" .env; then
-    TG_SECRET=$(grep "^TELEGRAM_WEBHOOK_SECRET=" .env | cut -d'"' -f2)
+    TG_SECRET=$(grep "^TELEGRAM_WEBHOOK_SECRET=" .env | cut -d'=' -f2- | tr -d '"')
     [ -z "$TG_SECRET" ] && TG_SECRET=$(openssl rand -hex 16)
 else
     TG_SECRET=$(openssl rand -hex 16)
+fi
+
+# v1.0: MAINTENANCE_TOKEN — کلید کانال نگهداری (scripts/maintenance.sh).
+# اگه هست نگه دار (idempotent)؛ حداقل ۳۲ کاراکتر — کوتاه‌تر یعنی کانال خاموش.
+if [ -f .env ] && grep -q "^MAINTENANCE_TOKEN=" .env; then
+    MAINT_TOKEN=$(grep "^MAINTENANCE_TOKEN=" .env | cut -d'=' -f2- | tr -d '"')
+    if [ -z "$MAINT_TOKEN" ] || [ "${#MAINT_TOKEN}" -lt 32 ]; then
+        MAINT_TOKEN=$(openssl rand -hex 32)
+        echo "  ✅ MAINTENANCE_TOKEN قبلی ضعیف بود — جدید تولید شد"
+    else
+        echo "  ✅ MAINTENANCE_TOKEN موجود نگه داشته شد"
+    fi
+else
+    MAINT_TOKEN=$(openssl rand -hex 32)
+    MAINT_TOKEN_IS_NEW="1"
 fi
 
 mkdir -p db
 chmod 700 db
 
 # reCAPTCHA — اگه از قبل هست، نگه‌دار
-EXISTING_RECAPTCHA_SECRET=$(grep "^RECAPTCHA_SECRET=" .env 2>/dev/null | cut -d'"' -f2 || echo "")
-EXISTING_RECAPTCHA_SITEKEY=$(grep "^NEXT_PUBLIC_RECAPTCHA_SITEKEY=" .env 2>/dev/null | cut -d'"' -f2 || echo "")
+EXISTING_RECAPTCHA_SECRET=$(grep "^RECAPTCHA_SECRET=" .env 2>/dev/null | cut -d'=' -f2- | tr -d '"') || true
+EXISTING_RECAPTCHA_SITEKEY=$(grep "^NEXT_PUBLIC_RECAPTCHA_SITEKEY=" .env 2>/dev/null | cut -d'=' -f2- | tr -d '"') || true
 
 # v1.1: NEXT_PUBLIC_SITE_URL هم مثل بقیه‌ی کلیدها preserve می‌شه
-EXISTING_SITE_URL=$(grep "^NEXT_PUBLIC_SITE_URL=" .env 2>/dev/null | cut -d'"' -f2 || echo "")
+EXISTING_SITE_URL=$(grep "^NEXT_PUBLIC_SITE_URL=" .env 2>/dev/null | cut -d'=' -f2- | tr -d '"') || true
 [ -z "$EXISTING_SITE_URL" ] && EXISTING_SITE_URL="https://ehsanmorad.ir"
+
+# v1.0 (audit W46-50 #7): TRUST_PROXY/PORT/HOSTNAME هم preserve — قبلاً هر re-run
+# بی‌صدا روی مقدار تمپلیت برمی‌گشت (ادمینی که TRUST_PROXY=false ست کرده بود را
+# سکوت امنیتی‌اش گرفته می‌شد)
+EXISTING_TRUST_PROXY=$(grep "^TRUST_PROXY=" .env 2>/dev/null | cut -d'=' -f2- | tr -d '"') || true
+[ -z "$EXISTING_TRUST_PROXY" ] && EXISTING_TRUST_PROXY="$EXISTING_TRUST_PROXY"
+EXISTING_PORT=$(grep "^PORT=" .env 2>/dev/null | cut -d'=' -f2- | tr -d '"') || true
+[ -z "$EXISTING_PORT" ] && EXISTING_PORT="3000"
+EXISTING_HOSTNAME=$(grep "^HOSTNAME=" .env 2>/dev/null | cut -d'=' -f2- | tr -d '"') || true
+[ -z "$EXISTING_HOSTNAME" ] && EXISTING_HOSTNAME="127.0.0.1"
 
 # Write .env (preserving existing values where present)
 # v1.1: قبل از بازنویسی، .env قدیمی رو کنار بذار (برای merge کلیدهای سفارشی)
@@ -196,17 +257,19 @@ cat > .env << EOF
 # v1.1.1 — auto-generated by install.sh
 DATABASE_URL="file:$SITE_DIR/db/custom.db"
 NODE_ENV="production"
-PORT=3000
+PORT=$EXISTING_PORT
 # v1.1.1 (audit S10-M1): فقط روی loopback — nginx به همین آدرس proxy می‌کند؛
 # app هرگز مستقیم از اینترنت قابل دسترسی نیست → هدرِ جعلی X-Forwarded-For
 # نمی‌تواند rate limit را دور بزند
-HOSTNAME="127.0.0.1"
+HOSTNAME="$EXISTING_HOSTNAME"
 SESSION_SECRET="$SECRET"
 NEXT_PUBLIC_SITE_URL="$EXISTING_SITE_URL"
 RECAPTCHA_SECRET="$EXISTING_RECAPTCHA_SECRET"
 NEXT_PUBLIC_RECAPTCHA_SITEKEY="$EXISTING_RECAPTCHA_SITEKEY"
 BALE_WEBHOOK_SECRET="$BALE_SECRET"
 TELEGRAM_WEBHOOK_SECRET="$TG_SECRET"
+# v1.0: کانال نگهداری — فقط با این هدر: X-Maintenance-Token (ببین scripts/maintenance.sh)
+MAINTENANCE_TOKEN="$MAINT_TOKEN"
 # v1.1.2: سایت پشت nginx محلی است — app فقط وقتی TRUST_PROXY=true است به
 # X-Forwarded-For اعتماد می‌کند (rate limit بر اساس IP واقعی کاربر)
 TRUST_PROXY="true"
@@ -219,6 +282,14 @@ TRUST_PROXY="true"
 EOF
 chmod 600 .env
 echo "  ✅ Webhook secrets تولید شد"
+# v1.0 (audit W46-50 #14): توکن نگهداری هم مثل رمز ادمین در فایل 600 ذخیره می‌شود —
+# اگر خروجی install در log ذخیره شده باشد، توکن فقط از فایل امن خوانده می‌شود
+umask 077
+echo "$MAINT_TOKEN" > "$PROJECT_ROOT/db/.maintenance-token.txt"
+chmod 600 "$PROJECT_ROOT/db/.maintenance-token.txt"
+if [ "${MAINT_TOKEN_IS_NEW:-}" = "1" ]; then
+    echo "  ✅ MAINTENANCE_TOKEN تولید شد (در انتهای نصب یک بار چاپ می‌شود)"
+fi
 
 # v1.1: کلیدهای سفارشی .env قدیمی که تو تمپلیت نیستن (به‌جز DATABASE_URL)
 # رو به انتهای .env جدید اضافه کن — تا تو اجرای مجدد install.sh از بین نرن
@@ -256,6 +327,15 @@ fi
 # ============================================================================
 echo ""
 echo "[6/11] دیتابیس..."
+# v1.0 (audit W46-50 #2 — HIGH): سرویسِ در حال اجرا قبل از دست‌بردن در فایل‌های
+# db متوقف می‌شود — حذف WAL/journal زیر پای Node/Prisma در re-run آخرین
+# تراکنش‌های commit‌شده را از بین می‌برد (data loss). در قدم ۸ دوباره start می‌شود.
+SERVICE_WAS_ACTIVE=0
+if systemctl is-active --quiet personal-site 2>/dev/null; then
+    SERVICE_WAS_ACTIVE=1
+    systemctl stop personal-site
+    echo "  سرویس موقتاً متوقف شد (برای امنیت دیتابیس)"
+fi
 mkdir -p db
 chmod 700 db
 touch db/custom.db
@@ -290,7 +370,8 @@ if [ "$ADMIN_EXISTS" = "0" ] || [ -z "$ADMIN_EXISTS" ]; then
     umask 077
     echo "$SEED_OUT" > "$PROJECT_ROOT/db/.admin-initial-password.txt"
     chmod 600 "$PROJECT_ROOT/db/.admin-initial-password.txt" 2>/dev/null || true
-    umask 022
+    # v1.0 (audit W46-50 #13): umask 022 حذف شد — قول «همه‌ی فایل‌های ساخته‌شده 600»
+    # باید تا انتهای اسکریپت برقرار بماند
     if [ $SEED_RC -ne 0 ]; then
         echo "  ❌ seed_access_users failed (exit $SEED_RC)"
     else
@@ -377,7 +458,7 @@ ProtectSystem=full
 ProtectHome=read-only
 # v1.1.2 (fix): db ممکن است در $PROJECT_ROOT/db باشد حتی وقتی WorkingDirectory
 # همان standalone است — بدون این مسیر sqlite3 خطای SQLITE_CANTOPEN می‌دهد
-ReadWritePaths=$SITE_DIR $PROJECT_ROOT/db
+ReadWritePaths=$SITE_DIR $PROJECT_ROOT/db $PROJECT_ROOT/backups
 PrivateTmp=true
 # v1.1.1 (audit S10-M4): hardening اضافه — مجموعه‌ی کم‌ریسک (بدون SystemCallFilter و
 # بدون MemoryDenyWriteExecute که JIT وی۸ را می‌شکند؛ با systemd-analyze security بسنجید)
@@ -424,6 +505,12 @@ EOF
 chmod 644 /etc/logrotate.d/personal-site-backup
 systemctl enable cron 2>/dev/null || systemctl enable crond 2>/dev/null || true
 systemctl restart cron 2>/dev/null || systemctl restart crond 2>/dev/null || true
+# v1.0 (audit W46-50 #4): دایرکتوری backups متعلق به سرویس — تا اکشن backupِ
+# کانال نگهداری (که با کاربر ehsansite اجرا می‌شود) بتواند بنویسد؛ root cron هم
+# در همان می‌نویسد. بدون این، با ProtectSystem عملیات EROFS می‌گرفت.
+mkdir -p "$PROJECT_ROOT/backups" 2>/dev/null || true
+chown ehsansite:ehsansite "$PROJECT_ROOT/backups" 2>/dev/null || true
+chmod 750 "$PROJECT_ROOT/backups" 2>/dev/null || true
 echo "  ✅ بک‌آپ شبانه ۳ بامداد فعال شد (/etc/cron.d/personal-site-backup)"
 echo "  ✅ logrotate لاگ بک‌آپ فعال شد (/etc/logrotate.d/personal-site-backup)"
 
@@ -434,7 +521,10 @@ echo ""
 echo "[10/11] Nginx..."
 # v1.1.2 (fix): || true حذف شد — خطای کپی کانفیگ یا nginx -t باید نصب را متوقف کند
 # (سایت بدون nginx کار نمی‌کند؛ پوشاندن خطا یعنی «موفق» گزارش‌کردنِ نصب خراب)
-if ! cp nginx-ehsanmorad.conf /etc/nginx/sites-available/nginx-ehsanmorad.conf; then
+# v1.0 (audit W46-50 #1 — HIGH): مسیر مطلق — در شاخه‌ی standalone، cd به
+# .next/standalone انجام شده بود و cp نسبی فایل conf را پیدا نمی‌کرد و کل نصب
+# بعد از تمام شدن کارهای سنگین abort می‌شد
+if ! cp "$PROJECT_ROOT/nginx-ehsanmorad.conf" /etc/nginx/sites-available/nginx-ehsanmorad.conf; then
     echo "  ❌ کپی nginx config ناموفق بود — فایل nginx-ehsanmorad.conf کنار install.sh هست؟"
     exit 1
 fi
@@ -449,13 +539,20 @@ else
 fi
 echo "  ✅ Nginx تنظیم شد"
 
-# تست
-if curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/ 2>/dev/null | grep -q "200"; then
-    echo "  ✅ سایت بالا اومد"
-    SUCCESS=true
-else
+# تست — v1.0 (audit W46-50 #14): retry تا ۱۵ ثانیه؛ start سرد standalone گاهی
+# بیشتر از 5s طول می‌کشید و «سایت بالا نیومد» کاذب گزارش می‌شد
+SUCCESS=false
+for _ in 1 2 3 4 5 6; do
+    sleep 3
+    CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/ 2>/dev/null || echo "000")
+    if [ "$CODE" = "200" ]; then
+        echo "  ✅ سایت بالا اومد"
+        SUCCESS=true
+        break
+    fi
+done
+if [ "$SUCCESS" != "true" ]; then
     echo "  ⚠ چک کن: journalctl -u personal-site -n 20"
-    SUCCESS=false
 fi
 
 # ============================================================================
@@ -476,7 +573,15 @@ if [ -n "$DOMAIN_FOUND" ]; then
     echo "  در حال دریافت SSL certificate..."
     # v1.1.1 (audit S10-H2): --redirect — بعد از صدور گواهی، HTTP به HTTPS ریدایرکت
     # می‌شود؛ قبلاً HTTP باز می‌ماند و رمز ادمین می‌توانست در HTTPِ خالی ارسال شود
-    if certbot --nginx -d "$DOMAIN_FOUND" -d "www.$DOMAIN_FOUND" --redirect --non-interactive --agree-tos --register-unsafely-without-email 2>&1 | tail -5; then
+    # v1.0 (audit W46-50 #5): www فقط وقتی در DNS هست درخواست می‌شود — نبودِ رکورد
+    # www کل order را می‌شکست و HTTPS کلاً skip می‌شد
+    WWW_ARGS=""
+    if host "www.$DOMAIN_FOUND" >/dev/null 2>&1; then
+        WWW_ARGS="-d www.$DOMAIN_FOUND"
+    else
+        echo "  (رکورد www در DNS نیست — فقط دامنه‌ی اصلی درخواست می‌شود)"
+    fi
+    if certbot --nginx -d "$DOMAIN_FOUND" $WWW_ARGS --redirect --non-interactive --agree-tos --register-unsafely-without-email 2>&1 | tail -5; then
         echo "  ✅ HTTPS فعال شد (HTTP → HTTPS redirect)"
         SITE_URL="https://$DOMAIN_FOUND"
     else
@@ -534,13 +639,28 @@ else
     echo "    Telegram: http://YOUR_IP/api/telegram/webhook"
     echo "    (برای webhook، HTTPS لازم است — اول دامنه + certbot راه بیندازید)"
 fi
-echo "    ⚠️ v1.1: Secret فقط از طریق هدر ارسال می‌شه (نه URL):"
-echo "       x-webhook-secret: <مقدار داخل .env>"
+echo "    ⚠️ v1.0: Secret از طریق هدر بومی پلتفرم ارسال می‌شه — موقع setWebhook این بدنه را بفرست:"
+echo "       { "url": "https://<domain>/api/bale/webhook", "secret_token": "<BALE_WEBHOOK_SECRET داخل .env>" }"
+echo "       (پلتفرم مقدار را در هدر X-Telegram-Bot-Api-Secret-Token برمی‌گرداند؛ هدر سفارشی x-webhook-secret هم پذیرفته می‌شود)"
 echo "    ⚠️ Secretها تو فایل .env هستن — با 'sudo cat .env' ببین"
 echo "    ⚠️ این مقادیر رو با کسی به اشتراک نذار!"
 echo ""
 echo "  بک‌آپ خودکار: هر شب ۳ بامداد (نگه‌داری ۷ نسخه — backups/)"
 echo ""
+echo "  کانال نگهداری اختصاصی (v1.0):"
+echo "    action ها: status | db-stats | security-logs | messages | chats | backup | help"
+echo "    روی خود سرور:   cd $PROJECT_ROOT && bash scripts/maintenance.sh status"
+echo "    از هر جای دیگر: bash scripts/maintenance.sh status  (با MAINTENANCE_URL ست‌شده)"
+echo ""
+if [ "${MAINT_TOKEN_IS_NEW:-}" = "1" ]; then
+    echo "  🔑 MAINTENANCE_TOKEN (یک بار نمایش — در .env هم ذخیره شد):"
+    echo "     $MAINT_TOKEN"
+    echo "     ⚠️ این توکن را فقط به نگهدارنده‌ی مطمئن بده — دسترسی خواندن پیام‌ها/لاگ‌ها + بک‌آپ دارد"
+    echo ""
+else
+    echo "  🔑 MAINTENANCE_TOKEN: قبلاً ست شده — با 'sudo grep MAINTENANCE_TOKEN $PROJECT_ROOT/.env' ببین"
+    echo ""
+fi
 echo "  دستورات:"
 echo "    systemctl status personal-site"
 echo "    systemctl restart personal-site"

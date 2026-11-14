@@ -5,8 +5,8 @@ generate_tutorial_v1_1.py — تولید راهنمای فارسی Word برای
 =================================================================
 
 خروجی (هر دو مسیر، همزمان):
-  - public/TUTORIAL_FA_1.1.docx
-  - download/TUTORIAL_FA_1.1.docx
+  - public/TUTORIAL_FA_1.0.docx
+  - download/TUTORIAL_FA_1.0.docx
 
 ویژگی‌ها:
   - فونت Vazirmatn (با rFonts برای eastAsia/cs)
@@ -30,8 +30,8 @@ from docx.oxml import OxmlElement
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUT_PATHS = [
-    PROJECT_ROOT / "public" / "TUTORIAL_FA_1.1.docx",
-    PROJECT_ROOT / "download" / "TUTORIAL_FA_1.1.docx",
+    PROJECT_ROOT / "public" / "TUTORIAL_FA_1.0.docx",
+    PROJECT_ROOT / "download" / "TUTORIAL_FA_1.0.docx",
 ]
 
 FONT_FA = "Vazirmatn"
@@ -167,7 +167,7 @@ _run.font.color.rgb = RGBColor(0, 90, 60)
 subtitle = doc.add_paragraph()
 subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
 subtitle.paragraph_format.space_before = Pt(20)
-_run = subtitle.add_run("راهنمای نصب و راه‌اندازی — نسخه 1.1")
+_run = subtitle.add_run("راهنمای نصب و راه‌اندازی — نسخه 1.0")
 _set_run_fonts(_run, FONT_FA)
 _run.font.size = Pt(17)
 _run.font.color.rgb = RGBColor(70, 110, 90)
@@ -187,7 +187,7 @@ doc.add_page_break()
 # ============================================================================
 add_heading("۱. مقدمه و قابلیت‌ها", 1)
 add_para(
-    "این سند، راهنمای کامل نصب و مدیریت «سایت شخصی Ehsan Morad» نسخه 1.1 هست. "
+    "این سند، راهنمای کامل نصب و مدیریت «سایت شخصی Ehsan Morad» نسخه 1.0 هست. "
     "همه‌چیز از یک پکیج آماده نصب می‌شه — بدون نیاز به npm install یا build روی سرور."
 )
 add_para("قابلیت‌های اصلی:", bold=True)

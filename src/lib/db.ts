@@ -9,15 +9,25 @@ import fs from 'fs'
 // وگرنه fallback به db/custom.db داخل cwd.
 function resolveDbPath(): { dbPath: string; envParams: URLSearchParams } {
   const envUrl = process.env.DATABASE_URL;
-  if (envUrl && envUrl.startsWith("file:")) {
+  if (envUrl) {
+    // v1.0 (audit W41-45 #3): fail-fast — DATABASE_URL بدون پیشوند file: قبلاً بی‌صدا
+    // نادیده گرفته می‌شد و یک db خالیِ جدید در cwd ساخته می‌شد (دقیق split-brain که
+    // این تابع برای رفعش نوشته شده بود). الان خطای شفاف می‌دهیم.
+    if (!envUrl.startsWith("file:")) {
+      throw new Error(
+        'DATABASE_URL must start with "file:" for SQLite. Fix .env or unset it.'
+      );
+    }
     const raw = envUrl.slice("file:".length);
     if (raw) {
       // v1.1.2 (audit CODE-01-L): DATABASE_URL ممکن است query param داشته باشد؛
-      // چسباندن کورکورانه "?connection_limit=1" یک URL دوبل-علامت‌سؤال و Prisma
-      // startup failure می‌ساخت. حالا پارامترها merge می‌شوند.
+      // پارامترها merge می‌شوند (چسباندن کورکورانه یک URL خراب می‌ساخت).
       const qIdx = raw.indexOf("?");
-      if (qIdx === -1) return { dbPath: raw, envParams: new URLSearchParams() };
-      return { dbPath: raw.slice(0, qIdx), envParams: new URLSearchParams(raw.slice(qIdx + 1)) };
+      const bare = qIdx === -1 ? raw : raw.slice(0, qIdx);
+      const params = qIdx === -1 ? new URLSearchParams() : new URLSearchParams(raw.slice(qIdx + 1));
+      // v1.0: مسیر نسبی نسبت به cwd نرمال می‌شود
+      const abs = path.isAbsolute(bare) ? bare : path.join(process.cwd(), bare);
+      return { dbPath: abs, envParams: params };
     }
   }
   return { dbPath: path.join(process.cwd(), 'db', 'custom.db'), envParams: new URLSearchParams() }
@@ -44,7 +54,9 @@ const globalForPrisma = globalThis as unknown as {
 envParams.set("connection_limit", "1")
 envParams.set("busy_timeout", "5000")
 const qs = envParams.toString()
-const sqliteUrl = `file:${dbPath}${qs ? `?${qs}` : ""}`
+// v1.0 (audit W41-45 #3): هر سگمنت مسیر encode می‌شود (فاصله، #، ?) تا ساخت URL break نشود
+const encodedPath = dbPath.split(path.sep).map(seg => encodeURIComponent(seg)).join("/")
+const sqliteUrl = `file:${encodedPath}${qs ? `?${qs}` : ""}`
 
 function createPrismaClient(): PrismaClient {
   const client = new PrismaClient({

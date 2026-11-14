@@ -43,6 +43,8 @@ resolve_db() {
     local candidate=""
     if [ -n "$url" ]; then
         candidate="${url#file:}"
+        # v1.0 (audit W41-45 #13): query params (?connection_limit=...) از مسیر حذف می‌شوند
+        candidate="${candidate%%\?*}"
         case "$candidate" in
             /*) ;;                                  # absolute path — همان می‌ماند
             *) candidate="$PROJECT_DIR/$candidate" ;;
@@ -114,6 +116,9 @@ systemctl stop "$SERVICE_NAME" 2>/dev/null || true
 # ---------------------------------------------------------------------------
 PRE_RESTORE="$DB_FILE.pre-restore"
 if [ -f "$DB_FILE" ]; then
+    # v1.0 (audit W41-45 #13): checkpoint WAL قبل از کپی rollback — وگرنه
+    # آخرین تراکنش‌ها در -wal می‌ماندند و snapshot بازگشت ناقص بود
+    sqlite3 "$DB_FILE" "PRAGMA wal_checkpoint(TRUNCATE);" >/dev/null 2>&1 || true
     cp -p "$DB_FILE" "$PRE_RESTORE"
     chmod 600 "$PRE_RESTORE"
     echo "  🔒 بک‌آپ وضعیت فعلی: $PRE_RESTORE"

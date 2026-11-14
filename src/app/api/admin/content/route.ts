@@ -1,4 +1,4 @@
-import { checkAdminAuth } from "@/lib/admin-auth";
+import { checkAdminAuth, TAB_PERMISSIONS } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -15,7 +15,7 @@ export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
     const password = ""; // V17.8: dead param removed (checkAdminAuth ignores it)
-    const authCheck = await checkAdminAuth(req); if (!authCheck.ok) {
+    const authCheck = await checkAdminAuth(req, TAB_PERMISSIONS["/api/admin/content"]); if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
     if (!body) return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
 
     // V18.3: dead password param removed (checkAdminAuth ignores it)
-    const authCheck = await checkAdminAuth(req); if (!authCheck.ok) {
+    const authCheck = await checkAdminAuth(req, TAB_PERMISSIONS["/api/admin/content"]); if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 
@@ -102,6 +102,15 @@ export async function POST(req: Request) {
         if (typeof v === "string" && k !== "cover" && k !== "link") clean[k] = v.slice(0, 5000);
         if (typeof v === "string" && (k === "cover" || k === "link")) clean[k] = v.slice(0, 500);
       }
+      // v1.0 (audit W11-15 #11): نوع‌دهی اجباری فیلدهای عددی/بولی — مقدار غلط
+      // (مثل order:"abc" یا visible:"yes") قبلاً به Prisma می‌رسید و 500 مبهم می‌داد
+      if (clean.order !== undefined) {
+        const n = Number(clean.order);
+        if (!Number.isFinite(n) || n < 0) delete clean.order;
+        else clean.order = Math.round(n);
+      }
+      if (clean.visible !== undefined) clean.visible = clean.visible === true;
+      if (clean.enabled !== undefined) clean.enabled = clean.enabled === true;
       return clean;
     };
     const joinItems = (data: Record<string, unknown>): Record<string, unknown> => {
@@ -197,8 +206,10 @@ export async function POST(req: Request) {
             created++;
           } catch (e) {
             // v1.1.1 (audit Q1): شکست ردیف دیگر swallow نمی‌شود — شمرده و گزارش می‌شود
+            // v1.0 (audit W11-15 #11): پیام generic — e.message پرisma می‌تواند نام
+            // ستون/مدل داخلی را لو بدهد
             failed++;
-            if (errors.length < 5) errors.push(e instanceof Error ? e.message.slice(0, 120) : "row error");
+            if (errors.length < 5) errors.push(`row ${created + failed} invalid`);
           }
         }
         return NextResponse.json({ ok: true, created, total: items.length, failed, errors });

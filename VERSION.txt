@@ -1,19 +1,20 @@
 ================================================================
   PERSONAL SITE — VERSION HISTORY & DEPLOYMENT GUIDE
-  آخرین نسخه: v1.1 (revision 1.1.2)
+  آخرین نسخه: v1.0 (نسخه‌ی یک — خروجی نهایی ممیزی ۶۰ کارگر)
 ================================================================
 
-## 📌 نسخه فعلی: v1.1 (rev 1.1.2 — ممیزی دقیق ۶۰ worker + رفع کامل)
+## 📌 نسخه فعلی: v1.0 — نسخه‌ی یک (پایه‌ی نهایی؛ تاریخچه‌ی قبلی v1.1.x/V18.x
+   فقط به‌عنوان سابقه‌ی توسعه مونده و همه‌چیز زیر همین نسخه یک تحویل می‌شود)
 
-⚠️ نکته‌ی تاریخچه: نسخه‌بندی عوض شد — «v1.1» جایگزین کل خط V17.x/V18.x
-می‌شه. هرچی قبلاً V18.3 و پایین‌تر بود، الان زیر چتر v1.1 جمع شده.
+⚠️ نکته‌ی تاریخچه: شماره‌های داخلی قبلی (V17.x/V18.x/v1.1.x) به‌عنوان revision
+توسعه مونده‌اند؛ نام انتشار رسمی از این به بعد «v1.0» است.
 
 ================================================================
   نصب سریع (یک دستور)
 ================================================================
 
-wget https://github.com/ldrcoir/ehsan-site/raw/main/public/install-v1.1.zip
-unzip install-v1.1.zip
+# خروجی رسمی: ehsan-site-v1.0-<تاریخ-شمسی>.zip (مثلاً ehsan-site-v1.0-1405-08-24.zip)
+unzip ehsan-site-v1.0-*.zip
 cd personal-site
 sudo ./install.sh
 
@@ -24,6 +25,25 @@ sudo ./install.sh
   ⚠️ رمز فقط یک بار موقع نصب نمایش داده می‌شه — یادداشتش کن!
      (کپی امن: sudo cat db/.admin-initial-password.txt)
   ⚠️ حتماً از پنل → تنظیمات → تغییر رمز عوض کن!
+
+================================================================
+  کانال نگهداری اختصاصی (v1.0)
+================================================================
+install.sh یک MAINTENANCE_TOKEN تولید می‌کند و یک بار چاپ می‌کند
+(کپی امن: sudo cat db/.maintenance-token.txt).
+
+روی خود سرور:
+  cd /home/ehsan/personal-site
+  bash scripts/maintenance.sh status
+  bash scripts/maintenance.sh backup
+
+از دور (هر جا):
+  export MAINTENANCE_TOKEN=... MAINTENANCE_URL=https://ehsanmorad.ir
+  bash scripts/maintenance.sh security-logs
+
+action ها: status | db-stats | security-logs | messages | chats | backup | help
+امنیت: فقط هدر X-Maintenance-Token با timingSafeEqual — fail-closed بدون توکن؛
+rate limit ۲۰/۵دقیقه؛ همه‌ی فراخوانی‌ها در SecurityLog ثبت می‌شوند.
 
 ================================================================
   تنظیم reCAPTCHA (بعد از نصب)

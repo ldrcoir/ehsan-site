@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# package-v1.1.sh — ساخت پکیج انتشار public/install-v1.1.zip (v1.1)
+# package-v1.1.sh — ساخت پکیج انتشار public/install-v1.0.zip (v1.1)
 # ============================================================================
 # استفاده (بعد از build کامل — یعنی .next/standalone/server.js موجود باشه):
 #   bash scripts/package-v1.1.sh
@@ -8,7 +8,7 @@
 # مراحل:
 #   0) pre-check: .next/standalone/server.js
 #   1) پاک‌سازی artifactهای کهنه از .next/standalone/public
-#   2) stage به /tmp/install-v1.1/personal-site
+#   2) stage به /tmp/install-v1.0/personal-site
 #      (standalone + public انتقادی + install.sh + scripts بدون ابزار dev
 #       + prisma/schema.prisma + VERSION.txt + package.json + nginx conf)
 #   3) لاغر کردن node_modules (حذف @img/sharp، engineهای غیر-sqlite
@@ -16,7 +16,7 @@
 #   4) اطمینان از وجود bcryptjs
 #   5) پاک‌سازی فایلهای راه‌گونه (*.db، .env*، *.log، *.tsbuildinfo، *.zip)
 #   6) README.md و .env.example فارسی
-#   7) node --check + zip -9 → public/install-v1.1.zip
+#   7) node --check + zip -9 → public/install-v1.0.zip
 #   8) assert سایز < 25MB + گزارش نهایی
 # ============================================================================
 set -eo pipefail
@@ -27,10 +27,10 @@ cd "$PROJECT_DIR"
 
 STAGE_ROOT="/tmp/install-v1.1"
 STAGE="$STAGE_ROOT/personal-site"
-OUT="$PROJECT_DIR/public/install-v1.1.zip"
+OUT="$PROJECT_DIR/public/install-v1.0.zip"
 MAX_BYTES=$((25 * 1024 * 1024))   # 25MB سقف پکیج
 
-SCRIPTS_KEEP="apply_schema.py seed_access_users.py seed_content.py seed_equipment.py seed_texts.py reset-admin-password.sh auto-backup.sh export-site.sh import-site.sh restore-db.sh"
+SCRIPTS_KEEP="apply_schema.py seed_access_users.py seed_content.py seed_equipment.py seed_texts.py reset-admin-password.sh auto-backup.sh export-site.sh import-site.sh restore-db.sh maintenance.sh"
 # v1.1: list_messages.py حذف شد — ابزار dump مستقیم DB بود و دلیلی برای ارسال به نصب‌کننده نداشت
 # v1.1.2: آموزش از dist/ هم پیدا می‌شود (از public/ خارج شد تا build لاغر بماند)
 PUBLIC_KEEP="icon-192.png icon-512.png favicon.ico manifest.json robots.txt"
@@ -90,14 +90,14 @@ done
 
 # v1.1.2: آموزش فارسی — از dist/ به public پکیج + ریشه‌ی خروجی
 TUTORIAL_SRC=""
-if [ -f "$PROJECT_DIR/dist/TUTORIAL_FA_1.1.docx" ]; then
-    TUTORIAL_SRC="$PROJECT_DIR/dist/TUTORIAL_FA_1.1.docx"
-elif [ -f "$PROJECT_DIR/public/TUTORIAL_FA_1.1.docx" ]; then
-    TUTORIAL_SRC="$PROJECT_DIR/public/TUTORIAL_FA_1.1.docx"
+if [ -f "$PROJECT_DIR/dist/TUTORIAL_FA_1.0.docx" ]; then
+    TUTORIAL_SRC="$PROJECT_DIR/dist/TUTORIAL_FA_1.0.docx"
+elif [ -f "$PROJECT_DIR/public/TUTORIAL_FA_1.0.docx" ]; then
+    TUTORIAL_SRC="$PROJECT_DIR/public/TUTORIAL_FA_1.0.docx"
 fi
 if [ -n "$TUTORIAL_SRC" ] && [ -d "$STAGE/public" ]; then
-    cp "$TUTORIAL_SRC" "$STAGE/public/TUTORIAL_FA_1.1.docx"
-    echo "✅ TUTORIAL_FA_1.1.docx به پکیج اضافه شد"
+    cp "$TUTORIAL_SRC" "$STAGE/public/TUTORIAL_FA_1.0.docx"
+    echo "✅ TUTORIAL_FA_1.0.docx به پکیج اضافه شد"
 fi
 
 # scripts — فقط زیرمجموعه‌ی allow-list (بدون ابزارهای dev)
@@ -179,8 +179,8 @@ cat > "$STAGE/README.md" << 'MDEOF'
 ## نصب سریع (روی VPS تازه — Ubuntu 22/24)
 
 ```bash
-wget https://github.com/ldrcoir/ehsan-site/raw/main/public/install-v1.1.zip
-unzip install-v1.1.zip
+wget https://github.com/ldrcoir/ehsan-site/raw/main/public/install-v1.0.zip
+unzip install-v1.0.zip
 cd personal-site
 sudo ./install.sh
 ```
@@ -215,7 +215,7 @@ sudo bash scripts/reset-admin-password.sh
 
 ## مستندات
 
-- `public/TUTORIAL_FA_1.1.docx` — آموزش کامل ۱۴ فصلی (فارسی)
+- `public/TUTORIAL_FA_1.0.docx` — آموزش کامل ۱۴ فصلی (فارسی)
 - `VERSION.txt` — تاریخچه نسخه‌ها و راهنمای استقرار
 - `.env.example` — نمونه‌ی کلیدهای محیطی
 MDEOF
@@ -261,13 +261,13 @@ HUMAN=$(numfmt --to=iec --suffix=B "$SIZE" 2>/dev/null || echo "${SIZE}B")
 
 echo ""
 echo "=========================================="
-echo "  ✅ پکیج ساخته شد: public/install-v1.1.zip"
+echo "  ✅ پکیج ساخته شد: public/install-v1.0.zip"
 echo "  سایز: $HUMAN ($SIZE bytes) — سقف: 25MB"
 echo "  تعداد فایلها: $FILE_COUNT"
 echo "=========================================="
 echo ""
 echo "  مسیر کامل: $OUT"
 echo ""
-echo "  برای انتشار: به repo پوش کن (public/install-v1.1.zip"
+echo "  برای انتشار: به repo پوش کن (public/install-v1.0.zip"
 echo "  تو .gitignore مستثنی شده — force-keep)."
 echo ""

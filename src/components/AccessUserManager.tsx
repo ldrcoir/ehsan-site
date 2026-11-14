@@ -78,6 +78,12 @@ export default function AccessUserManager() {
     expiresAt: "",
     active: true,
   });
+  // v1.2: دیدن/ندیدن رمز هنگام تایپ (چشم) — قبلاً فقط type=password بود و ادمین
+  // نمی‌توانست رمزی که تایپ یا تولید کرده را ببیند
+  const [showPassword, setShowPassword] = useState(false);
+  // v1.2: بعد از ذخیره‌ی موفق با رمز جدید، رمز یک بار به‌صورت متن باز نشان داده می‌شود
+  // (بسته‌ی تأیید با دکمه‌ی کپی) تا ادمین آن را برای کاربر بفرستد و بعد ببندد
+  const [passwordSaved, setPasswordSaved] = useState<null | { username: string; password: string }>(null);
 
   useEffect(() => {
     fetchUsers();
@@ -175,10 +181,22 @@ export default function AccessUserManager() {
     setShowForm(true);
   }
 
+  // v1.2: تولید رمز قوی (۱۶ کاراکتر — حروف بزرگ/کوچک + عدد + نماد بدون ابهام)
+  // با crypto.getRandomValues — بدون هیچ سمتِ سرور؛ رمز فقط در همین مرورگر ساخته می‌شود
+  function generateStrongPassword(): string {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%^&*-_+=";
+    const bytes = new Uint32Array(16);
+    crypto.getRandomValues(bytes);
+    let out = "";
+    for (let i = 0; i < 16; i++) out += chars[bytes[i] % chars.length];
+    return out;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
 
+    const passwordChanged = form.password.length > 0;
     const body: any = {
       username: form.username,
       password: form.password || undefined,
@@ -205,7 +223,17 @@ export default function AccessUserManager() {
       });
       const data = await res.json();
       if (data.ok) {
-        setShowForm(false);
+        // v1.0: اگه رمز ست/عوض شد، فرم بسته شود و پنل نمایش یک‌بارِ رمز باز شود
+        // (audit W56-60 #1: قبلاً setShowForm(false) فراموش شده بود و پنل رمز
+        // هرگز دیده نمی‌شد چون early-return فرم جلوتر بود)
+        if (passwordChanged) {
+          setShowForm(false);
+          setPasswordSaved({ username: form.username, password: form.password });
+          setForm(prev => ({ ...prev, password: "" }));
+          setShowPassword(false);
+        } else {
+          setShowForm(false);
+        }
         fetchUsers();
       } else {
         const msgs: Record<string, string> = {
@@ -341,14 +369,44 @@ export default function AccessUserManager() {
 
           <div>
             <label style={labelStyle}>Password (رمز){editingUser ? " — خالی بذار اگه نمی‌خوای عوض کنی" : ""}</label>
-            <input
-              type="password"
-              value={form.password}
-              onChange={e => setForm({ ...form, password: e.target.value })}
-              required={!editingUser}
-              minLength={8}
-              style={inputStyle}
-            />
+            <div style={{ display: "flex", gap: 6 }}>
+              <input
+                type={showPassword ? "text" : "password"}
+                value={form.password}
+                onChange={e => setForm({ ...form, password: e.target.value })}
+                required={!editingUser}
+                // v1.0 (audit W56-60 #7): قاعده‌ی سمت کلاینت هم‌مثل سرور — ادمین ۱۲، کاربر ۸
+                minLength={form.role === "admin" ? 12 : 8}
+                style={{ ...inputStyle, flex: 1 }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(v => !v)}
+                className="signal-waveform-btn"
+                title={showPassword ? "پنهان کردن رمز" : "دیدن رمز"}
+                style={{ padding: "8px 10px", fontSize: 13, whiteSpace: "nowrap" }}
+              >
+                {showPassword ? "🙈 پنهان" : "👁 دیدن"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const pw = generateStrongPassword();
+                  setForm(prev => ({ ...prev, password: pw }));
+                  setShowPassword(true);
+                }}
+                className="signal-waveform-btn"
+                title="تولید رمز قوی تصادفی (۱۶ کاراکتر)"
+                style={{ padding: "8px 10px", fontSize: 11, whiteSpace: "nowrap" }}
+              >
+                🎲 تولید رمز قوی
+              </button>
+            </div>
+            <small style={{ color: "var(--text-faint)", fontSize: 10, display: "block", marginTop: 4 }}>
+              {form.password.length > 0
+                ? `طول رمز: ${form.password.length} کاراکتر${form.role === "admin" ? " (ادمین: حداقل ۱۲)" : " (حداقل ۸)"} — با دکمه‌ی 👁 می‌توانی رمز را ببینی`
+                : "حداقل: ادمین ۱۲ و کاربر عادی ۸ کاراکتر — یا با 🎲 رمز قوی بساز"}
+            </small>
           </div>
 
           <div>
@@ -485,6 +543,51 @@ export default function AccessUserManager() {
             </button>
           </div>
         </form>
+      </div>
+    );
+  }
+
+  // ==========================================================================
+  // v1.2: نمایش یک‌باره‌ی رمز بعد از ذخیره — ادمین باید رمز جدید را ببیند تا
+  // برای کاربر بفرستد. اینجا فرم بسته شده ولی تا فشردن «ذخیره کردم» باز می‌ماند.
+  // ==========================================================================
+  if (passwordSaved) {
+    return (
+      <div>
+        <div style={{ marginBottom: 16 }}>
+          <h3 style={{ margin: 0, color: "var(--primary-bright)" }}>✅ رمز با موفقیت ذخیره شد</h3>
+        </div>
+        <div style={{ padding: 16, background: "rgba(0,255,128,0.06)", border: "1px solid var(--primary)", borderRadius: 4, maxWidth: 600 }}>
+          <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 10 }}>
+            رمز جدیدِ کاربر <b style={{ color: "var(--primary-bright)" }}>{passwordSaved.username}</b> — فقط همین یک بار نمایش داده می‌شود (سرور آن را هش‌شده نگه می‌دارد و دیگر نمی‌توان بازیابی‌اش کرد):
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <code
+              id="new-pw-value"
+              style={{ flex: 1, padding: "10px 12px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 4, fontFamily: "monospace", fontSize: 14, color: "var(--primary-bright)", userSelect: "all", wordBreak: "break-all" }}
+            >
+              {passwordSaved.password}
+            </code>
+            <button
+              className="signal-waveform-btn"
+              onClick={() => {
+                navigator.clipboard?.writeText(passwordSaved.password).catch(() => {});
+              }}
+              style={{ padding: "10px 12px", whiteSpace: "nowrap" }}
+            >
+              📋 کپی
+            </button>
+          </div>
+          <div style={{ marginTop: 14, display: "flex", gap: 10 }}>
+            <button
+              className="signal-waveform-btn active"
+              style={{ flex: 1 }}
+              onClick={() => setPasswordSaved(null)}
+            >
+              ذخیره کردم، ببند
+            </button>
+          </div>
+        </div>
       </div>
     );
   }

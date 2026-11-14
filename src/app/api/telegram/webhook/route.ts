@@ -9,7 +9,14 @@ import { processTelegramWebhook, sendTelegramMessage } from "@/lib/telegram";
  */
 export async function POST(req: Request) {
   try {
-    const secret = req.headers.get("x-webhook-secret") || "";
+    // v1.0 (audit W31-35 #1 — HIGH): هدر بومی پلتفرم هم پذیرفته می‌شود — Telegram
+    // موقع setWebhook با secret_token، مقدار را در X-Telegram-Bot-Api-Secret-Token
+    // برمی‌گرداند؛ قبلاً فقط هدر سفارشی چک می‌شد و هیچ delivery واقعی رد نمی‌شد ۴۰۳
+    // نمی‌گرفت و کانال فرمان ادمین کار نمی‌کرد.
+    const secret =
+      req.headers.get("x-telegram-bot-api-secret-token") ||
+      req.headers.get("x-webhook-secret") ||
+      "";
     const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
     if (!expectedSecret) {
       return NextResponse.json({ ok: false, error: "webhook_not_configured" }, { status: 503 });
@@ -20,6 +27,10 @@ export async function POST(req: Request) {
     const secretBuf = crypto.createHash("sha256").update(secret).digest();
     const expBuf = crypto.createHash("sha256").update(expectedSecret).digest();
     if (!crypto.timingSafeEqual(secretBuf, expBuf)) {
+      // v1.0 (audit W31-35 #2): تلاش ناموفق لاگ می‌شود
+      const { logSecurityEvent } = await import("@/lib/security");
+      const ip = req.headers.get("x-real-ip") || (req.headers.get("x-forwarded-for") || "").split(",").pop()?.trim() || null;
+      logSecurityEvent("webhook_bad_secret", ip && ip !== "unknown" ? ip : null, "telegram webhook secret mismatch").catch(() => {});
       return NextResponse.json({ ok: false, error: "invalid_secret" }, { status: 403 });
     }
     const body = await req.json().catch(() => null);

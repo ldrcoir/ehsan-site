@@ -7,20 +7,34 @@ import { getSetting } from "@/lib/settings";
  */
 
 // v1.1.1 (audit S5-L2): replay protection — همان update دوباره پردازش نشود
+// v1.0 (audit W31-35 #3): همان بازطراحی bale — mark بعد از پردازش موفق،
+// TTL ۲۴ ساعت، سقف ۱۰هزار با evict قدیمی‌ترین
 const seenUpdates = new Map<number, number>(); // updateId → firstSeenTs
-const SEEN_TTL_MS = 10 * 60 * 1000;
-function isReplay(updateId: unknown): boolean {
-  if (typeof updateId !== "number" || !isFinite(updateId)) return false;
+const SEEN_TTL_MS = 24 * 60 * 60 * 1000;
+const SEEN_MAX = 10000;
+function hasSeen(updateId: number): boolean {
   const now = Date.now();
-  if (seenUpdates.size > 500) {
-    for (const [k, ts] of seenUpdates) {
-      if (now - ts > SEEN_TTL_MS) seenUpdates.delete(k);
-    }
-  }
   const first = seenUpdates.get(updateId);
-  if (first !== undefined && now - first < SEEN_TTL_MS) return true;
+  return first !== undefined && now - first < SEEN_TTL_MS;
+}
+function markSeen(updateId: number): void {
+  const now = Date.now();
+  while (seenUpdates.size >= SEEN_MAX) {
+    let victim: number | null = null;
+    let victimTs = Infinity;
+    for (const [k, ts] of seenUpdates) {
+      if (ts < victimTs) { victimTs = ts; victim = k; }
+    }
+    if (victim === null) break;
+    seenUpdates.delete(victim);
+  }
   seenUpdates.set(updateId, now);
-  return false;
+}
+function sweepSeen(): void {
+  const now = Date.now();
+  for (const [k, ts] of seenUpdates) {
+    if (now - ts > SEEN_TTL_MS) seenUpdates.delete(k);
+  }
 }
 
 // v1.1 (security): strip Markdown metacharacters — جلوگیری از تزریق لینک جعلی
@@ -59,6 +73,13 @@ export async function sendTelegramMessage(text: string): Promise<boolean> {
       signal: AbortSignal.timeout(10_000),
       body: JSON.stringify({ chat_id: config.chatId, text, parse_mode: "Markdown" }),
     });
+    // v1.0 (audit W21-25 #4): res.ok چک + سقف بدنه
+    if (!res.ok) {
+      console.error("[telegram] sendMessage HTTP error:", res.status, (await res.text().catch(() => "")).slice(0, 200));
+      return false;
+    }
+    const cl = parseInt(res.headers.get("content-length") || "0", 10);
+    if (cl > 64 * 1024) return false;
     const data = await res.json();
     return !!data.ok;
   } catch (err) {
@@ -94,11 +115,21 @@ export async function notifyTelegramChat(msg: {
 
 /** Process inbound Telegram webhook */
 export async function processTelegramWebhook(body: any): Promise<{ ok: boolean; reply?: string }> {
-  const message = body?.message;
-  if (!message || !message.text) return { ok: false };
+  const updateId = body?.update_id;
+  sweepSeen();
+  if (typeof updateId === "number" && isFinite(updateId) && hasSeen(updateId)) {
+    return { ok: true, reply: undefined };
+  }
+  const result = await processTelegramWebhookInner(body);
+  // v1.0 (audit W31-35 #3): mark بعد از پردازش موفق
+  if (typeof updateId === "number" && isFinite(updateId)) markSeen(updateId);
+  return result;
+}
 
-  // v1.1.1 (audit S5-L2): replay dedup
-  if (isReplay(body?.update_id)) return { ok: true, reply: undefined };
+async function processTelegramWebhookInner(body: any): Promise<{ ok: boolean; reply?: string }> {
+  const message = body?.message;
+  // v1.0 (audit W31-35 #4): typeof چک — متن عددی قبلاً در .trim() می‌ترکید
+  if (!message || typeof message.text !== "string") return { ok: false };
 
   // v1.1 (security): sender verification — فقط chat.id ادمینِ پیکربندی‌شده مجاز است
   // (هر کاربر تلگرامی که handle ربات را پیدا کند وگرنه می‌توانست /disable بزند)
@@ -157,6 +188,7 @@ export async function processTelegramWebhook(body: any): Promise<{ ok: boolean; 
     case "/start": case "/help":
       return { ok: true, reply: "*Telegram Admin Bot*\n\n/list /reply {id} {text}\n/chat {sid} {text}\n/disable /enable /stats" };
     default:
-      return { ok: false, reply: `Unknown: ${cmd}. /help` };
+      // v1.0 (audit W31-35 #4): cmd با mdSafe — دستور عجیب می‌توانست Markdown reply را بشکند
+      return { ok: false, reply: `Unknown: ${mdSafe(cmd)}. /help` };
   }
 }

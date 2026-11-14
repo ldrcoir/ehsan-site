@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getClientIpSafe } from "@/lib/ip";
+import { isIpBlocked } from "@/lib/security";
 import { db } from "@/lib/db";
 import crypto from "crypto";
 
@@ -41,6 +42,11 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => null)) ?? {};
     const rawIp = getClientIpSafe(req);
     const ip = rawIp === "unknown" ? null : rawIp;
+    // v1.0 (audit W16-20 #3): IPهای مسدودشده دیگر PageView تولید نمی‌کنند —
+    // قبلاً فقط login و chat چک می‌شد و BlockedIp می‌توانست analytics را آلوده کند
+    if (ip && (await isIpBlocked(ip))) {
+      return NextResponse.json({ ok: true, tracked: false });
+    }
     // v1.1.2 (audit SEC-06): clamp طول user-agent — هدر تا 16KB می‌تواند باشد
     const userAgent = (req.headers.get("user-agent") || "").slice(0, 300) || null;
     const now = Date.now();

@@ -141,7 +141,13 @@ export default function UserDashboardPage() {
 
   useEffect(() => {
     // Load saved panel language
-    const savedLang = (localStorage.getItem("panel_lang") as Lang) || "fa";
+    // v1.0 (audit W36-40 #7): storage بلاک‌شده باعث crash کامل dashboard می‌شد
+    let savedLang: Lang = "fa";
+    try {
+      savedLang = (localStorage.getItem("panel_lang") as Lang) || "fa";
+    } catch {
+      savedLang = "fa";
+    }
     setLang(savedLang);
     document.documentElement.lang = savedLang;
     document.documentElement.dir = savedLang === "fa" ? "rtl" : "ltr";
@@ -165,7 +171,7 @@ export default function UserDashboardPage() {
 
   function switchLang(newLang: Lang) {
     setLang(newLang);
-    localStorage.setItem("panel_lang", newLang);
+    try { localStorage.setItem("panel_lang", newLang); } catch {}
     document.documentElement.lang = newLang;
     document.documentElement.dir = newLang === "fa" ? "rtl" : "ltr";
   }
@@ -185,11 +191,19 @@ export default function UserDashboardPage() {
 
   function hasTabAccess(tabId: Tab): boolean {
     if (isAdmin) return true;
-    // FIX: همه‌ی APIهای پشتیبان فقط role==="admin" را می‌پذیرند (checkAdminAuth در
-    // src/lib/admin-auth.ts)، پس دادن تب‌های messages/content/text/nav/themes/clips
-    // به کاربر عادی فقط منجر به رندر + ۴۰۱ می‌شد. حالا فقط تب «overview» برای
-    // کاربر عادی در دسترس است؛ تمام تب‌های دیگر ادمین‌only هستند.
-    return tabId === "overview";
+    // v1.0 (audit W16-20 #1): سیستم permissions واقعی شد — هم‌سو با checkAdminAuth
+    // در src/lib/admin-auth.ts که حالا TAB_PERMISSIONS را سمت سرور چک می‌کند.
+    // تب‌های واگذارشدنی: messages / clips / content / text / nav / themes —
+    // اگر کاربر limited این permission را داشته باشد، تب برایش رندر می‌شود و
+    // API سمت سرور هم همان permission را می‌پذیرد. تب‌های حساس (users، stats،
+    // settings، chats، font) همچنان ادمین‌only هستند. overview همیشه باز است.
+    const granted = (user?.permissions || "")
+      .split(",")
+      .map(p => p.trim())
+      .filter(Boolean);
+    const GRANTABLE: string[] = ["messages", "clips", "content", "text", "nav", "themes"];
+    if (tabId === "overview") return true;
+    return GRANTABLE.includes(tabId) && granted.includes(tabId);
   }
 
   let accessSchedule = lang === "fa" ? "بدون محدودیت (۲۴/۷)" :
@@ -425,14 +439,20 @@ function MessagesPanel({ lang }: { lang: Lang }) {
   // FIX: جستجو + فیلتر وضعیت (سمت کلاینت روی پیام‌های بارگذاری‌شده)
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "new" | "read" | "replied" | "archived">("all");
+  // v1.0 (audit W16-20 #2): یادداشت/تگ — داده‌های CRM که از قبل از API می‌آمدند
+  // ولی نه نمایش داده می‌شدند نه قابل ویرایش بودند
+  const [notingId, setNotingId] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState("");
+  const [taggingId, setTaggingId] = useState<string | null>(null);
+  const [tagText, setTagText] = useState("");
 
-  useEffect(() => {
-    // FIX: AbortController — اگر کامپوننت unmount شد، درخواست در حال پرواز لغو شود
-    const controller = new AbortController();
-    fetch("/api/messages", { credentials: "include", signal: controller.signal })
+  // v1.0: بارگذاری پیام‌ها استخراج شد به تابع — addNote/setTags هم بعد از ذخیره
+  // لیست را رفرش می‌کنند
+  function loadMessages(signal?: AbortSignal) {
+    fetch("/api/messages", { credentials: "include", signal })
       .then(r => r.json())
       .then(data => {
-        if (controller.signal.aborted) return;
+        if (signal?.aborted) return;
         if (data.ok) setMessages(data.messages || []);
         else {
           setMessages([]);
@@ -441,14 +461,21 @@ function MessagesPanel({ lang }: { lang: Lang }) {
         }
       })
       .catch(() => {
-        if (controller.signal.aborted) return; // AbortError — نادیده بگیر
+        if (signal?.aborted) return; // AbortError — نادیده بگیر
         setMessages([]);
         setError("network_error");
       })
       .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
+        if (!signal?.aborted) setLoading(false);
       });
+  }
+
+  useEffect(() => {
+    // FIX: AbortController — اگر کامپوننت unmount شد، درخواست در حال پرواز لغو شود
+    const controller = new AbortController();
+    loadMessages(controller.signal);
     return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function sendReply(msgId: string) {
@@ -522,6 +549,54 @@ function MessagesPanel({ lang }: { lang: Lang }) {
       }
     } catch {
       setError("network");
+    }
+  }
+
+  // v1.0 (audit W16-20 #2): ثبت یادداشت ادمین روی پیام
+  async function addNote(msgId: string) {
+    const note = noteText.trim();
+    if (!note) return;
+    setError("");
+    try {
+      const res = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ action: "add_note", id: msgId, note }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setNotingId(null);
+        setNoteText("");
+        loadMessages();
+      } else {
+        setError(data.error || "note_failed");
+      }
+    } catch {
+      setError("network_error");
+    }
+  }
+
+  // v1.0 (audit W16-20 #2): ست کردن تگ‌های پیام (با کاما جدا می‌شوند)
+  async function setTags(msgId: string, tags: string[]) {
+    setError("");
+    try {
+      const res = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ action: "set_tags", id: msgId, tags }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setTaggingId(null);
+        setTagText("");
+        loadMessages();
+      } else {
+        setError(data.error || "tags_failed");
+      }
+    } catch {
+      setError("network_error");
     }
   }
 
@@ -657,6 +732,86 @@ function MessagesPanel({ lang }: { lang: Lang }) {
                 </div>
               </div>
               <p className="dashboard-message-text">{msg.message}</p>
+              {/* v1.0 (audit W16-20 #2): نمایش تگ‌ها */}
+              {msg.tags && msg.tags.length > 0 && (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+                  {msg.tags.map((tag: any) => (
+                    <span
+                      key={tag.id}
+                      style={{
+                        fontSize: "10px", padding: "2px 8px", borderRadius: 10,
+                        background: "var(--bg-panel2)", border: "1px solid var(--border)",
+                        color: "var(--primary-bright)", display: "inline-flex", alignItems: "center", gap: 4,
+                      }}
+                    >
+                      #{tag.name}
+                      <button
+                        onClick={() => setTags(msg.id, msg.tags.filter((t: any) => t.id !== tag.id).map((t: any) => t.name))}
+                        style={{ background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", fontSize: 10, padding: 0 }}
+                        title="Remove tag"
+                        aria-label="Remove tag"
+                      >✕</button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              {/* v1.0 (audit W16-20 #2): نمایش یادداشت‌های ادمین */}
+              {msg.notes && msg.notes.length > 0 && (
+                <div className="dashboard-message-replies" style={{ opacity: 0.85 }}>
+                  {msg.notes.map((n: any) => (
+                    <p key={n.id} className="dashboard-message-reply-text" style={{ fontStyle: "italic" }}>
+                      📝 {n.note}
+                    </p>
+                  ))}
+                </div>
+              )}
+              {/* فرم افزودن یادداشت */}
+              {notingId === msg.id && (
+                <div className="dashboard-reply-form">
+                  <textarea
+                    value={noteText}
+                    onChange={e => setNoteText(e.target.value)}
+                    placeholder="یادداشت (فقط ادمین می‌بیند)..."
+                    rows={2}
+                    className="dashboard-reply-textarea"
+                    autoFocus
+                  />
+                  <div className="dashboard-message-actions">
+                    <button onClick={() => addNote(msg.id)} className="dashboard-btn">💾 ثبت یادداشت</button>
+                    <button onClick={() => { setNotingId(null); setNoteText(""); }} className="dashboard-btn">انصراف</button>
+                  </div>
+                </div>
+              )}
+              {/* فرم تگ‌گذاری */}
+              {taggingId === msg.id && (
+                <div className="dashboard-reply-form">
+                  <input
+                    type="text"
+                    value={tagText}
+                    onChange={e => setTagText(e.target.value)}
+                    placeholder="تگ‌ها با کاما: important, followup"
+                    className="admin-search"
+                    style={{ width: "100%" }}
+                    autoFocus
+                    onKeyDown={e => {
+                      if (e.key === "Enter") {
+                        const tags = tagText.split(",").map(t => t.trim()).filter(Boolean);
+                        if (tags.length > 0) setTags(msg.id, tags);
+                      }
+                    }}
+                  />
+                  <div className="dashboard-message-actions">
+                    <button
+                      onClick={() => {
+                        const tags = tagText.split(",").map(t => t.trim()).filter(Boolean);
+                        if (tags.length > 0) setTags(msg.id, tags);
+                      }}
+                      className="dashboard-btn"
+                    >💾 ذخیره تگ‌ها</button>
+                    <button onClick={() => { setTaggingId(null); setTagText(""); }} className="dashboard-btn">انصراف</button>
+                  </div>
+                </div>
+              )}
               {msg.replies && msg.replies.length > 0 && (
                 <div className="dashboard-message-replies">
                   {msg.replies.map((r: any) => (
@@ -671,6 +826,15 @@ function MessagesPanel({ lang }: { lang: Lang }) {
                   onClick={() => { setReplyingTo(msg.id); setReplyText(""); }}
                   className="dashboard-btn"
                 >{replyLabel}</button>
+                {/* v1.0 (audit W16-20 #2): دکمه‌های یادداشت/تگ */}
+                <button
+                  onClick={() => { setNotingId(notingId === msg.id ? null : msg.id); setNoteText(""); }}
+                  className="dashboard-btn"
+                >📝 یادداشت</button>
+                <button
+                  onClick={() => { setTaggingId(taggingId === msg.id ? null : msg.id); setTagText((msg.tags || []).map((t: any) => t.name).join(", ")); }}
+                  className="dashboard-btn"
+                >🏷️ تگ</button>
                 {/* v1.1.1: علامت‌گذاری خوانده‌شده — فقط برای پیام‌های جدید */}
                 {/* FIX: دکمه‌های وضعیت read/unread/archive — همگی با اکشن set_status */}
                 {msg.status !== "read" && (

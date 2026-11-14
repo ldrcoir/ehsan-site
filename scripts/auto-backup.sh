@@ -25,6 +25,8 @@ resolve_db() {
     local candidate=""
     if [ -n "$url" ]; then
         candidate="${url#file:}"
+        # v1.0 (audit W41-45 #13): query params (?connection_limit=...) از مسیر حذف می‌شوند
+        candidate="${candidate%%\?*}"
         case "$candidate" in
             /*) ;;                                  # absolute path — همان می‌ماند
             *) candidate="$PROJECT_DIR/$candidate" ;;

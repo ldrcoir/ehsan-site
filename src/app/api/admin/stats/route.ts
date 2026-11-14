@@ -4,8 +4,7 @@ import { db } from "@/lib/db";
 
 export async function GET(req: Request) {
   try {
-    const url = new URL(req.url);
-    const password = ""; // V17.8: dead param removed (checkAdminAuth ignores it)
+    // v1.0 (audit W16-20 #9): متغیرهای مرده‌ی دوران ?password= حذف شدند
     const authCheck = await checkAdminAuth(req); if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }

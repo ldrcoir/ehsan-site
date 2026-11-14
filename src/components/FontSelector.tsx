@@ -37,6 +37,26 @@ export default function FontSelector() {
     document.documentElement.setAttribute("data-font", saved);
   }, []);
 
+  // v1.0 (audit W16-20 #10): فونت پیش‌فرضِ سایت — قبل از این تب فقط localStorage
+  // مرورگر را عوض می‌کرد؛ فونت واقعی سایت (defaultFont SiteSetting) فقط از تب
+  // settings قابل تغییر بود. حالا با یک دکمه از همین‌جا هم ست می‌شود.
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  async function setAsSiteDefault() {
+    setSaveState("saving");
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ defaultFont: currentFont }),
+      });
+      const data = await res.json().catch(() => null);
+      setSaveState(data?.ok ? "saved" : "error");
+    } catch {
+      setSaveState("error");
+    }
+  }
+
   function selectFont(fontId: string) {
     setCurrentFont(fontId);
     // FIX-2: write در try/catch با fallback درون‌حافظه‌ای
@@ -63,6 +83,14 @@ export default function FontSelector() {
       <p style={{ color: "var(--text-dim)", fontSize: 12, marginBottom: 16 }}>
         فونت سایت رو انتخاب کن. انتخاب تو مرورگر ذخیره می‌شه.
       </p>
+      <div style={{ marginBottom: 16 }}>
+        <button onClick={setAsSiteDefault} className="signal-waveform-btn" disabled={saveState === "saving"}>
+          {saveState === "saving" ? "..." : saveState === "saved" ? "✅ ثبت شد" : saveState === "error" ? "❌ خطا" : "🌐 ثبت به‌عنوان فونت پیش‌فرض سایت"}
+        </button>
+        <small style={{ display: "block", marginTop: 6, color: "var(--text-faint)", fontSize: 10 }}>
+          برای همه‌ی بازدیدکننده‌ها (نیاز به دسترسی ادمین دارد)
+        </small>
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         {FONTS.map(font => (
           <button
