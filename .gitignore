@@ -92,3 +92,9 @@ download/TUTORIAL_FA_*.docx
 
 __pycache__/
 *.pyc
+
+# delivered artifacts (kept out of repo & served build)
+/dist/
+*.zip
+*.docx
+__pycache__/
