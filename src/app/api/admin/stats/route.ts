@@ -27,9 +27,28 @@ export async function GET(req: Request) {
       db.article.count(),
     ]);
 
+    // v1.2: Top referrers — PageView.referrer is nullable in the schema
+    // (prisma/schema.prisma: `referrer String?`), so exclude null AND empty
+    // strings, group, and take the top 10. Wrapped in its own try/catch so a
+    // groupBy failure never breaks the whole stats response (→ empty array).
+    let topReferrers: { referrer: string; count: number }[] = [];
+    try {
+      const referrerAgg = await db.pageView.groupBy({
+        by: ["referrer"],
+        _count: { referrer: true },
+        where: { referrer: { not: null, notIn: [""] } },
+        orderBy: { _count: { referrer: "desc" } },
+        take: 10,
+      });
+      topReferrers = referrerAgg.map(r => ({ referrer: r.referrer ?? "", count: r._count.referrer }));
+    } catch (refErr) {
+      console.error("[/api/admin/stats] topReferrers groupBy failed:", refErr);
+      topReferrers = [];
+    }
+
     return NextResponse.json({
       ok: true,
-      stats: { totalViews, viewsToday, viewsWeek, topPages, recentViews, contactCount, chatCount, chatMsgCount, tutorialCount, bookCount, articleCount },
+      stats: { totalViews, viewsToday, viewsWeek, topPages, recentViews, topReferrers, contactCount, chatCount, chatMsgCount, tutorialCount, bookCount, articleCount },
     });
   } catch (err) {
     return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });

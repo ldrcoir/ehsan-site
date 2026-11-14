@@ -5,6 +5,11 @@ import "./personal.css"; // V17.4: import globally so admin pages also get style
 import { Inter, Lora, Fira_Code } from "next/font/google";
 import { db } from "@/lib/db"; // V1.1: SEO metadata from DB (server component)
 
+// v1.1.2: سایت کامل DB-driven است — جلوگیری از prerender شدن metadata قدیمی
+// بعد از ویرایش‌های ادمین (در نبود revalidate، صفحه‌ی statically-generated
+// ممکن است metadata/JSON-LD کهنه نشان دهد).
+export const dynamic = "force-dynamic";
+
 // ============================================================================
 // فونت‌ها — هر فونت یه CSS variable می‌سازه که تو استایل‌ها استفاده می‌شه
 // ============================================================================
@@ -55,8 +60,18 @@ export async function generateMetadata(): Promise<Metadata> {
 
   const ogIsRemote = ogImage.startsWith("http");
 
+  // v1.1.2: siteUrl از env می‌آید و ممکن است malformed باشد — قبلاً new URL
+  // بیرون از try/catch بود و می‌توانست کل generateMetadata را بترکاند.
+  // fallback: دامنه‌ی ثابت سایت.
+  let metadataBase: URL;
+  try {
+    metadataBase = new URL(siteUrl);
+  } catch {
+    metadataBase = new URL("https://ehsanmorad.ir");
+  }
+
   return {
-    metadataBase: new URL(siteUrl),
+    metadataBase,
     title: {
       default: siteName,
       template: `%s | ${siteName}`,

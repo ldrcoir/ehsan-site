@@ -3,6 +3,8 @@ import { getClientIpSafe } from "@/lib/ip";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { PERSONAL, type Lang } from "@/lib/content";
+// FIX-2: مسدودسازی IP برای مسیر بازدیدکننده (named export — security.ts no default export)
+import { isIpBlocked } from "@/lib/security";
 
 // --- Rate limit (per IP) ---
 const RATE_WINDOW_MS = 60 * 1000; // 1 min
@@ -134,6 +136,15 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { ok: false, error: "rate_limit" },
         { status: 429 }
+      );
+    }
+
+    // FIX-2: مسیر بازدیدکننده (POST) — قبل از هر DB write چک کن IP مسدود نشده باشد.
+    // فقط مسیر visitor بلاک می‌شود؛ GET ادمین (checkAdminAuth) از این چک عبور می‌کند.
+    if (ip && (await isIpBlocked(ip))) {
+      return NextResponse.json(
+        { ok: false, error: "ip_blocked" },
+        { status: 403 }
       );
     }
 

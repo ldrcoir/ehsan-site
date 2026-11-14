@@ -2,39 +2,16 @@
 // /api/admin/users/[id] — ویرایش و حذف کاربر AccessUser
 // ============================================================================
 // PUT    : ویرایش کاربر
-//   body: { displayName?, role?, password?, allowedHourStart?, allowedHourEnd?, allowedDays?, expiresAt?, active?, deactivatedReason? }
-// DELETE : حذف کاربر (همراه با AccessLog ها به‌خاطر onDelete: Cascade)
+//   body: { username?, displayName?, role?, password?, allowedHourStart?, allowedHourEnd?, allowedDays?, expiresAt?, active?, deactivatedReason? }
+// DELETE : حذف کاربر — AccessLog ها قبل از حذف به SecurityLog آرشیو می‌شوند
 //
 // نکته: ادمین نمی‌تونه خودش رو حذف یا غیرفعال کنه
 // ============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { hashPassword, getSessionFromRequest, pwTagOf } from "@/lib/access-auth";
-
-// v1.1 (security): این بررسی از admin-auth.ts استفاده نمی‌کنه چون به خود آبجکت user
-// نیاز داریم — ولی دقیقاً همان دروازه رو اعمال می‌کنه: pwTag (ابطال session بعد
-// از تغییر رمز) + انقضا/ساعت/روز مجاز در هر درخواست.
-async function checkAdmin(request: NextRequest) {
-  const session = getSessionFromRequest(request);
-  if (!session) return null;
-  const user = await db.accessUser.findUnique({ where: { id: session.userId } });
-  if (!user || !user.active) return null;
-  if (user.role !== "admin") return null;
-  if (pwTagOf(user.passwordHash) !== session.pwTag) return null;
-  const now = new Date();
-  if (user.expiresAt && now > user.expiresAt) return null;
-  if (user.allowedDays) {
-    const days = user.allowedDays.split(",").map(d => parseInt(d.trim(), 10)).filter(n => !isNaN(n));
-    if (days.length > 0 && !days.includes(now.getUTCDay())) return null;
-  }
-  const hs = user.allowedHourStart, he = user.allowedHourEnd;
-  if (hs !== null && he !== null && hs !== undefined && he !== undefined) {
-    const h = now.getUTCHours();
-    if (hs <= he ? (h < hs || h >= he) : (h < hs && h >= he)) return null;
-  }
-  return user;
-}
+import { hashPassword } from "@/lib/access-auth";
+import { checkAdminAuth } from "@/lib/admin-auth";
 
 // ----------------------------------------------------------------------------
 // PUT /api/admin/users/[id] — ویرایش کاربر
@@ -44,10 +21,15 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const admin = await checkAdmin(request);
-    if (!admin) {
+    // v1.1.2 (audit SEC-05-M): از checkAdminAuth استفاده می‌شود تا همه‌ی لایه‌ها
+    // (pwTag + session revocation + schedule) مثل بقیه‌ی مسیرهای ادمین اعمال شوند —
+    // کپی محلی قدیمی sessionsValidAfter را چک نمی‌کرد و توکنِ قبل از logout تا ۲۴h
+    // برای PUT/DELETE معتبر می‌ماند.
+    const authCheck = await checkAdminAuth(request);
+    if (!authCheck.ok || !authCheck.userId) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
+    const adminId = authCheck.userId;
 
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
@@ -60,6 +42,20 @@ export async function PUT(
 
   // ساخت data برای update
   const data: any = {};
+  // v1.1.2 (audit PANEL-09): ویرایش username — قبلاً API فیلد username را نادیده می‌گرفت
+  if (body.username !== undefined) {
+    const newUsername = String(body.username).trim();
+    if (!/^[a-zA-Z0-9._-]{3,64}$/.test(newUsername)) {
+      return NextResponse.json({ ok: false, error: "invalid_username" }, { status: 400 });
+    }
+    if (newUsername !== existing.username) {
+      const dupe = await db.accessUser.findUnique({ where: { username: newUsername } });
+      if (dupe) {
+        return NextResponse.json({ ok: false, error: "username_exists" }, { status: 409 });
+      }
+      data.username = newUsername;
+    }
+  }
   if (body.displayName !== undefined) data.displayName = String(body.displayName).trim();
   if (body.role !== undefined) data.role = body.role === "admin" ? "admin" : "user";
   if (body.allowedHourStart !== undefined) {
@@ -112,12 +108,12 @@ export async function PUT(
   }
 
   // اگه کاربر داره خودش رو غیرفعال می‌کنه — جلوگیری کن
-  if (id === admin.id && data.active === false) {
+  if (id === adminId && data.active === false) {
     return NextResponse.json({ ok: false, error: "cannot_deactivate_self" }, { status: 400 });
   }
 
   // V18.3: ادمین نمی‌تونه خودش رو به user تنزل بده (قفل شدن کامل پنل)
-  if (id === admin.id && body.role !== undefined && body.role !== "admin") {
+  if (id === adminId && body.role !== undefined && body.role !== "admin") {
     return NextResponse.json({ ok: false, error: "cannot_demote_self" }, { status: 400 });
   }
 
@@ -162,15 +158,17 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const admin = await checkAdmin(request);
-    if (!admin) {
+    // v1.1.2 (audit SEC-05-M): gate کامل مشابه PUT — از checkAdminAuth
+    const authCheck = await checkAdminAuth(request);
+    if (!authCheck.ok || !authCheck.userId) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
+    const adminId = authCheck.userId;
 
   const { id } = await params;
 
   // جلوگیری از حذف خود
-  if (id === admin.id) {
+  if (id === adminId) {
     return NextResponse.json({ ok: false, error: "cannot_delete_self" }, { status: 400 });
   }
 
@@ -188,7 +186,30 @@ export async function DELETE(
     }
   }
 
-  // حذف (AccessLog ها به‌خاطر onDelete: Cascade خودکار حذف می‌شن)
+  // v1.1.2 (audit SEC-12-M): آرشیو AccessLog ها قبل از حذف — با onDelete: Cascade
+  // کل ردپای حسابرسی کاربر بی‌صدا نابود می‌شد. رکوردها به SecurityLog منتقل می‌شوند
+  // (بدون تغییر schema، سازگار با دیتابیس‌های موجود).
+  try {
+    const logs = await db.accessLog.findMany({
+      where: { userId: id },
+      orderBy: { createdAt: "desc" },
+      take: 500,
+      select: { action: true, ip: true, details: true, createdAt: true },
+    });
+    if (logs.length > 0) {
+      await db.securityLog.createMany({
+        data: logs.map(l => ({
+          type: "access_log_archived",
+          ip: l.ip,
+          detail: `user=${existing.username} action=${l.action} at=${l.createdAt.toISOString()} ${l.details}`.slice(0, 500),
+        })),
+      });
+    }
+  } catch {
+    // آرشیو نباید حذف کاربر را بشکند
+  }
+
+  // حذف (AccessLog ها به‌خاطر onDelete: Cascade خودکار حذف می‌شن — نسخه‌ی آرشیو بالا در SecurityLog می‌ماند)
   await db.accessUser.delete({ where: { id } });
 
   return NextResponse.json({ ok: true });

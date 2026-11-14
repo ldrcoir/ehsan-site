@@ -14,9 +14,9 @@ Allow: /
 Allow: /$
 
 # داده‌های JSON/سرویس‌ها — نباید index بشن
+# v1.1.2: خطاهای Disallow: /*?password= و /*?token= حذف شدند — robots.txt
+# عمومی است و advertising پارامترهای حساس دقیقاً وجودشان را به مهاجم تبلیغ می‌کرد
 Disallow: /api/
-Disallow: /*?password=
-Disallow: /*?token=
 
 # مسیر سایت‌مپ (فایل sitemap خودش بخش‌های مخفی‌شده از پنل را حذف می‌کند)
 Sitemap: https://ehsanmorad.ir/sitemap.xml

@@ -2,7 +2,7 @@ import { checkAdminAuth } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { seedDefaultProviders } from "@/lib/providers";
-import { validateBaseUrl } from "@/lib/ssrf";
+import { validateBaseUrlAsync } from "@/lib/ssrf";
 
 /**
  * GET /api/admin/providers?password=xxx
@@ -61,7 +61,8 @@ export async function POST(req: Request) {
         // V18.1: SSRF validation at store time (not just fetch time)
         const rawBaseUrl = data.baseUrl ? String(data.baseUrl) : null;
         if (rawBaseUrl) {
-          const check = validateBaseUrl(rawBaseUrl);
+          // v1.1.2 (SEC-08): async + DNS pre-resolve
+          const check = await validateBaseUrlAsync(rawBaseUrl);
           if (!check.valid) {
             return NextResponse.json({ ok: false, error: "invalid_baseurl" }, { status: 400 });
           }
@@ -94,7 +95,8 @@ export async function POST(req: Request) {
         if (data.baseUrl !== undefined) {
           const rawUrl = data.baseUrl ? String(data.baseUrl) : null;
           if (rawUrl) {
-            const check = validateBaseUrl(rawUrl);
+            // v1.1.2 (SEC-08): async + DNS pre-resolve
+            const check = await validateBaseUrlAsync(rawUrl);
             if (!check.valid) {
               return NextResponse.json({ ok: false, error: "invalid_baseurl" }, { status: 400 });
             }

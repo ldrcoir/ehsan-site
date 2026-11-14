@@ -11,6 +11,7 @@ export async function GET(req: Request) {
     }
     const items = await db.navItem.findMany({
       orderBy: { order: "asc" },
+      take: 200, // v1.1.2 (hardening): cap list size
     });
     return NextResponse.json({ ok: true, items });
   } catch (err) {
@@ -42,8 +43,19 @@ export async function POST(req: Request) {
       case "update": {
         const id = String(body.id || "");
         if (!id) return NextResponse.json({ ok: false, error: "missing_id" }, { status: 400 });
-        const d = { ...body.data }; delete d.id; delete d.createdAt; delete d.updatedAt;
-        const item = await db.navItem.update({ where: { id }, data: d });
+        // v1.1.2 (hardening): update previously passed raw body.data to Prisma —
+        // unknown fields → PrismaClientValidationError 500 and id/timestamps could
+        // be injected. Whitelist exactly the fields the "create" branch accepts.
+        const d = body.data || {};
+        const data: Record<string, unknown> = {};
+        if (d.labelEn !== undefined) data.labelEn = String(d.labelEn);
+        if (d.labelFa !== undefined) data.labelFa = String(d.labelFa);
+        if (d.labelDe !== undefined) data.labelDe = String(d.labelDe);
+        if (d.href !== undefined) data.href = String(d.href);
+        if (d.target !== undefined) data.target = String(d.target);
+        if (d.visible !== undefined) data.visible = Boolean(d.visible);
+        if (d.order !== undefined) data.order = Number(d.order) || 99;
+        const item = await db.navItem.update({ where: { id }, data });
         return NextResponse.json({ ok: true, item });
       }
       case "delete": {

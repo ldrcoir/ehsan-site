@@ -1,11 +1,34 @@
 import { NextResponse } from "next/server";
 import { getClientIpSafe } from "@/lib/ip";
 import { db } from "@/lib/db";
+// FIX-2: مسدودسازی IP برای مسیر بازدیدکننده (named export — security.ts no default export)
+import { isIpBlocked } from "@/lib/security";
 
 // V17.9: rate limit برای /api/chat/messages (جلوگیری از IDOR brute-force)
 const msgRateLimit = new Map<string, number[]>();
 const MSG_RATE_WINDOW = 60 * 1000;
 const MSG_RATE_MAX = 20;
+
+// FIX-2: سقف سخت روی تعداد کلیدهای Map — جلوگیری از memory-DoS با چرخش IP بین
+// دو پاکسازی دوره‌ای (سبک eviction مشابه src/middleware.ts checkRateLimit)
+const MSG_RATE_MAP_MAX = 10000;
+const MSG_RATE_EVICT_BATCH = 2000;
+
+function evictMsgRateLimit(): void {
+  if (msgRateLimit.size < MSG_RATE_MAP_MAX) return;
+  const now = Date.now();
+  // ۱) اول کلیدهای کاملاً منقضی را حذف کن (مثل middleware)
+  for (const [k, arr] of msgRateLimit) {
+    if (!arr.some((t) => now - t < MSG_RATE_WINDOW)) {
+      msgRateLimit.delete(k);
+      if (msgRateLimit.size < MSG_RATE_MAP_MAX) return;
+    }
+  }
+  // ۲) هنوز پر است → قدیمی‌ترین ~۲۰۰۰ کلید را حذف کن (Map ترتیب درج را نگه می‌دارد)
+  const oldest = Array.from(msgRateLimit.keys()).slice(0, MSG_RATE_EVICT_BATCH);
+  for (const k of oldest) msgRateLimit.delete(k);
+}
+
 if (typeof setInterval !== "undefined") {
   setInterval(() => {
     const now = Date.now();
@@ -35,7 +58,14 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: "rate_limit" }, { status: 429 });
     }
     arr.push(now);
+    if (!msgRateLimit.has(ip)) evictMsgRateLimit();
     msgRateLimit.set(ip, arr);
+
+    // FIX-2: مسیر بازدیدکننده (GET poll) — قبل از هر DB lookup چک کن IP مسدود نشده باشد.
+    // این route فقط مسیر visitor دارد (ادمین از /api/chat GET با checkAdminAuth می‌گذرد).
+    if (ip && (await isIpBlocked(ip))) {
+      return NextResponse.json({ ok: false, error: "ip_blocked" }, { status: 403 });
+    }
 
     const url = new URL(req.url);
     const sessionId = url.searchParams.get("sessionId") || "";

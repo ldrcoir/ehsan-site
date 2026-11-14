@@ -14,9 +14,12 @@ export async function POST(req: Request) {
     if (!expectedSecret) {
       return NextResponse.json({ ok: false, error: "webhook_not_configured" }, { status: 503 });
     }
-    const secretBuf = Buffer.from(secret);
-    const expBuf = Buffer.from(expectedSecret);
-    if (secretBuf.length !== expBuf.length || !crypto.timingSafeEqual(secretBuf, expBuf)) {
+    // v1.1.2 (audit SEC-09): مقایسه‌ی digest SHA-256 به‌جای مقایسه‌ی مستقیم —
+    // چک طولی قبل از timingSafeEqual طول secret را از طریق timing افشا می‌کرد؛
+    // hash هر دو مقدار همیشه 32 بایت است و طول دیگر لو نمی‌رود.
+    const secretBuf = crypto.createHash("sha256").update(secret).digest();
+    const expBuf = crypto.createHash("sha256").update(expectedSecret).digest();
+    if (!crypto.timingSafeEqual(secretBuf, expBuf)) {
       return NextResponse.json({ ok: false, error: "invalid_secret" }, { status: 403 });
     }
     const body = await req.json().catch(() => null);

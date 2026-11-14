@@ -36,16 +36,27 @@ function rateLimit(ip: string): boolean {
 function isSpammy(text: string): boolean {
   const lower = text.toLowerCase();
   // Common spam patterns
-  const spamPatterns = [
+  // v1.1.2 (audit SEC-06): الگوی URL بدون backtracking مرسومی — شمارش لینک‌ها به‌صورت خطی
+  let urlCount = 0;
+  const urlRe = /https?:\/\/\S+/g;
+  while (urlRe.exec(lower) !== null) {
+    urlCount++;
+    if (urlCount >= 3) break;
+  }
+  const spamPatterns: RegExp[] = [
     /\b(viagra|cialis|casino|lottery|prize|winner|bitcoin investment)\b/,
-    /(https?:\/\/[^\s]+){3,}/, // 3+ URLs
     /(.)\1{10,}/, // 11+ of same char in a row
   ];
-  return spamPatterns.some((re) => re.test(lower));
+  return urlCount >= 3 || spamPatterns.some((re) => re.test(lower));
 }
 
 export async function POST(req: Request) {
   try {
+    // v1.1.2 (audit SEC-16): سقف حجم بدنه قبل از parse — حداکثر 64KB کافی است
+    const cl = parseInt(req.headers.get("content-length") || "0", 10);
+    if (cl > 64 * 1024) {
+      return NextResponse.json({ ok: false, error: "payload_too_large" }, { status: 413 });
+    }
     // V18.2: use shared IP helper
     const ip = getClientIpSafe(req);
     const userAgent = req.headers.get("user-agent") || "";
@@ -124,6 +135,8 @@ export async function POST(req: Request) {
         // v1.1 (security): timeout — یک اتصال سیاه‌شده می‌توانست handler را دقیقه‌ها
         // نگه دارد و آمپلی‌فیکیشن DoS بسازد
         signal: AbortSignal.timeout(5000),
+        // v1.1.2 (audit SEC-08-L): redirect manual — هم‌تراز با بقیه‌ی fetchهای سرور
+        redirect: "manual",
         body: new URLSearchParams({
           secret: process.env.RECAPTCHA_SECRET || "",
           response: recaptchaToken,

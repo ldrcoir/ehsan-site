@@ -173,7 +173,7 @@ function isSensitivePath(pathname: string): boolean {
   );
 }
 
-function addSecurityHeaders(res: NextResponse, pathname?: string): NextResponse {
+function addSecurityHeaders(res: NextResponse, pathname?: string, isHttps = false): NextResponse {
   res.headers.set("X-Content-Type-Options", "nosniff");
   res.headers.set("X-Frame-Options", "DENY");
   res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
@@ -183,6 +183,12 @@ function addSecurityHeaders(res: NextResponse, pathname?: string): NextResponse 
   res.headers.set("Cross-Origin-Resource-Policy", "same-origin");
   res.headers.set("X-XSS-Protection", "0"); // مرورگرهای مدرن از CSP استفاده می‌کنن
   res.headers.set("X-Powered-By", ""); // مخفی کردن Next.js
+  // v1.1.2 (audit SEC-01/SEC-15): CSP + HSTS روی پاسخ‌های early-return (401/403/429/413/redirect)
+  // هم اعمال می‌شود — قبلاً فقط پاسخ نهایی این هدرها را داشت.
+  res.headers.set("Content-Security-Policy", CSP);
+  if (isHttps) {
+    res.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
+  }
   // V18.3 (security): no-store برای مسیرهای حساس
   if (pathname && isSensitivePath(pathname)) {
     res.headers.set("Cache-Control", "no-store");
@@ -225,25 +231,12 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const method = req.method;
   const cookieHeader = req.headers.get("cookie") || "";
+  const isHttps =
+    req.url.startsWith("https://") || req.headers.get("x-forwarded-proto") === "https";
 
-  // --- 1. Rate limit برای login/contact/chat/track ---
-  // v1.1.1 (audit S4-M2): نرمال‌سازی مسیر قبل از lookup — /api/track/ و //api/track
-  // نباید از lookup فرار کنند
-  const normalizedPath = pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
-  const rateLimit = RATE_LIMIT_PATHS[normalizedPath];
-  if (rateLimit) {
-    // V18.2: use shared IP helper (prefer x-real-ip, then last XFF entry)
-    const ip = getClientIpSafe(req);
-    if (!checkRateLimit(`${pathname}:${ip}`, rateLimit.max, rateLimit.windowMs)) {
-      const res = NextResponse.json(
-        { ok: false, error: "rate_limit" },
-        { status: 429, headers: { "Retry-After": String(Math.ceil(rateLimit.windowMs / 1000)) } }
-      );
-      return addSecurityHeaders(res, pathname);
-    }
-  }
-
-  // --- 2. CSRF protection برای POST/PUT/DELETE به مسیرهای non-public ---
+  // --- 1. CSRF protection برای POST/PUT/DELETE به مسیرهای non-public ---
+  // v1.1.2 (audit SEC-01): CSRF قبل از rate-limit — درخواست‌های cross-site که 403
+  // می‌خورند نباید سهمیه‌ی rate-limit قربانی را بسوزانند.
   const isPublicApi = PUBLIC_API_PREFIXES.some(p => pathname === p || pathname.startsWith(p + "/"));
   // V17.8: PATCH هم اضافه شد (قبلاً missing بود)
   if ((method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE") && !isPublicApi) {
@@ -252,17 +245,39 @@ export async function middleware(req: NextRequest) {
     // Origin باید مطابق host باشه (همان-origin)
     if (!origin || !host) {
       const res = NextResponse.json({ ok: false, error: "missing_origin" }, { status: 403 });
-      return addSecurityHeaders(res, pathname);
+      return addSecurityHeaders(res, pathname, isHttps);
     }
     try {
       const originUrl = new URL(origin);
       if (originUrl.host !== host) {
         const res = NextResponse.json({ ok: false, error: "origin_mismatch" }, { status: 403 });
-        return addSecurityHeaders(res, pathname);
+        return addSecurityHeaders(res, pathname, isHttps);
       }
     } catch {
       const res = NextResponse.json({ ok: false, error: "invalid_origin" }, { status: 403 });
-      return addSecurityHeaders(res, pathname);
+      return addSecurityHeaders(res, pathname, isHttps);
+    }
+  }
+
+  // --- 2. Rate limit برای login/contact/chat/track ---
+  // v1.1.1 (audit S4-M2): نرمال‌سازی مسیر قبل از lookup — /api/track/ و //api/track
+  // نباید از lookup فرار کنند
+  const normalizedPath = pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+  // v1.1.2 (audit SEC-14-M): rate-limit فقط روی متدهای mutation — قبلاً GET پنل ادمین
+  // (/api/chat polling) سهمیه‌ی عمومی 8/15min همان مسیر را می‌سوزاند و پنل ادمین 429 می‌گرفت.
+  const isMutating = method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE";
+  const rateLimit = isMutating ? RATE_LIMIT_PATHS[normalizedPath] : undefined;
+  if (rateLimit) {
+    // V18.2: use shared IP helper (prefer x-real-ip, then last XFF entry)
+    const ip = getClientIpSafe(req);
+    // v1.1.2 (audit SEC-01): کلید bucket با normalizedPath — قبلاً pathname خام بود و
+    // /api/track/ یک bucket دوم می‌ساخت (دو برابر سهمیه).
+    if (!checkRateLimit(`${normalizedPath}:${ip}`, rateLimit.max, rateLimit.windowMs)) {
+      const res = NextResponse.json(
+        { ok: false, error: "rate_limit" },
+        { status: 429, headers: { "Retry-After": String(Math.ceil(rateLimit.windowMs / 1000)) } }
+      );
+      return addSecurityHeaders(res, pathname, isHttps);
     }
   }
 
@@ -272,7 +287,7 @@ export async function middleware(req: NextRequest) {
       const loginUrl = new URL("/user-login", req.url);
       // V17.9: security headers روی redirect هم اعمال بشن
       const redirectRes = NextResponse.redirect(loginUrl);
-      return addSecurityHeaders(redirectRes, pathname);
+      return addSecurityHeaders(redirectRes, pathname, isHttps);
     }
   }
 
@@ -280,7 +295,7 @@ export async function middleware(req: NextRequest) {
   if (pathname.startsWith(ADMIN_API_PREFIX) || pathname === "/api/messages") {
     if (!(await hasValidSession(cookieHeader))) {
       const res = NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-      return addSecurityHeaders(res, pathname);
+      return addSecurityHeaders(res, pathname, isHttps);
     }
   }
 
@@ -294,7 +309,7 @@ export async function middleware(req: NextRequest) {
         { ok: false, error: "payload_too_large" },
         { status: 413 }
       );
-      return addSecurityHeaders(res, pathname);
+      return addSecurityHeaders(res, pathname, isHttps);
     }
     // V18.3 (security) + v1.1.1 (audit S4-M4): هر درخواستی با transfer-encoding
     // روی body-methods رد می‌شه — ترکیب Content-Length کوچک + بدنه chunked بزرگ
@@ -304,20 +319,13 @@ export async function middleware(req: NextRequest) {
         { ok: false, error: "payload_too_large" },
         { status: 413 }
       );
-      return addSecurityHeaders(res, pathname);
+      return addSecurityHeaders(res, pathname, isHttps);
     }
   }
 
   // --- 6. ادامه با security headers ---
   const res = NextResponse.next();
-  res.headers.set("Content-Security-Policy", CSP);
-  // HSTS — فقط روی HTTPS (روی HTTP ست نکن — اگه سایت پشت CDN بدون HTTPS باشه مشکل ایجاد می‌کنه)
-  // V17.8: HSTS — روی HTTPS واقعی یا پشت TLS-terminating proxy (x-forwarded-proto)
-  const isHttps = req.url.startsWith("https://") || req.headers.get("x-forwarded-proto") === "https";
-  if (isHttps) {
-    res.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
-  }
-  return addSecurityHeaders(res, pathname);
+  return addSecurityHeaders(res, pathname, isHttps);
 }
 
 // ===========================================================================

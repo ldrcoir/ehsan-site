@@ -15,7 +15,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 
-    const equipment = await db.labEquipment.findMany({ orderBy: { order: "asc" } });
+    const equipment = await db.labEquipment.findMany({ orderBy: { order: "asc" }, take: 300 }); // v1.1.2 (hardening): cap list size
     return NextResponse.json({
       ok: true,
       items: equipment.map(e => {

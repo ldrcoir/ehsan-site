@@ -90,19 +90,36 @@ export default function NavMenuManager({ lang }: { lang: string }) {
   const move = async (id: string, dir: -1 | 1) => {
     const idx = items.findIndex(i => i.id === id);
     const newIdx = idx + dir;
-    if (newIdx < 0 || newIdx >= items.length) return;
-    // Swap orders
-    const a = items[idx];
-    const b = items[newIdx];
-    const [r1, r2] = await Promise.all([
-      navPost({ action: "update", id: a.id, data: { order: b.order } }),
-      navPost({ action: "update", id: b.id, data: { order: a.order } }),
-    ]);
-    if (!r1.ok || !r2.ok) {
-      setErrMsg((fa ? "جابجایی ناموفق: " : "Reorder failed: ") + (r1.error || r2.error));
-      return;
+    if (idx < 0 || newIdx < 0 || newIdx >= items.length) return;
+    // FIX: ترتیب کامل جدید از لیست محلی محاسبه می‌شود — قبلاً دو update مستقل با
+    // orderهای همدیگر فرستاده می‌شد و وقتی دو آیتم order برابر داشتند (مثلاً هر دو ۹۹)
+    // جابجایی عملاً no-op می‌شد و UI با سرور هماهنگ نمی‌ماند.
+    const reordered = [...items];
+    const [moved] = reordered.splice(idx, 1);
+    reordered.splice(newIdx, 0, moved);
+
+    // اگر در لیست order تکراری وجود دارد (ambiguity)، برای حذف ابهام «همه» آیتم‌ها
+    // با order = index خودشان در لیست جدید persist می‌شوند؛ وگرنه فقط دو آیتمِ
+    // جابجاشده با مقدار index جدیدشان کافی است.
+    const orders = items.map(i => Number(i.order));
+    const hasDuplicateOrders = new Set(orders).size !== orders.length;
+    const updates = hasDuplicateOrders
+      ? reordered.map((it, i) => ({ id: it.id, order: i }))
+      : [
+          { id: moved.id, order: newIdx },
+          { id: items[newIdx].id, order: idx },
+        ];
+
+    const results = await Promise.all(
+      updates.map(u => navPost({ action: "update", id: u.id, data: { order: u.order } }))
+    );
+    const failed = results.find(r => !r.ok);
+    if (failed) {
+      setErrMsg((fa ? "جابجایی ناموفق: " : "Reorder failed: ") + (failed.error || ""));
+    } else {
+      setErrMsg("");
     }
-    setErrMsg("");
+    // FIX: حتی در صورت شکستِ partial هم reload — تا UI با وضعیت واقعی سرور sync بماند
     loadItems();
   };
 

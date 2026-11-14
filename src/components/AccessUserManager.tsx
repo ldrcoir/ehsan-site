@@ -62,6 +62,8 @@ export default function AccessUserManager() {
   const [showLogs, setShowLogs] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  // نام کاربری وقتی لاگ‌ها برای یک کاربر خاص فیلتر شدن (برای عنوان پنل)
+  const [logsUser, setLogsUser] = useState("");
 
   // فرم
   const [form, setForm] = useState({
@@ -105,8 +107,35 @@ export default function AccessUserManager() {
       const data = await res.json();
       if (data.ok) {
         setLogs(data.logs);
+        setLogsUser("");
         setShowLogs(true);
+      } else {
+        setError(data.error || "load_failed");
       }
+    } catch {
+      // (a) قبلاً فقط try/finally بود — شکست شبکه بی‌صدا بود
+      setError("network_error");
+    } finally {
+      setLogsLoading(false);
+    }
+  }
+
+  // (b) لاگ‌های یک کاربر خاص — GET /api/admin/users/logs?userId=<id>
+  // Response shape (تأییدشده در route): { ok: true, logs, total }
+  async function fetchUserLogs(user: User) {
+    setLogsLoading(true);
+    try {
+      const res = await fetch(`/api/admin/users/logs?userId=${encodeURIComponent(user.id)}&limit=200`, { cache: "no-store", credentials: "include" });
+      const data = await res.json();
+      if (data.ok) {
+        setLogs(data.logs);
+        setLogsUser(user.username);
+        setShowLogs(true);
+      } else {
+        setError(data.error || "load_failed");
+      }
+    } catch {
+      setError("network_error");
     } finally {
       setLogsLoading(false);
     }
@@ -240,8 +269,15 @@ export default function AccessUserManager() {
     return (
       <div>
         <div style={{ marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h3 style={{ margin: 0, color: "var(--primary)" }}>📋 Access Logs ({logs.length})</h3>
-          <button onClick={() => setShowLogs(false)} className="signal-waveform-btn">← Back</button>
+          <h3 style={{ margin: 0, color: "var(--primary)" }}>
+            {logsUser ? `📋 Access Logs — ${logsUser} (${logs.length})` : `📋 Access Logs (${logs.length})`}
+          </h3>
+          <div style={{ display: "flex", gap: 8 }}>
+            {logsUser && (
+              <button onClick={() => fetchLogs()} disabled={logsLoading} className="signal-waveform-btn">Show all</button>
+            )}
+            <button onClick={() => { setShowLogs(false); setLogsUser(""); }} className="signal-waveform-btn">← Back</button>
+          </div>
         </div>
         <div style={{ maxHeight: 500, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 4 }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
@@ -297,7 +333,6 @@ export default function AccessUserManager() {
               type="text"
               value={form.username}
               onChange={e => setForm({ ...form, username: e.target.value })}
-              disabled={!!editingUser}
               required
               minLength={3}
               style={inputStyle}
@@ -311,7 +346,7 @@ export default function AccessUserManager() {
               value={form.password}
               onChange={e => setForm({ ...form, password: e.target.value })}
               required={!editingUser}
-              minLength={6}
+              minLength={8}
               style={inputStyle}
             />
           </div>
@@ -459,7 +494,7 @@ export default function AccessUserManager() {
       <div style={{ marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h3 style={{ margin: 0, color: "var(--primary)" }}>👥 Users ({users.length})</h3>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={fetchLogs} disabled={logsLoading} className="signal-waveform-btn">
+          <button onClick={() => fetchLogs()} disabled={logsLoading} className="signal-waveform-btn">
             {logsLoading ? "..." : "📋 Logs"}
           </button>
           <button onClick={startNew} className="signal-waveform-btn active">➕ New User</button>
@@ -488,6 +523,7 @@ export default function AccessUserManager() {
               <th style={thStyle}>Days</th>
               <th style={thStyle}>Expires</th>
               <th style={thStyle}>Active</th>
+              <th style={thStyle}>Logins</th>
               <th style={thStyle}>Last Login</th>
               <th style={thStyle}>Actions</th>
             </tr>
@@ -516,19 +552,21 @@ export default function AccessUserManager() {
                 <td style={tdStyle}>
                   {user.active ? "✅" : "❌"}
                 </td>
+                <td style={tdStyle}>{typeof user.loginCount === "number" ? user.loginCount.toLocaleString("fa-IR") : "—"}</td>
                 <td style={tdStyle}>
                   {user.lastLoginAt
                     ? new Date(user.lastLoginAt).toLocaleDateString("fa-IR")
                     : "never"}
                 </td>
                 <td style={tdStyle}>
+                  <button onClick={() => fetchUserLogs(user)} disabled={logsLoading} className="signal-waveform-btn" style={{ padding: "4px 8px", marginRight: 4 }}>📋</button>
                   <button onClick={() => startEdit(user)} className="signal-waveform-btn" style={{ padding: "4px 8px", marginRight: 4 }}>✏️</button>
                   <button onClick={() => handleDelete(user)} className="signal-waveform-btn" style={{ padding: "4px 8px" }}>🗑️</button>
                 </td>
               </tr>
             ))}
             {users.length === 0 && (
-              <tr><td colSpan={9} style={{ padding: 20, textAlign: "center", color: "var(--text-faint)" }}>هیچ کاربری وجود ندارد. اولین کاربر رو بساز.</td></tr>
+              <tr><td colSpan={10} style={{ padding: 20, textAlign: "center", color: "var(--text-faint)" }}>هیچ کاربری وجود ندارد. اولین کاربر رو بساز.</td></tr>
             )}
           </tbody>
         </table>

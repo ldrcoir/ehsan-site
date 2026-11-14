@@ -76,8 +76,10 @@ export default function ArchiveGrid({
     return en || de || fa || "";
   };
 
-  // Reset to page 1 when filter changes
-  if (filter && page !== 1 && currentItems.length === 0 && filtered.length > 0) {
+  // Reset to page 1 when the filter changes — AND whenever items shrink so the
+  // page index can't point past the last page (regardless of filter, e.g. after
+  // a parent refetch returns fewer items).
+  if (page !== 1 && (page > totalPages || (filter && currentItems.length === 0 && filtered.length > 0))) {
     setPage(1);
   }
 

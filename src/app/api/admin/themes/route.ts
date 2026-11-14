@@ -1,5 +1,6 @@
 import { checkAdminAuth } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 
 /**
@@ -15,6 +16,7 @@ export async function GET(req: Request) {
 
     const themes = await db.customTheme.findMany({
       orderBy: { order: "asc" },
+      take: 100, // v1.1.2 (hardening): cap list size
     });
 
     return NextResponse.json({ ok: true, themes });
@@ -137,6 +139,11 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: false, error: "invalid_action" }, { status: 400 });
     }
   } catch (err) {
+    // v1.1.2 (hardening): duplicate theme name on create/update raises P2002
+    // (findUnique pre-checks elsewhere are not race-safe) → 409 instead of 500
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return NextResponse.json({ ok: false, error: "theme_name_exists" }, { status: 409 });
+    }
     console.error("[/api/admin/themes POST]", err);
     return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });
   }

@@ -9,7 +9,8 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { Component, useEffect, useState } from "react";
+import type { ErrorInfo, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import ContentManager from "@/components/ContentManager";
 import TextEditor from "@/components/TextEditor";
@@ -41,6 +42,48 @@ const DAY_NAMES = ["یکشنبه", "دوشنبه", "سه‌شنبه", "چهار�
 type Tab = "overview" | "messages" | "chats" | "content" | "text" | "nav" | "themes" | "users" | "font" | "clips" | "stats" | "settings";
 
 type Lang = "fa" | "en" | "de";
+
+// ============================================================================
+// TabErrorBoundary — اگر رندر محتوای یک تب خطا بدهد، کل داشبورد سفید نمی‌شود؛
+// به‌جای آن یک کارت خطا با پیام خطا و دکمه «Reload» نشان داده می‌شود.
+// ============================================================================
+type TabErrorBoundaryProps = { children: ReactNode };
+type TabErrorBoundaryState = { error: Error | null };
+
+class TabErrorBoundary extends Component<TabErrorBoundaryProps, TabErrorBoundaryState> {
+  state: TabErrorBoundaryState = { error: null };
+
+  static getDerivedStateFromError(error: Error): TabErrorBoundaryState {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("[user-dashboard] tab render error:", error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div
+          className="dashboard-access-warning"
+          role="alert"
+          style={{ background: "rgba(255,0,64,0.1)", borderColor: "var(--red)", color: "var(--red)" }}
+        >
+          <p style={{ margin: "0 0 8px 0" }}>
+            ⚠️ {this.state.error.message || "Unexpected error while rendering this tab."}
+          </p>
+          <button
+            className="dashboard-btn"
+            onClick={() => window.location.reload()}
+          >
+            Reload
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const TAB_LABELS: Record<Lang, Record<Tab, string>> = {
   fa: {
@@ -139,16 +182,14 @@ export default function UserDashboardPage() {
   if (!user) return null;
 
   const isAdmin = user.role === "admin";
-  const userPermissions = user.permissions
-    ? user.permissions.split(",").filter(Boolean)
-    : [];
 
   function hasTabAccess(tabId: Tab): boolean {
     if (isAdmin) return true;
-    if (tabId === "overview") return true;
-    // V18.3: users/settings/stats/chats فقط برای ادمین — بقیه تب‌ها بر اساس userPermissions
-    if (tabId === "settings" || tabId === "users" || tabId === "stats" || tabId === "chats") return isAdmin;
-    return userPermissions.includes(tabId);
+    // FIX: همه‌ی APIهای پشتیبان فقط role==="admin" را می‌پذیرند (checkAdminAuth در
+    // src/lib/admin-auth.ts)، پس دادن تب‌های messages/content/text/nav/themes/clips
+    // به کاربر عادی فقط منجر به رندر + ۴۰۱ می‌شد. حالا فقط تب «overview» برای
+    // کاربر عادی در دسترس است؛ تمام تب‌های دیگر ادمین‌only هستند.
+    return tabId === "overview";
   }
 
   let accessSchedule = lang === "fa" ? "بدون محدودیت (۲۴/۷)" :
@@ -239,6 +280,8 @@ export default function UserDashboardPage() {
 
         {/* Content */}
         <div className="dashboard-content">
+          {/* FIX: خطای رندر هر تب کل داشبورد را نمی‌کُشد — با تغییر تب، boundary هم reset می‌شود */}
+          <TabErrorBoundary key={activeTab}>
           {activeTab === "overview" && (
             <div>
               <div className="dashboard-help-box">
@@ -363,6 +406,7 @@ export default function UserDashboardPage() {
           {activeTab === "settings" && isAdmin && (
             <SettingsPanel />
           )}
+          </TabErrorBoundary>
         </div>
       </div>
     </div>
@@ -378,11 +422,17 @@ function MessagesPanel({ lang }: { lang: Lang }) {
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
   const [error, setError] = useState("");
+  // FIX: جستجو + فیلتر وضعیت (سمت کلاینت روی پیام‌های بارگذاری‌شده)
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "new" | "read" | "replied" | "archived">("all");
 
   useEffect(() => {
-    fetch("/api/messages", { credentials: "include" })
+    // FIX: AbortController — اگر کامپوننت unmount شد، درخواست در حال پرواز لغو شود
+    const controller = new AbortController();
+    fetch("/api/messages", { credentials: "include", signal: controller.signal })
       .then(r => r.json())
       .then(data => {
+        if (controller.signal.aborted) return;
         if (data.ok) setMessages(data.messages || []);
         else {
           setMessages([]);
@@ -390,8 +440,15 @@ function MessagesPanel({ lang }: { lang: Lang }) {
           setError(data.error || "load_failed");
         }
       })
-      .catch(() => { setMessages([]); setError("network_error"); })
-      .finally(() => setLoading(false));
+      .catch(() => {
+        if (controller.signal.aborted) return; // AbortError — نادیده بگیر
+        setMessages([]);
+        setError("network_error");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, []);
 
   async function sendReply(msgId: string) {
@@ -405,12 +462,19 @@ function MessagesPanel({ lang }: { lang: Lang }) {
       });
       const data = await res.json();
       if (data.ok) {
+        // FIX: بعد از پاسخ موفق، وضعیت پیام را بلافاصله در state محلی «replied» کن
+        // (سرور هم در /api/admin/reply همین را ذخیره می‌کند؛ refresh تأییدش می‌کند)
+        setMessages(prev => prev ? prev.map(m => m.id === msgId ? { ...m, status: "replied" } : m) : prev);
         setReplyingTo(null);
         setReplyText("");
         // Refresh messages
         const refreshRes = await fetch("/api/messages", { credentials: "include" });
         const refreshData = await refreshRes.json();
-        if (refreshData.ok) setMessages(refreshData.messages || []);
+        if (refreshData.ok) {
+          setMessages((refreshData.messages || []).map((m: any) =>
+            m.id === msgId ? { ...m, status: "replied" } : m
+          ));
+        }
       } else {
         setError(data.error || "reply_failed");
       }
@@ -441,17 +505,18 @@ function MessagesPanel({ lang }: { lang: Lang }) {
 
   // v1.1.1 (audit P1-G2): lifecycle وضعیت پیام — علامت‌گذاری «خوانده‌شده»
   // (schema از قبل status داشت ولی هیچ API/UI آن را تغییر نمی‌داد)
-  async function markRead(msgId: string) {
+  // FIX: حالا generic است — read/unread(=new)/archived هم با همین اکشن set_status
+  async function setStatus(msgId: string, status: "new" | "read" | "replied" | "archived") {
     try {
       const res = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ action: "set_status", id: msgId, status: "read" }),
+        body: JSON.stringify({ action: "set_status", id: msgId, status }),
       });
       const data = await res.json();
       if (data.ok) {
-        setMessages(prev => prev ? prev.map(m => m.id === msgId ? { ...m, status: "read" } : m) : prev);
+        setMessages(prev => prev ? prev.map(m => m.id === msgId ? { ...m, status } : m) : prev);
       } else {
         setError(data.error || "status_failed");
       }
@@ -497,14 +562,31 @@ function MessagesPanel({ lang }: { lang: Lang }) {
   const cancelLabel = lang === "fa" ? "✕ انصراف" : lang === "en" ? "✕ Cancel" : "✕ Abbrechen";
   const placeholder = lang === "fa" ? "پاسخ خود را بنویسید..." : lang === "en" ? "Type your reply..." : "Antwort eingeben...";
   const emptyLabel = lang === "fa" ? "پیامی دریافت نشده." : lang === "en" ? "No messages." : "Keine Nachrichten.";
+  // FIX: وقتی فیلتر/جستجو نتیجه‌ای ندارد (باید از «بدون پیام» تفکیک شود)
+  const noMatchLabel = lang === "fa" ? "هیچ پیامی با این فیلتر مطابقت ندارد." : lang === "en" ? "No messages match this filter." : "Keine Nachrichten entsprechen diesem Filter.";
   // v1.1.1: برچسب‌های وضعیت
   const readLabel = lang === "fa" ? "✓ خوانده" : lang === "en" ? "✓ Mark read" : "✓ Gelesen";
+  // FIX: برچسب‌های وضعیت جدید (unread → status «new»)
+  const unreadLabel = lang === "fa" ? "↩ خوانده‌نشده" : lang === "en" ? "Mark unread" : "Ungelesen";
+  const archiveLabel = lang === "fa" ? "📦 بایگانی" : lang === "en" ? "📦 Archive" : "📦 Archivieren";
+  const searchPlaceholder = lang === "fa" ? "جستجو در پیام‌ها (نام/ایمیل/متن)..." : lang === "en" ? "Search messages (name/email/body)..." : "Nachrichten durchsuchen (Name/E-Mail/Text)...";
+  const allStatusLabel = lang === "fa" ? "همه وضعیت‌ها" : lang === "en" ? "All statuses" : "Alle Status";
   const deleteAllLabel = lang === "fa" ? "🗑️ حذف همه پیام‌ها" : lang === "en" ? "🗑️ Delete all" : "🗑️ Alle löschen";
   const statusLabels: Record<string, string> = lang === "fa"
     ? { new: "🆕 جدید", read: "👁 خوانده", replied: "↩ پاسخ داده شد", archived: "📦 بایگانی" }
     : lang === "en"
     ? { new: "🆕 new", read: "👁 read", replied: "↩ replied", archived: "📦 archived" }
     : { new: "🆕 neu", read: "👁 gelesen", replied: "↩ beantwortet", archived: "📦 archiviert" };
+
+  // FIX: فیلتر سمت کلاینت — وضعیت + جستجو در name/email/message
+  // (ContactMessage فیلد subject ندارد — گزارش شده)
+  const q = search.trim().toLowerCase();
+  const visibleMessages = (messages || []).filter(m => {
+    if (statusFilter !== "all" && (m.status || "new") !== statusFilter) return false;
+    if (!q) return true;
+    return [m.name, m.email, m.message]
+      .some(v => typeof v === "string" && v.toLowerCase().includes(q));
+  });
 
   return (
     <div>
@@ -518,6 +600,31 @@ function MessagesPanel({ lang }: { lang: Lang }) {
         {lang === "en" && "💡 Messages from the contact form. You can reply or delete."}
         {lang === "de" && "💡 Nachrichten vom Kontaktformular. Sie können antworten oder löschen."}
       </div>
+      {/* FIX: نوار جستجو + فیلتر وضعیت (سمت کلاینت روی پیام‌های بارگذاری‌شده) */}
+      {messages && messages.length > 0 && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <input
+            type="text"
+            className="admin-search"
+            placeholder={searchPlaceholder}
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{ flex: 1, minWidth: 180 }}
+          />
+          <select
+            className="dashboard-select"
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value as typeof statusFilter)}
+            aria-label="Status filter"
+          >
+            <option value="all">{allStatusLabel}</option>
+            <option value="new">{statusLabels["new"]}</option>
+            <option value="read">{statusLabels["read"]}</option>
+            <option value="replied">{statusLabels["replied"]}</option>
+            <option value="archived">{statusLabels["archived"]}</option>
+          </select>
+        </div>
+      )}
       {/* v1.1.1: bulk delete — فقط وقتی حداقل یک پیام هست */}
       {messages && messages.length > 0 && (
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
@@ -528,9 +635,11 @@ function MessagesPanel({ lang }: { lang: Lang }) {
       )}
       {messages && messages.length === 0 ? (
         <p className="dashboard-empty-state">{emptyLabel}</p>
+      ) : visibleMessages.length === 0 ? (
+        <p className="dashboard-empty-state">{noMatchLabel}</p>
       ) : (
         <div className="dashboard-messages-list">
-          {messages?.map(msg => (
+          {visibleMessages.map(msg => (
             <div key={msg.id} className="dashboard-message-card">
               <div className="dashboard-message-header">
                 <div>
@@ -563,11 +672,24 @@ function MessagesPanel({ lang }: { lang: Lang }) {
                   className="dashboard-btn"
                 >{replyLabel}</button>
                 {/* v1.1.1: علامت‌گذاری خوانده‌شده — فقط برای پیام‌های جدید */}
-                {msg.status === "new" && (
+                {/* FIX: دکمه‌های وضعیت read/unread/archive — همگی با اکشن set_status */}
+                {msg.status !== "read" && (
                   <button
-                    onClick={() => markRead(msg.id)}
+                    onClick={() => setStatus(msg.id, "read")}
                     className="dashboard-btn"
                   >{readLabel}</button>
+                )}
+                {msg.status !== "new" && (
+                  <button
+                    onClick={() => setStatus(msg.id, "new")}
+                    className="dashboard-btn"
+                  >{unreadLabel}</button>
+                )}
+                {msg.status !== "archived" && (
+                  <button
+                    onClick={() => setStatus(msg.id, "archived")}
+                    className="dashboard-btn"
+                  >{archiveLabel}</button>
                 )}
                 <button
                   onClick={() => deleteMessage(msg.id)}

@@ -97,6 +97,16 @@ const customThemeToCss = (t: any): string => {
 }${scan}`;
 };
 
+// v1.1.2: WaveDivider به module scope منتقل شد — قبلاً داخل Home تعریف می‌شد و
+// روی هر render یک تابع/کامپوننت جدید ساخته می‌شد که باعث remount کامل SVG
+// می‌شد (tree diffing یک type جدید می‌بیند).
+const WaveDivider = () => (
+  <svg className="wave-divider" viewBox="0 0 800 40" preserveAspectRatio="none" aria-hidden="true">
+    <path d="M0,20 Q100,5 200,20 T400,20 T600,20 T800,20" />
+    <path d="M0,20 Q100,35 200,20 T400,20 T600,20 T800,20" opacity="0.5" />
+  </svg>
+);
+
 export default function Home() {
   const [lang, setLang] = useState<Lang>(DEFAULT_LANG);
   const { content: siteContent } = useContent(lang);
@@ -306,7 +316,9 @@ export default function Home() {
       }
     };
     // DevTools detection (simple threshold-based)
-    const threshold = 160;
+    // v1.1.2: threshold 160→260 — false positiveهای zoom مرورگر کمتر می‌شوند
+    // (در zoom بالا outerWidth-innerWidth به‌راحتی از ۱۶۰ رد می‌شد)
+    const threshold = 260;
     const checkDevtools = () => {
       const widthDiff = window.outerWidth - window.innerWidth > threshold;
       const heightDiff = window.outerHeight - window.innerHeight > threshold;
@@ -519,14 +531,6 @@ export default function Home() {
 
   const reveal = (id: string) => (revealed.has(id) ? "reveal visible" : "reveal");
 
-  // Wave divider SVG
-  const WaveDivider = () => (
-    <svg className="wave-divider" viewBox="0 0 800 40" preserveAspectRatio="none" aria-hidden="true">
-      <path d="M0,20 Q100,5 200,20 T400,20 T600,20 T800,20" />
-      <path d="M0,20 Q100,35 200,20 T400,20 T600,20 T800,20" opacity="0.5" />
-    </svg>
-  );
-
   return (
     <div className="app">
       <MatrixRain />
@@ -545,6 +549,27 @@ export default function Home() {
             <p style={{ fontSize: "0.75rem", color: "#666" }}>
               If you're the owner, you can disable this in page.tsx → anti-theft useEffect.
             </p>
+            {/* v1.1.2: دکمه‌ی بستن visible — deterrent سمت کلاینت؛ رفتار detection
+                دست‌نخورده ماند (interval در صورت باز بودن devtools دوباره نشان می‌دهد) */}
+            <button
+              type="button"
+              onClick={() => setAntiTheftWarning(false)}
+              style={{
+                marginTop: 12,
+                padding: "8px 24px",
+                background: "var(--primary, #00ff41)",
+                color: "#000",
+                border: "none",
+                borderRadius: 4,
+                fontFamily: "var(--font-mono, monospace)",
+                fontSize: "0.85rem",
+                fontWeight: "bold",
+                letterSpacing: 1,
+                cursor: "pointer",
+              }}
+            >
+              بستن
+            </button>
           </div>
         </div>
       )}
@@ -787,7 +812,7 @@ export default function Home() {
               return (
                 <article key={s.id || i} className={`skill-card ${reveal(`skill-${i}`)}`} data-reveal={`skill-${i}`}>
                   <h3>{category}</h3>
-                  <ul className="tags">{items.map((tag: string) => <li key={tag}>{tag}</li>)}</ul>
+                  <ul className="tags">{items.map((tag: string) => <li key={`${s.id}-${i}-${tag}`}>{tag}</li>)}</ul>
                 </article>
               );
             })}
@@ -971,7 +996,9 @@ export default function Home() {
                 {mounted ? (
                   <div
                     className="g-recaptcha"
-                    data-sitekey={process.env.NEXT_PUBLIC_RECAPTCHA_SITEKEY || ""}
+                    // v1.1.2: sitekey از پنل (settings.recaptcha_sitekey از /api/content)
+                    // اولویت دارد؛ در نبودش fallback به env قبلی.
+                    data-sitekey={settings.recaptcha_sitekey || process.env.NEXT_PUBLIC_RECAPTCHA_SITEKEY || ""}
                     data-theme="dark"
                   ></div>
                 ) : (

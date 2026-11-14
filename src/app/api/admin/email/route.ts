@@ -32,6 +32,11 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    // v1.1.2 (audit SEC-16-M): سقف حجم بدنه قبل از parse — حداکثر 64KB
+    const cl = parseInt(req.headers.get("content-length") || "0", 10);
+    if (cl > 64 * 1024) {
+      return NextResponse.json({ ok: false, error: "payload_too_large" }, { status: 413 });
+    }
     const body = await req.json().catch(() => null);
     if (!body) return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
 
@@ -67,8 +72,9 @@ export async function POST(req: Request) {
           return NextResponse.json({ ok: false, error: "no_email_set" });
         }
 
-        const subject = String(body.subject || "New message from your portfolio");
-        const text = String(body.body || "");
+        // v1.1.2 (audit SEC-16-M): clamp طول subject/body — جلوگیری از abuse در فوروارد
+        const subject = String(body.subject || "New message from your portfolio").slice(0, 300);
+        const text = String(body.body || "").slice(0, 20_000);
 
         // Use formsubmit.co — free, no signup
         // First time: formsubmit.co sends a confirmation email to activate

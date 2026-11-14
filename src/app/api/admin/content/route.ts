@@ -1,5 +1,6 @@
 import { checkAdminAuth } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 
 /**
@@ -27,12 +28,13 @@ export async function GET(req: Request) {
     };
 
     // V17.8: parallel queries instead of sequential (5× faster)
+    // v1.1.2 (hardening): take cap so a bloated table can't return unbounded payloads
     const [books, articles, tutorials, skills, aiInstructions] = await Promise.all([
-      db.book.findMany({ orderBy: { order: "asc" } }),
-      db.article.findMany({ orderBy: { order: "asc" } }),
-      db.tutorial.findMany({ orderBy: { order: "asc" } }),
-      db.skill.findMany({ orderBy: { order: "asc" } }),
-      db.aiInstruction.findMany({ orderBy: { order: "asc" } }),
+      db.book.findMany({ orderBy: { order: "asc" }, take: 500 }),
+      db.article.findMany({ orderBy: { order: "asc" }, take: 500 }),
+      db.tutorial.findMany({ orderBy: { order: "asc" }, take: 500 }),
+      db.skill.findMany({ orderBy: { order: "asc" }, take: 500 }),
+      db.aiInstruction.findMany({ orderBy: { order: "asc" }, take: 500 }),
     ]);
 
     const results: any = {
@@ -109,9 +111,25 @@ export async function POST(req: Request) {
       return data;
     };
 
+    // v1.1.2 (hardening): link/cover/embedUrl must be http(s) URLs — blocks
+    // javascript:/data: URIs (XSS vectors) from being stored and re-served as hrefs/srcs
+    const URL_FIELDS = ["link", "cover", "embedUrl"];
+    const validateUrls = (data: Record<string, unknown>): boolean => {
+      for (const f of URL_FIELDS) {
+        const v = data[f];
+        if (typeof v === "string" && v.trim() !== "") {
+          if (!v.startsWith("http://") && !v.startsWith("https://")) return false;
+        }
+      }
+      return true;
+    };
+
     switch (action) {
       case "create": {
         const data = joinItems(sanitize(body.data));
+        if (!validateUrls(data)) {
+          return NextResponse.json({ ok: false, error: "invalid_url" }, { status: 400 });
+        }
         const created = await model.create({ data });
         return NextResponse.json({ ok: true, item: created });
       }
@@ -120,14 +138,33 @@ export async function POST(req: Request) {
         const id = String(body.id || "");
         if (!id) return NextResponse.json({ ok: false, error: "missing_id" }, { status: 400 });
         const data = joinItems(sanitize(body.data));
-        const updated = await model.update({ where: { id }, data });
-        return NextResponse.json({ ok: true, item: updated });
+        if (!validateUrls(data)) {
+          return NextResponse.json({ ok: false, error: "invalid_url" }, { status: 400 });
+        }
+        // v1.1.2 (hardening): stale id (P2025) → 404 instead of 500
+        try {
+          const updated = await model.update({ where: { id }, data });
+          return NextResponse.json({ ok: true, item: updated });
+        } catch (e) {
+          if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {
+            return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
+          }
+          throw e;
+        }
       }
 
       case "delete": {
         const id = String(body.id || "");
         if (!id) return NextResponse.json({ ok: false, error: "missing_id" }, { status: 400 });
-        await model.delete({ where: { id } });
+        // v1.1.2 (hardening): stale id (P2025) → 404 instead of 500
+        try {
+          await model.delete({ where: { id } });
+        } catch (e) {
+          if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {
+            return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
+          }
+          throw e;
+        }
         return NextResponse.json({ ok: true });
       }
 
@@ -145,6 +182,10 @@ export async function POST(req: Request) {
         const items = body.items || [];
         if (!Array.isArray(items) || items.length === 0) {
           return NextResponse.json({ ok: false, error: "no_items" }, { status: 400 });
+        }
+        // v1.1.2 (hardening): cap batch size — previously unbounded loop → DoS via huge payload
+        if (items.length > 200) {
+          return NextResponse.json({ ok: false, error: "too_many_items" }, { status: 400 });
         }
         let created = 0;
         let failed = 0;

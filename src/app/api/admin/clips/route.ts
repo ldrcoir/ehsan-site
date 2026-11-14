@@ -2,6 +2,7 @@
 // /api/admin/clips — مدیریت کلیپ‌های آپارات (با session ادمین)
 // ============================================================================
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { checkAdminAuth } from "@/lib/admin-auth";
 import { sanitizeEmbed } from "@/lib/sanitize-embed";
@@ -61,6 +62,15 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "update") {
+      // v1.1.2 (hardening): id was passed through String() blindly — missing id
+      // became "undefined" → Prisma error 500; stale id → P2025 → 500.
+      if (!body?.id) {
+        return NextResponse.json({ ok: false, error: "id_required" }, { status: 400 });
+      }
+      const existing = await db.aparatClip.findUnique({ where: { id: String(body.id) } });
+      if (!existing) {
+        return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
+      }
       const rawEmbed = String(body.embedCode || "");
       const safeEmbed = sanitizeEmbed(rawEmbed);
       if (rawEmbed && !safeEmbed) {
@@ -101,9 +111,20 @@ export async function DELETE(req: NextRequest) {
     }
 
     const body = await req.json();
-    await db.aparatClip.delete({
-      where: { id: String(body.id) },
-    });
+    // v1.1.2 (hardening): missing id → 400, stale id (P2025) → 404 instead of 500
+    if (!body?.id) {
+      return NextResponse.json({ ok: false, error: "id_required" }, { status: 400 });
+    }
+    try {
+      await db.aparatClip.delete({
+        where: { id: String(body.id) },
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {
+        return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
+      }
+      throw e;
+    }
 
     return NextResponse.json({ ok: true });
   } catch (e) {

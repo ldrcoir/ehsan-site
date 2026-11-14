@@ -3,6 +3,7 @@
 // ============================================================================
 "use client";
 import { sanitizeEmbed } from "@/lib/sanitize-embed";
+import ThemeApplier from "@/components/ThemeApplier"; // v1.1.2: تم/فونت پیش‌فرض DB روی این صفحه هم اعمال شود
 
 import { useEffect, useState } from "react";
 
@@ -31,32 +32,34 @@ export default function ClipsPage() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#000", color: "#00ff41", fontFamily: "monospace" }}>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg, #000)", color: "var(--fg, #00ff41)", fontFamily: "monospace" }}>
+        <ThemeApplier />
         ...
       </div>
     );
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#000", color: "#c8ffc8", fontFamily: "monospace", padding: 20 }}>
+    <div style={{ minHeight: "100vh", background: "var(--bg, #000)", color: "var(--fg-soft, #c8ffc8)", fontFamily: "monospace", padding: 20 }}>
+      <ThemeApplier />
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
-        <h1 style={{ color: "#00ff41", textTransform: "uppercase", letterSpacing: 2, marginBottom: 30 }}>
+        <h1 style={{ color: "var(--fg, #00ff41)", textTransform: "uppercase", letterSpacing: 2, marginBottom: 30 }}>
           🎬 کلیپ‌ها
         </h1>
 
         {clips.length === 0 ? (
-          <p style={{ color: "#4a7a4a", textAlign: "center", padding: 40 }}>
+          <p style={{ color: "var(--muted, #4a7a4a)", textAlign: "center", padding: 40 }}>
             هنوز کلیپی اضافه نشده.
           </p>
         ) : (
           <div style={{ display: "grid", gap: 30 }}>
             {clips.map((clip) => (
-              <div key={clip.id} style={{ background: "#050505", border: "1px solid #1a3a1a", borderRadius: 8, overflow: "hidden" }}>
-                <div style={{ padding: "16px 20px", borderBottom: "1px solid #1a3a1a" }}>
-                  <h2 style={{ color: "#39ff14", margin: 0, fontSize: 16 }}>{clip.title}</h2>
-                  {clip.description && <p style={{ color: "#4a7a4a", fontSize: 11, marginTop: 4 }}>{clip.description}</p>}
+              <div key={clip.id} style={{ background: "var(--bg-deep, #050505)", border: "1px solid var(--border, #1a3a1a)", borderRadius: 8, overflow: "hidden" }}>
+                <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border, #1a3a1a)" }}>
+                  <h2 style={{ color: "var(--accent, #39ff14)", margin: 0, fontSize: 16 }}>{clip.title}</h2>
+                  {clip.description && <p style={{ color: "var(--muted, #4a7a4a)", fontSize: 11, marginTop: 4 }}>{clip.description}</p>}
                 </div>
-                <div style={{ aspectRatio: "16/9", background: "#000" }} dangerouslySetInnerHTML={{ __html: sanitizeEmbed(clip.embedCode) }} />
+                <div style={{ aspectRatio: "16/9", background: "var(--bg, #000)" }} dangerouslySetInnerHTML={{ __html: sanitizeEmbed(clip.embedCode) }} />
               </div>
             ))}
           </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type ContentType = "book" | "article" | "tutorial" | "skill" | "aiInstruction" | "equipment";
 
@@ -25,12 +25,20 @@ export default function ContentManager({ lang }: { lang: string }) {
     equipment: { en: "Equipment", fa: "تجهیزات" },
   };
 
+  // FIX: درخواست‌های loadItems قابل لغو هستند — load قبلی (مثلاً از activeType قبلی)
+  // هنگام load جدید یا unmount لغو و پاسخ stale نادیده گرفته می‌شود
+  const loadAbortRef = useRef<AbortController | null>(null);
+
   const loadItems = async () => {
+    loadAbortRef.current?.abort();
+    const controller = new AbortController();
+    loadAbortRef.current = controller;
     setLoading(true);
     try {
       const endpoint = activeType === "equipment" ? "equipment" : "content";
-      const res = await fetch(`/api/admin/${endpoint}`, { credentials: "include" });
+      const res = await fetch(`/api/admin/${endpoint}`, { credentials: "include", signal: controller.signal });
       const data = await res.json();
+      if (controller.signal.aborted) return; // پاسخ کهنه از type قبلی — نادیده
       if (data.ok) {
         // API برمی‌گردونه: { books, articles, tutorials, skills, aiInstructions }
         // برای equipment: { items: [...] }
@@ -53,15 +61,29 @@ export default function ContentManager({ lang }: { lang: string }) {
         setErrMsg(data.error === "unauthorized" ? "unauthorized — please log in again" : `load failed (${data.error || res.status})`);
       }
     } catch {
+      if (controller.signal.aborted) return; // AbortError — نادیده بگیر
       setErrMsg("network error while loading");
     }
-    setLoading(false);
+    if (!controller.signal.aborted) setLoading(false);
   };
 
-   
-   
+  // FIX: export JSON — دانلود آیتم‌های بارگذاری‌شده‌ی type فعال
+  const exportJson = () => {
+    const blob = new Blob([JSON.stringify(items, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ehsan-${activeType}-export.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
 
-  useEffect(() => { loadItems(); }, [activeType]);
+  useEffect(() => {
+    loadItems();
+    return () => { loadAbortRef.current?.abort(); }; // FIX: cleanup → abort
+  }, [activeType]);
 
   const saveItem = async (item: Item) => {
     const isNew = !item.id;
@@ -164,7 +186,7 @@ export default function ContentManager({ lang }: { lang: string }) {
     // v1.1.1 (audit P1-G4): همه‌ی فیلدهای FA/DE که سایت عمومی رندر می‌کند اضافه شدند
     if (activeType === "book") return { titleEn: "", titleFa: "", titleDe: "", year: "2025", publisherEn: "", publisherFa: "", publisherDe: "", descEn: "", descFa: "", descDe: "", cover: "linear-gradient(135deg,#003b00,#00ff41)", link: "#", visible: true, order: 0 };
     if (activeType === "article") return { titleEn: "", titleFa: "", titleDe: "", venueEn: "", venueFa: "", venueDe: "", date: "2025-01", typeEn: "Article", typeFa: "", typeDe: "", summaryEn: "", summaryFa: "", summaryDe: "", link: "#", visible: true, order: 0 };
-    if (activeType === "tutorial") return { titleEn: "", titleFa: "", titleDe: "", duration: "00:00", levelEn: "Beginner", levelFa: "", levelDe: "", descEn: "", descFa: "", descDe: "", embedUrl: "", platform: "aparat", visible: true, order: 0 };
+    if (activeType === "tutorial") return { titleEn: "", titleFa: "", titleDe: "", duration: "00:00", levelEn: "Beginner", levelFa: "", levelDe: "", descEn: "", descFa: "", descDe: "", embedUrl: "", platform: "aparat", playlist: "", visible: true, order: 0 };
     if (activeType === "skill") return { categoryEn: "", categoryFa: "", categoryDe: "", items: "", visible: true, order: 0 };
     return { name: "", content: "", enabled: true, order: 0 };
   };
@@ -220,6 +242,8 @@ export default function ContentManager({ lang }: { lang: string }) {
       { key: "levelFa", label: "Level (FA)", type: "text" },
       { key: "levelDe", label: "Level (DE)", type: "text" },
       { key: "embedUrl", label: "Embed URL", type: "text" },
+      { key: "platform", label: "Platform (aparat/youtube/…)", type: "text" },
+      { key: "playlist", label: "Playlist", type: "text" },
       { key: "descEn", label: "Description (EN)", type: "textarea" },
       { key: "descFa", label: "Description (FA)", type: "textarea" },
       { key: "descDe", label: "Description (DE)", type: "textarea" },
@@ -253,6 +277,8 @@ export default function ContentManager({ lang }: { lang: string }) {
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         <button className="btn btn-primary btn-sm" onClick={() => setEditing(getEmptyItem())}>+ add</button>
         <button className="btn btn-ghost btn-sm" onClick={() => setShowBulk(!showBulk)}>bulk import</button>
+        {/* FIX: export JSON — دانلود آیتم‌های بارگذاری‌شده‌ی type فعال */}
+        <button className="btn btn-ghost btn-sm" onClick={exportJson} disabled={items.length === 0}>export JSON</button>
         <span style={{ color: "var(--text-dim)", fontSize: "0.78rem", alignSelf: "center" }}>{items.length} items</span>
       </div>
 
@@ -278,7 +304,7 @@ export default function ContentManager({ lang }: { lang: string }) {
                 <textarea value={editing[f.key] || ""} onChange={(e) => setEditing({ ...editing, [f.key]: e.target.value })} rows={2}
                   style={{ width: "100%", background: "var(--bg)", border: "1px solid var(--border)", color: "var(--green-bright)", fontFamily: "var(--font-mono)", fontSize: "0.8rem", padding: "6px" }} />
               ) : (
-                <input type={f.type === "number" ? "number" : "text"} value={editing[f.key] || ""}
+                <input type={f.type === "number" ? "number" : "text"} value={editing[f.key] ?? ""}
                   onChange={(e) => setEditing({ ...editing, [f.key]: f.type === "number" ? parseInt(e.target.value) || 0 : e.target.value })}
                   style={{ width: "100%", background: "var(--bg)", border: "1px solid var(--border)", color: "var(--green-bright)", fontFamily: "var(--font-mono)", fontSize: "0.8rem", padding: "6px" }} />
               )}

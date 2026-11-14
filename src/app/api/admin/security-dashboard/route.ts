@@ -56,15 +56,24 @@ export async function POST(req: Request) {
     const action = String(body.action || "");
     const ip = String(body.ip || "");
 
+    // v1.1.2 (hardening): validate ip format (IPv4 or IPv6) before storing/logging —
+    // garbage strings would poison the security dashboard and block lists
+    const IPV4_RE = /^(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)){3}$/;
+    // IPv6 (full and compressed forms, including ::)
+    const IPV6_RE = /^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$/;
+    const isValidIp = (v: string): boolean => IPV4_RE.test(v) || IPV6_RE.test(v);
+
     switch (action) {
       case "unblock": {
         if (!ip) return NextResponse.json({ ok: false, error: "missing_ip" }, { status: 400 });
+        if (!isValidIp(ip)) return NextResponse.json({ ok: false, error: "invalid_ip" }, { status: 400 });
         await db.blockedIp.deleteMany({ where: { ip } });
         await db.securityLog.create({ data: { type: "manual_unblock", ip, detail: "Manually unblocked by admin" } });
         return NextResponse.json({ ok: true });
       }
       case "block": {
         if (!ip) return NextResponse.json({ ok: false, error: "missing_ip" }, { status: 400 });
+        if (!isValidIp(ip)) return NextResponse.json({ ok: false, error: "invalid_ip" }, { status: 400 });
         await db.blockedIp.upsert({
           where: { ip },
           update: { reason: String(body.reason || "Manually blocked"), attempts: 99 },

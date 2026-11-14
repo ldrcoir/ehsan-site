@@ -17,11 +17,17 @@ type Lang = "fa" | "en" | "de";
 
 type TopPage = { path: string; _count: number };
 
+type TopReferrer = { referrer: string; count: number };
+
+type RecentView = { path: string; referrer: string | null; lang: string | null; createdAt: string };
+
 type SiteStats = {
   totalViews: number;
   viewsToday: number;
   viewsWeek: number;
   topPages: TopPage[];
+  topReferrers: TopReferrer[];
+  recentViews: RecentView[];
   contactCount: number;
   chatCount: number;
   chatMsgCount: number;
@@ -68,6 +74,7 @@ const T = {
     // stat cards
     totalViews: "کل بازدیدها",
     viewsToday: "بازدید امروز",
+    viewsWeek: "بازدید این هفته",
     contactCount: "پیام‌های تماس",
     chatCount: "جلسات چت",
     chatMsgCount: "پیام‌های چت",
@@ -96,6 +103,13 @@ const T = {
     blockBtn: "🚫 بلاک",
     invalidIp: "IP نامعتبر است",
     blockDone: "IP بلاک شد",
+    unblockDone: "بلاک IP برداشته شد",
+    clearLogsDone: "لاگ‌ها پاک شدند",
+    topReferrers: "🔗 منابع ارجاع‌کننده",
+    exportCsv: "⬇️ خروجی CSV",
+    clearStats: "🗑️ پاک کردن آمار",
+    clearStatsConfirm: "همه آمار بازدید (PageView) پاک بشن؟",
+    statsCleared: "آمار پاک شد",
   },
   en: {
     help: "💡 Site view & content stats plus security overview (blocked IPs, recent events). Auto-refreshes every 60 seconds.",
@@ -105,6 +119,7 @@ const T = {
     networkError: "Network error",
     totalViews: "Total Views",
     viewsToday: "Views Today",
+    viewsWeek: "Views This Week",
     contactCount: "Contact Messages",
     chatCount: "Chat Sessions",
     chatMsgCount: "Chat Messages",
@@ -131,6 +146,13 @@ const T = {
     blockBtn: "🚫 Block",
     invalidIp: "Invalid IP address",
     blockDone: "IP blocked",
+    unblockDone: "IP unblocked",
+    clearLogsDone: "Logs cleared",
+    topReferrers: "🔗 Top Referrers",
+    exportCsv: "⬇️ Export CSV",
+    clearStats: "🗑️ Clear Stats",
+    clearStatsConfirm: "Delete ALL visitor stats?",
+    statsCleared: "Stats cleared",
   },
   de: {
     help: "💡 Seiten- und Inhaltsstatistiken sowie Sicherheitsübersicht (gesperrte IPs, letzte Ereignisse). Aktualisiert sich alle 60 Sekunden automatisch.",
@@ -140,6 +162,7 @@ const T = {
     networkError: "Netzwerkfehler",
     totalViews: "Gesamte Aufrufe",
     viewsToday: "Aufrufe heute",
+    viewsWeek: "Aufrufe diese Woche",
     contactCount: "Kontaktnachrichten",
     chatCount: "Chat-Sitzungen",
     chatMsgCount: "Chat-Nachrichten",
@@ -166,6 +189,13 @@ const T = {
     blockBtn: "🚫 Sperren",
     invalidIp: "Ungültige IP-Adresse",
     blockDone: "IP gesperrt",
+    unblockDone: "IP entsperrt",
+    clearLogsDone: "Logs gelöscht",
+    topReferrers: "🔗 Top-Referrer",
+    exportCsv: "⬇️ CSV exportieren",
+    clearStats: "🗑️ Statistiken löschen",
+    clearStatsConfirm: "ALLE Besucherstatistiken löschen?",
+    statsCleared: "Statistiken gelöscht",
   },
 } as const;
 
@@ -179,12 +209,25 @@ export default function StatsSecurityPanel({ lang }: { lang: Lang }) {
   const [security, setSecurity] = useState<SecurityData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // (a) success feedback — قبلاً عملیات موفق با setError (قرمز ❌) نشون داده می‌شد
+  const [success, setSuccess] = useState("");
   const [busyIp, setBusyIp] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
+  const [clearingStats, setClearingStats] = useState(false);
   // v1.1.1: بلاک دستی IP
   const [blockInput, setBlockInput] = useState("");
   const [blocking, setBlocking] = useState(false);
   const loadedRef = useRef(false);
+
+  // --- (a) Success/error feedback helpers (mutually exclusive) ---
+  function showError(msg: string) {
+    setError(msg);
+    setSuccess("");
+  }
+  function showSuccess(msg: string) {
+    setSuccess(msg);
+    setError("");
+  }
 
   // --- Load stats + security data ---
   const load = useCallback(async (silent = false) => {
@@ -238,12 +281,13 @@ export default function StatsSecurityPanel({ lang }: { lang: Lang }) {
       });
       const data = await res.json().catch(() => null);
       if (data && data.ok) {
+        showSuccess(t.unblockDone);
         await load(true);
       } else {
-        setError((data && data.error) || "unblock_failed");
+        showError((data && data.error) || "unblock_failed");
       }
     } catch {
-      setError(t.networkError);
+      showError(t.networkError);
     } finally {
       setBusyIp(null);
     }
@@ -262,12 +306,13 @@ export default function StatsSecurityPanel({ lang }: { lang: Lang }) {
       });
       const data = await res.json().catch(() => null);
       if (data && data.ok) {
+        showSuccess(t.clearLogsDone);
         await load(true);
       } else {
-        setError((data && data.error) || "clear_failed");
+        showError((data && data.error) || "clear_failed");
       }
     } catch {
-      setError(t.networkError);
+      showError(t.networkError);
     } finally {
       setClearing(false);
     }
@@ -279,7 +324,7 @@ export default function StatsSecurityPanel({ lang }: { lang: Lang }) {
     const ip = blockInput.trim();
     if (!ip || blocking) return;
     if (!IP_RE.test(ip)) {
-      setError(t.invalidIp);
+      showError(t.invalidIp);
       return;
     }
     setBlocking(true);
@@ -293,21 +338,71 @@ export default function StatsSecurityPanel({ lang }: { lang: Lang }) {
       const data = await res.json().catch(() => null);
       if (data && data.ok) {
         setBlockInput("");
-        setError(t.blockDone);
+        // (a) قبلاً: setError(t.blockDone) — قرمز ❌ برای عملیات موفق!
+        showSuccess(t.blockDone);
         await load(true);
       } else {
-        setError((data && data.error) || "block_failed");
+        showError((data && data.error) || "block_failed");
       }
     } catch {
-      setError(t.networkError);
+      showError(t.networkError);
     } finally {
       setBlocking(false);
+    }
+  }
+
+  // --- (d) Export CSV از recentViews — سمت کلاینت، بدون درخواست اضافه ---
+  function exportCsv() {
+    const rows = stats?.recentViews || [];
+    const esc = (v: unknown): string => {
+      const s = v === null || v === undefined ? "" : String(v);
+      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = ["path,referrer,createdAt"];
+    for (const r of rows) {
+      lines.push([esc(r.path), esc(r.referrer), esc(r.createdAt)].join(","));
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "visitor-stats.csv";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  // --- (e) Clear stats — POST /api/admin/clear { target: "stats" } ---
+  async function clearStats() {
+    if (clearingStats) return;
+    if (!confirm(t.clearStatsConfirm)) return;
+    setClearingStats(true);
+    try {
+      const res = await fetch("/api/admin/clear", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ target: "stats" }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data && data.ok) {
+        showSuccess(t.statsCleared);
+        await load(true);
+      } else {
+        showError((data && data.error) || "clear_stats_failed");
+      }
+    } catch {
+      showError(t.networkError);
+    } finally {
+      setClearingStats(false);
     }
   }
 
   const statCards: { label: string; value: number | undefined }[] = [
     { label: t.totalViews, value: stats?.totalViews },
     { label: t.viewsToday, value: stats?.viewsToday },
+    { label: t.viewsWeek, value: stats?.viewsWeek },
     { label: t.contactCount, value: stats?.contactCount },
     { label: t.chatCount, value: stats?.chatCount },
     { label: t.chatMsgCount, value: stats?.chatMsgCount },
@@ -328,11 +423,37 @@ export default function StatsSecurityPanel({ lang }: { lang: Lang }) {
         </div>
       )}
 
+      {/* (a) success feedback — green alert for successful actions */}
+      {success && (
+        <div
+          className="dashboard-access-warning"
+          role="status"
+          style={{ background: "rgba(0,255,65,0.08)", borderColor: "var(--green, #00ff41)", color: "var(--green, #00ff41)" }}
+        >
+          ✅ {success}
+        </div>
+      )}
+
       <div className="dashboard-help-box" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
         <span style={{ flex: "1 1 300px" }}>{t.help}</span>
-        <button onClick={() => load()} className="dashboard-btn" style={{ fontSize: "11px", padding: "4px 12px", flexShrink: 0 }}>
-          {t.refresh}
-        </button>
+        <div style={{ display: "flex", gap: "6px", flexShrink: 0, flexWrap: "wrap" }}>
+          {/* (d) Export CSV */}
+          <button onClick={exportCsv} className="dashboard-btn" style={{ fontSize: "11px", padding: "4px 12px" }}>
+            {t.exportCsv}
+          </button>
+          {/* (e) Clear stats */}
+          <button
+            onClick={clearStats}
+            className="dashboard-btn danger"
+            disabled={clearingStats}
+            style={{ fontSize: "11px", padding: "4px 12px", opacity: clearingStats ? 0.6 : 1 }}
+          >
+            {clearingStats ? "⏳" : t.clearStats}
+          </button>
+          <button onClick={() => load()} className="dashboard-btn" style={{ fontSize: "11px", padding: "4px 12px" }}>
+            {t.refresh}
+          </button>
+        </div>
       </div>
 
       {loading && !loadedRef.current ? (
@@ -377,6 +498,41 @@ export default function StatsSecurityPanel({ lang }: { lang: Lang }) {
                     </span>
                     <span style={{ color: "var(--green-bright, #39ff14)", whiteSpace: "nowrap" }}>
                       {p._count.toLocaleString(localeOf(lang))}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="dashboard-empty-state" style={{ margin: "0" }}>—</p>
+            )}
+          </div>
+
+          {/* --- (c) Top referrers — stats.topReferrers: [{referrer, count}] --- */}
+          <div className="dashboard-message-card">
+            <strong style={{ fontSize: "12px", color: "var(--text-dim, #4a7a4a)", display: "block", marginBottom: "10px" }}>
+              {t.topReferrers}
+            </strong>
+            {stats && stats.topReferrers && stats.topReferrers.length > 0 ? (
+              <div className="dashboard-messages-list" style={{ gap: "6px" }}>
+                {stats.topReferrers.map((r, i) => (
+                  <div
+                    key={`${r.referrer}-${i}`}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: "10px",
+                      fontSize: "12px",
+                      padding: "6px 10px",
+                      border: "1px solid var(--border, #1a3a1a)",
+                      borderRadius: "6px",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <span style={{ color: "var(--text, #c8facc)", wordBreak: "break-all" }} dir="ltr">
+                      {i + 1}. {r.referrer || "—"}
+                    </span>
+                    <span style={{ color: "var(--green-bright, #39ff14)", whiteSpace: "nowrap" }}>
+                      {r.count.toLocaleString(localeOf(lang))}
                     </span>
                   </div>
                 ))}

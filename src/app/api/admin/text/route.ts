@@ -49,19 +49,20 @@ export async function POST(req: Request) {
       case "set": {
         const key = String(body.key || "");
         if (!key) return NextResponse.json({ ok: false, error: "missing_key" }, { status: 400 });
+        // v1.1.2 (hardening): cap key at 200 chars and values at 10000 chars
+        if (key.length > 200) {
+          return NextResponse.json({ ok: false, error: "key_too_long" }, { status: 400 });
+        }
+        const valueEn = String(body.valueEn || "");
+        const valueFa = String(body.valueFa || "");
+        const valueDe = String(body.valueDe || "");
+        if (valueEn.length > 10000 || valueFa.length > 10000 || valueDe.length > 10000) {
+          return NextResponse.json({ ok: false, error: "value_too_long" }, { status: 400 });
+        }
         await db.siteText.upsert({
           where: { key },
-          update: {
-            valueEn: String(body.valueEn || ""),
-            valueFa: String(body.valueFa || ""),
-            valueDe: String(body.valueDe || ""),
-          },
-          create: {
-            key,
-            valueEn: String(body.valueEn || ""),
-            valueFa: String(body.valueFa || ""),
-            valueDe: String(body.valueDe || ""),
-          },
+          update: { valueEn, valueFa, valueDe },
+          create: { key, valueEn, valueFa, valueDe },
         });
         return NextResponse.json({ ok: true });
       }
@@ -70,6 +71,21 @@ export async function POST(req: Request) {
         const items = body.items || [];
         if (!Array.isArray(items)) {
           return NextResponse.json({ ok: false, error: "no_items" }, { status: 400 });
+        }
+        // v1.1.2 (hardening): cap batch size at 300
+        if (items.length > 300) {
+          return NextResponse.json({ ok: false, error: "too_many_items" }, { status: 400 });
+        }
+        // v1.1.2 (hardening): validate caps for every item before writing (no partial writes)
+        for (const item of items) {
+          const key = String(item.key || "");
+          if (key.length > 200) {
+            return NextResponse.json({ ok: false, error: "key_too_long" }, { status: 400 });
+          }
+          const values = [String(item.valueEn || ""), String(item.valueFa || ""), String(item.valueDe || "")];
+          if (values.some((v) => v.length > 10000)) {
+            return NextResponse.json({ ok: false, error: "value_too_long" }, { status: 400 });
+          }
         }
         for (const item of items) {
           await db.siteText.upsert({

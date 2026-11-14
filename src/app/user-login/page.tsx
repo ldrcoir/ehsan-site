@@ -9,6 +9,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import ThemeApplier from "@/components/ThemeApplier"; // v1.1.2: تم/فونت پیش‌فرض DB روی این صفحه هم اعمال شود
 
 export default function UserLoginPage() {
   const router = useRouter();
@@ -60,6 +61,7 @@ export default function UserLoginPage() {
       fontFamily: "monospace",
       padding: 20,
     }}>
+      <ThemeApplier />
       <form onSubmit={handleSubmit} style={{
         background: "var(--bg-panel, #050505)",
         border: "1px solid var(--border, #1a3a1a)",

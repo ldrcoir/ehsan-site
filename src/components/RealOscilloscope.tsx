@@ -68,6 +68,9 @@ export default function RealOscilloscope({
   const [triggerLevel, setTriggerLevel] = useState(0);
   const [channelOn, setChannelOn] = useState(true);
   const [measurements, setMeasurements] = useState({ vpp: 0, vrms: 0, vavg: 0, freq: 0, period: 0 });
+  // (a) Mirror of `measurements` for the RAF loop — drawLabels reads the ref so
+  // on-canvas labels are never frozen at the stale closure state (zeros).
+  const measurementsRef = useRef(measurements);
 
   // Convert waveform (carrier shape) to voltage value at a given phase.
   // This is the *carrier* — modulation is applied on top of it by signalAtTime().
@@ -109,7 +112,12 @@ export default function RealOscilloscope({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d")!;
+    // (b) null check instead of `!` assertion — the 2D context can be unavailable
+    const ctxMaybe = canvas.getContext("2d");
+    if (!ctxMaybe) return;
+    // Narrowed alias — hoisted `function drawLabels` doesn't get control-flow
+    // narrowing from above, so bind the checked context to a non-null const.
+    const ctx: CanvasRenderingContext2D = ctxMaybe;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     let w = 0, h = 0;
@@ -133,6 +141,12 @@ export default function RealOscilloscope({
 
     const draw = (now: number) => {
       rafRef.current = requestAnimationFrame(draw);
+
+      // (c) SINGLE trigger: once fired, freeze the display (skip redraws) until reset
+      if (triggerMode === "SINGLE" && triggerFiredRef.current) return;
+
+      // (b) per-frame guard: bail out if the 2D context became unavailable
+      if (!canvas.getContext("2d")) return;
 
       const dt = lastTime === 0 ? 0.016 : Math.min((now - lastTime) / 1000, 0.05);
       lastTime = now;
@@ -230,13 +244,16 @@ export default function RealOscilloscope({
             if (v < mMin) mMin = v;
             mSum += v; mSum2 += v * v; mCount++;
           }
-          setMeasurements({
+          // (a) update BOTH the ref (read by drawLabels this frame) and the state
+          const nextMeasurements = {
             vpp: mMax - mMin,
             vrms: Math.sqrt(mSum2 / mCount),
             vavg: mSum / mCount,
             freq: frequency,
             period: 1 / Math.max(frequency, 0.001),
-          });
+          };
+          measurementsRef.current = nextMeasurements;
+          setMeasurements(nextMeasurements);
           measurementTimer = 0;
         }
 
@@ -262,6 +279,8 @@ export default function RealOscilloscope({
               if (triggerEdge === "RISE" && v1 < triggerLevel && v2 >= triggerLevel) { triggered = true; break; }
               if (triggerEdge === "FALL" && v1 > triggerLevel && v2 <= triggerLevel) { triggered = true; break; }
             }
+            // (c) SINGLE mode: arm the fired flag when a trigger edge is detected
+            if (triggered && triggerMode === "SINGLE") triggerFiredRef.current = true;
             if (!triggered) {
               ctx.fillStyle = textDim;
               ctx.font = "9px monospace";
@@ -364,8 +383,10 @@ export default function RealOscilloscope({
         ctx.fillText(`TRIG: ${triggerMode} - ${triggerEdge}`, w - 130, 14);
         ctx.fillText(`LVL: ${triggerLevel.toFixed(2)}V`, w - 130, 28);
         ctx.fillStyle = greenBright;
+        // (a) read the live ref, not the stale closure state
+        const m = measurementsRef.current;
         ctx.fillText(
-          `Vpp:${measurements.vpp.toFixed(2)}V  Vrms:${measurements.vrms.toFixed(2)}V  Vavg:${measurements.vavg.toFixed(2)}V  f:${measurements.freq.toFixed(1)}Hz  T:${(measurements.period * 1000).toFixed(1)}ms`,
+          `Vpp:${m.vpp.toFixed(2)}V  Vrms:${m.vrms.toFixed(2)}V  Vavg:${m.vavg.toFixed(2)}V  f:${m.freq.toFixed(1)}Hz  T:${(m.period * 1000).toFixed(1)}ms`,
           8, h - 8
         );
         ctx.fillStyle = textFaint;
@@ -431,8 +452,10 @@ export default function RealOscilloscope({
           <div className="osc-control-label"><span>TRIG MODE</span></div>
           <div className="osc-button-row">
             {(["AUTO", "NORM", "SINGLE"] as TriggerMode[]).map(m => (
-              <button key={m} className={`signal-waveform-btn ${triggerMode === m ? "active" : ""}`} onClick={() => setTriggerMode(m)}>{m}</button>
+              <button key={m} className={`signal-waveform-btn ${triggerMode === m ? "active" : ""}`} onClick={() => { triggerFiredRef.current = false; setTriggerMode(m); }}>{m}</button>
             ))}
+            {/* (c) reset/start: re-arm the SINGLE trigger (clears the fired flag) */}
+            <button className="signal-waveform-btn" onClick={() => { triggerFiredRef.current = false; }}>RESET</button>
           </div>
         </div>
         <div className="osc-control-group">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * TextEditor — edit ALL text strings on the site from admin panel.
@@ -14,6 +14,17 @@ export default function TextEditor({ lang }: { lang: string }) {
   const [savedKey, setSavedKey] = useState<string | null>(null);
   // v1.1 (robustness): خطاها بی‌صدا نباشند
   const [errMsg, setErrMsg] = useState("");
+  // FIX: تایمرِ نشانگر «ذخیره شد» track می‌شود — تایمر قبلی قبل از ست کردن تایمر جدید
+  // پاک می‌شود و هنگام unmount هم پاک می‌شود (قبلاً setTimeout های رهاشده باقی می‌ماندند)
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flashSaved = (key: string) => {
+    setSavedKey(key);
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    savedTimerRef.current = setTimeout(() => setSavedKey(null), 2000);
+  };
+  useEffect(() => () => {
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+  }, []);
   const loadTexts = async () => {
     setLoading(true);
     try {
@@ -50,8 +61,7 @@ export default function TextEditor({ lang }: { lang: string }) {
       const data = await res.json();
       if (data.ok) {
         setErrMsg("");
-        setSavedKey(key);
-        setTimeout(() => setSavedKey(null), 2000);
+        flashSaved(key);
       } else {
         setErrMsg(`save failed (${data.error || res.status})`);
       }
@@ -82,8 +92,7 @@ export default function TextEditor({ lang }: { lang: string }) {
           return next;
         });
         setErrMsg("");
-        setSavedKey(key);
-        setTimeout(() => setSavedKey(null), 2000);
+        flashSaved(key);
       } else {
         // v1.1.1 (audit P3): حذف ناموفق دیگر بی‌صدا نیست
         setErrMsg(fa ? `حذف ناموفق (${data.error || res.status})` : `delete failed (${data.error || res.status})`);
@@ -135,7 +144,7 @@ export default function TextEditor({ lang }: { lang: string }) {
   const filteredGroups = Object.keys(groups).filter(section => {
     if (!filter) return true;
     return section.includes(filter.toLowerCase()) ||
-      groups[section].some(k => k.includes(filter.toLowerCase()) || texts[k].en.includes(filter));
+      groups[section].some(k => k.includes(filter.toLowerCase()) || (texts[k]?.en || "").includes(filter));
   });
 
   const fa = lang === "fa";

@@ -10,6 +10,11 @@ import { db } from "@/lib/db";
  */
 export async function POST(req: Request) {
   try {
+    // v1.1.2 (audit SEC-16-L): سقف حجم بدنه قبل از parse — clamp متن بعداً انجام می‌شود
+    const cl = parseInt(req.headers.get("content-length") || "0", 10);
+    if (cl > 64 * 1024) {
+      return NextResponse.json({ ok: false, error: "payload_too_large" }, { status: 413 });
+    }
     const body = await req.json().catch(() => null);
     if (!body) {
       return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });

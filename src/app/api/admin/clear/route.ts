@@ -4,8 +4,8 @@ import { db } from "@/lib/db";
 
 /**
  * POST /api/admin/clear
- * Body: { password, target: "chat_session"|"chat_all"|"message"|"message_all", id? }
- * Clears/deletes chat sessions or contact messages.
+ * Body: { password, target: "chat_session"|"chat_all"|"message"|"message_all"|"chat_message"|"stats", id? }
+ * Clears/deletes chat sessions, single chat messages, contact messages, or analytics stats.
  */
 export async function POST(req: Request) {
   try {
@@ -25,7 +25,8 @@ export async function POST(req: Request) {
         // Delete a specific chat session + all its messages
         if (!id) return NextResponse.json({ ok: false, error: "missing_id" }, { status: 400 });
         await db.chatMessage.deleteMany({ where: { sessionId: id } });
-        await db.chatSession.delete({ where: { id } });
+        // v1.1.2 (hardening): delete → deleteMany so a stale/double delete returns ok instead of P2025 → 500
+        await db.chatSession.deleteMany({ where: { id } });
         return NextResponse.json({ ok: true, message: "Chat session deleted" });
       }
 
@@ -42,7 +43,8 @@ export async function POST(req: Request) {
         await db.messageReply.deleteMany({ where: { messageId: id } });
         await db.messageNote.deleteMany({ where: { messageId: id } });
         await db.messageTagRelation.deleteMany({ where: { messageId: id } });
-        await db.contactMessage.delete({ where: { id } });
+        // v1.1.2 (hardening): delete → deleteMany so a stale/double delete returns ok instead of P2025 → 500
+        await db.contactMessage.deleteMany({ where: { id } });
         return NextResponse.json({ ok: true, message: "Message deleted" });
       }
 
@@ -53,6 +55,19 @@ export async function POST(req: Request) {
         await db.messageTagRelation.deleteMany({});
         await db.contactMessage.deleteMany({});
         return NextResponse.json({ ok: true, message: "All messages cleared" });
+      }
+
+      case "chat_message": {
+        // v1.1.2 (hardening): delete a single chat message by id
+        if (!id) return NextResponse.json({ ok: false, error: "missing_id" }, { status: 400 });
+        await db.chatMessage.deleteMany({ where: { id } });
+        return NextResponse.json({ ok: true, message: "Chat message deleted" });
+      }
+
+      case "stats": {
+        // v1.1.2 (hardening): clear analytics (page views) — keeps response shape consistent
+        await db.pageView.deleteMany({});
+        return NextResponse.json({ ok: true, message: "Analytics stats cleared" });
       }
 
       default:

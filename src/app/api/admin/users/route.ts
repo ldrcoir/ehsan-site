@@ -12,6 +12,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { hashPassword } from "@/lib/access-auth";
 import { checkAdminAuth } from "@/lib/admin-auth";
@@ -27,6 +28,7 @@ export async function GET(request: NextRequest) {
     }
     const users = await db.accessUser.findMany({
       orderBy: { createdAt: "desc" },
+      take: 200, // v1.1.2 (hardening): cap list size
       select: {
         id: true,
         username: true,
@@ -103,35 +105,43 @@ export async function POST(request: NextRequest) {
   // هش رمز عبور
   const passwordHash = await hashPassword(password);
 
-  const user = await db.accessUser.create({
-    data: {
-      username,
-      passwordHash,
-      displayName,
-      role,
-      allowedHourStart,
-      allowedHourEnd,
-      allowedDays,
-      permissions,
-      expiresAt,
-      active,
-    },
-    select: {
-      id: true,
-      username: true,
-      displayName: true,
-      role: true,
-      allowedHourStart: true,
-      allowedHourEnd: true,
-      allowedDays: true,
-      permissions: true,
-      expiresAt: true,
-      active: true,
-      createdAt: true,
-    },
-  });
-
-  return NextResponse.json({ ok: true, user });
+  // v1.1.2 (hardening): findUnique pre-check above is not race-safe — a concurrent
+  // create with the same username raises P2002 → 409 instead of 500
+  try {
+    const user = await db.accessUser.create({
+      data: {
+        username,
+        passwordHash,
+        displayName,
+        role,
+        allowedHourStart,
+        allowedHourEnd,
+        allowedDays,
+        permissions,
+        expiresAt,
+        active,
+      },
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        role: true,
+        allowedHourStart: true,
+        allowedHourEnd: true,
+        allowedDays: true,
+        permissions: true,
+        expiresAt: true,
+        active: true,
+        createdAt: true,
+      },
+    });
+    return NextResponse.json({ ok: true, user });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      return NextResponse.json({ ok: false, error: "username_exists" }, { status: 409 });
+    }
+    throw e;
+  }
   } catch (err) {
     console.error("[/api/admin/users POST] error:", err);
     return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });

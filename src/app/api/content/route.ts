@@ -75,12 +75,17 @@ export async function GET() {
               "social_github", "social_linkedin", "social_devto", "social_medium",
               // v1.1 (admin-editable everything): ایمیل نمایشی از پنل (terminal contact)
               "contact_email",
+              // v1.1.2 (audit FIX-5): sitekey reCAPTCHA مقدار عمومی است (در فرم رندر می‌شود)
+              // و نباید توسط فیلتر secret-like حذف شود
+              "recaptcha_sitekey",
             ]);
             const isPublicKey =
               PUBLIC_KEYS.has(s.key) || /^section\.[a-z]+\.visible$/.test(s.key);
             // belt-and-suspenders: هیچ کلیدی که شبیه secret/tokens باشه هرگز برنگرده
             // v1.1.1 (audit P4): پوشش کلیدها کامل‌تر شد (credentials/webhook/api_key/key)
-            const looksSecret = /token|secret|password|forwardemail|apikey|api_key|credential|webhook|key/i.test(s.key);
+            const looksSecret =
+              s.key !== "recaptcha_sitekey" &&
+              /token|secret|password|forwardemail|apikey|api_key|credential|webhook|key/i.test(s.key);
             return isPublicKey && !looksSecret;
           })
           .map(s => [s.key, s.value])

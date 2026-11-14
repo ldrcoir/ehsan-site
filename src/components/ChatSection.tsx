@@ -5,6 +5,10 @@ import { UI, type Lang } from "@/lib/content";
 
 type Msg = { role: "user" | "assistant"; content: string; ts: number };
 
+// FIX-2: fallback درون‌حافظه‌ای برای مرورگرهای private mode — localStorage روی mount
+// ممکن است throw کند؛ visitorId آن‌وقت به‌صورت in-memory (per tab) نگه داشته می‌شود.
+let visitorIdMemoryFallback = "";
+
 /**
  * ChatSection — AI concierge styled as a radio comm channel.
  * Bot has callsign. Visitors chat with the AI; admin sees logs.
@@ -22,16 +26,27 @@ export default function ChatSection({ lang, welcomeText, title, subtitle, callsi
 
   // Generate a stable visitor ID (per browser)
   // V1.1: crypto.randomUUID (cryptographically strong) with a safe fallback
+  // FIX-2: همه‌ی localStorage reads/writes در try/catch — private mode کرش نمی‌کند
   useEffect(() => {
     const KEY = "portfolio_visitor_id";
-    let v = localStorage.getItem(KEY);
+    let v = "";
+    try {
+      v = localStorage.getItem(KEY) || "";
+    } catch {
+      v = visitorIdMemoryFallback;
+    }
     if (!v) {
       v =
         "v_" +
         (crypto.randomUUID?.() ||
           Math.random().toString(36).slice(2) + Date.now());
-      localStorage.setItem(KEY, v);
+      try {
+        localStorage.setItem(KEY, v);
+      } catch {
+        // storage unavailable (private mode / quota) — in-memory fallback
+      }
     }
+    visitorIdMemoryFallback = v;
     setVisitorId(v);
   }, []);
 
@@ -51,10 +66,13 @@ export default function ChatSection({ lang, welcomeText, title, subtitle, callsi
      
   }, [lang, welcomeText]);
 
-  // Autoscroll
+  // Autoscroll — FIX-2: فقط وقتی کاربر نزدیک پایین است (با اسکرول دستی مزاحم نیست)
   useEffect(() => {
-    if (bodyRef.current) {
-      bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+    const el = bodyRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distanceFromBottom < 120) {
+      el.scrollTop = el.scrollHeight;
     }
   }, [messages]);
 
@@ -118,14 +136,25 @@ export default function ChatSection({ lang, welcomeText, title, subtitle, callsi
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.ok) {
         setSessionId(data.sessionId);
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: data.reply, ts: Date.now() },
-        ]);
+        let appended = false;
+        setMessages((prev) => {
+          // FIX-2: poll (GET /api/chat/messages) با POST مسابقه دارد — اگر همین reply
+          // (با id یکسان یا محتوای یکسان) از قبل در state هست، append نکن تا حباب تکراری نیاید.
+          const alreadySeen =
+            Boolean(data.messageId) && seenMsgIdsRef.current.has(data.messageId);
+          const duplicateContent =
+            prev.some((m) => m.role === "assistant" && m.content === data.reply);
+          if (alreadySeen || duplicateContent) return prev;
+          appended = true;
+          return [
+            ...prev,
+            { role: "assistant" as const, content: data.reply, ts: Date.now() },
+          ];
+        });
         // v1.1.1 (audit Q1): این پاسخ AI را از dedupe poll مستثنا کن — id آن را
         // در Set ببین‌ها ثبت می‌کنیم تا poll بعدی همان را تکرار نکند
         if (data.messageId) seenMsgIdsRef.current.add(data.messageId);
-        lastPollTsRef.current = Date.now();
+        if (appended) lastPollTsRef.current = Date.now();
       } else {
         const err = data.error || "server_error";
         const msg =

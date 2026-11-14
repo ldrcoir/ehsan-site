@@ -48,7 +48,8 @@ ${urls}
 </urlset>`;
 
     return new NextResponse(xml, {
-      headers: { "Content-Type": "application/xml; charset=utf-8" },
+      // v1.1.2: no-store — sitemap DB-driven است و نباید cache کهنه سرو شود
+      headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "no-store" },
     });
   } catch (err) {
     console.error("[/sitemap.xml] error:", err);

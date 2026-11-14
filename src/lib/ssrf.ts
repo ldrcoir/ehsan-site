@@ -9,6 +9,12 @@
 //   - proper IPv6 ULA (fc00::/7) and link-local (fe80::/10) ranges
 //   - Ollama exception (localhost/127.0.0.1/::1) allowed ONLY on port 11434,
 //     applied AFTER the trailing-dot strip
+// v1.1.2 (audit SEC-08-M):
+//   - https-only برای هاست‌های عمومی (http فقط برای استثنای Ollama روی loopback) —
+//     قبلاً http://public-host مجاز بود و کلیدهای API به‌صورت clear-text می‌رفتند
+//   - محدودیت پورت: هاست عمومی فقط 443 — قبلاً http://public:6379 رد نمی‌شد
+//   - pre-resolve DNS و چک کردن همه‌ی IPهای resolved (کاهش پنجره‌ی DNS-rebinding
+//     TOCTOU — حلقه‌ی کامل نیاز به custom agent دارد؛ این لایه حمله را به‌شدت سخت می‌کند)
 
 // IPv4 private / reserved / loopback / link-local / CGNAT ranges
 // (run against dotted-decimal hosts)
@@ -72,11 +78,12 @@ function ipv6MappedToDotted(mapped: string): string | null {
   return bytes.join(".");
 }
 
-export function validateBaseUrl(baseUrl: string): { valid: boolean; sanitized: string } {
+export function validateBaseUrl(baseUrl: string): { valid: boolean; sanitized: string; host: string } {
+  const fail = { valid: false, sanitized: "", host: "" };
   try {
     const u = new URL(baseUrl);
     if (u.protocol !== "https:" && u.protocol !== "http:") {
-      return { valid: false, sanitized: "" };
+      return fail;
     }
     let host = u.hostname;
 
@@ -121,7 +128,7 @@ export function validateBaseUrl(baseUrl: string): { valid: boolean; sanitized: s
     const blockedHosts = new Set([
       "metadata.google.internal", "metadata", "169.254.169.254", "metadata.azure.com",
     ]);
-    if (blockedHosts.has(host)) return { valid: false, sanitized: "" };
+    if (blockedHosts.has(host)) return fail;
 
     // V18.3: block IPv6-mapped IPv4 — after new URL() these appear in canonical
     // hex form, e.g. [::ffff:169.254.169.254] → "[::ffff:a9fe:a9fe]" (brackets
@@ -130,27 +137,69 @@ export function validateBaseUrl(baseUrl: string): { valid: boolean; sanitized: s
       const dotted = ipv6MappedToDotted(host.slice("::ffff:".length));
       // explicit Ollama exception: [::ffff:127.0.0.1] allowed only on port 11434
       if (dotted === "127.0.0.1" && u.port === "11434") {
-        return { valid: true, sanitized: baseUrl };
+        return { valid: true, sanitized: baseUrl, host: "127.0.0.1" };
       }
       // run the IPv4 private patterns on the converted v4 when conversion worked
-      if (dotted && isPrivateHost(dotted)) return { valid: false, sanitized: "" };
+      if (dotted && isPrivateHost(dotted)) return fail;
       // fail-closed: any other ::ffff: host (including unparseable ones) gets rejected
-      return { valid: false, sanitized: "" };
+      return fail;
     }
 
     // Ollama exception — localhost / 127.0.0.1 / ::1 allowed ONLY on port 11434.
     // V18.3: applied AFTER the trailing-dot strip and numeric normalization so
     // "localhost." and numeric loopback forms can't dodge the port restriction.
     if (host === "localhost" || host === "127.0.0.1" || host === "::1") {
-      if (u.port !== "11434") return { valid: false, sanitized: "" };
-      return { valid: true, sanitized: baseUrl };
+      if (u.port !== "11434") return fail;
+      return { valid: true, sanitized: baseUrl, host };
     }
 
     // block private/reserved IPs
-    if (isPrivateHost(host)) return { valid: false, sanitized: "" };
+    if (isPrivateHost(host)) return fail;
 
-    return { valid: true, sanitized: baseUrl };
+    // v1.1.2 (audit SEC-08-M): هاست عمومی → فقط https و فقط پورت 443 (یا پیش‌فرض)
+    if (u.protocol !== "https:") return fail;
+    if (u.port !== "" && u.port !== "443") return fail;
+
+    return { valid: true, sanitized: baseUrl, host };
   } catch {
+    return fail;
+  }
+}
+
+/**
+ * v1.1.2 (audit SEC-08-M): async wrapper — علاوه بر چک‌های متنی، host را از
+ * DNS resolve می‌کند و همه‌ی IPهای resolved را هم روی private/reserved چک می‌کند.
+ * این پنجره‌ی DNS-rebinding (TOCTOU بین validation و fetch) را می‌بندد؛ fetch
+ * ممکن است دوباره resolve کند، اما rebinding حالا باید بین دو lookup با TTL کوتاه
+ * هم‌زمان شود که در عمل غیرقابل تکیه است. هر فراخواننده‌ی async باید از این نسخه
+ * استفاده کند.
+ */
+export async function validateBaseUrlAsync(baseUrl: string): Promise<{ valid: boolean; sanitized: string }> {
+  const sync = validateBaseUrl(baseUrl);
+  if (!sync.valid) return { valid: false, sanitized: "" };
+  // IP literal ها (dotted-decimal یا IPv6 با :) توسط چک‌های متنی بالا پوشش داده شده‌اند
+  const isIpLiteral = /^\d{1,3}(\.\d{1,3}){3}$/.test(sync.host) || sync.host.includes(":");
+  if (isIpLiteral) return { valid: true, sanitized: sync.sanitized };
+  try {
+    const dns = await import("dns");
+    const lookup = dns.promises.lookup;
+    const records = await lookup(sync.host, { all: true, verbatim: true });
+    // fail-closed: hostname بدون هیچ رکورد A/AAAA را رد کن
+    if (!records || records.length === 0) return { valid: false, sanitized: "" };
+    for (const rec of records) {
+      let addr = rec.address;
+      if (addr.startsWith("[")) addr = addr.slice(1, -1);
+      if (addr.startsWith("::ffff:")) {
+        const dotted = ipv6MappedToDotted(addr.slice("::ffff:".length));
+        if (dotted && isPrivateHost(dotted)) return { valid: false, sanitized: "" };
+        if (!dotted) return { valid: false, sanitized: "" };
+      } else if (isPrivateHost(addr)) {
+        return { valid: false, sanitized: "" };
+      }
+    }
+    return { valid: true, sanitized: sync.sanitized };
+  } catch {
+    // DNS failure → fail-closed (fetch هم در همین حالت شکست می‌خورد)
     return { valid: false, sanitized: "" };
   }
 }

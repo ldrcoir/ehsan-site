@@ -36,10 +36,13 @@ function sweep(now: number) {
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json().catch(() => ({}));
+    // v1.1.2 (audit CODE-02): req.json() می‌تواند null برگرداند (بدنه‌ی JSON literal "null")
+    // — در این حالت body.path پرتاب می‌شد و به‌جای {ok:true,tracked:false} خطای 500 می‌داد.
+    const body = (await req.json().catch(() => null)) ?? {};
     const rawIp = getClientIpSafe(req);
     const ip = rawIp === "unknown" ? null : rawIp;
-    const userAgent = req.headers.get("user-agent") || null;
+    // v1.1.2 (audit SEC-06): clamp طول user-agent — هدر تا 16KB می‌تواند باشد
+    const userAgent = (req.headers.get("user-agent") || "").slice(0, 300) || null;
     const now = Date.now();
 
     // Don't track bots

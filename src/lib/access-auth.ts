@@ -7,7 +7,7 @@
 // - بررسی دسترسی بر اساس ساعت/روز/تاریخ انقضا
 //
 // نکات امنیتی:
-// - رمز عبور هرگز به‌صورت plain text ذخیره نمی‌شه (bcrypt با salt rounds = 10)
+// - رمز عبور هرگز به‌صورت plain text ذخیره نمی‌شه (bcrypt با salt rounds = 12)
 // - session token شامل userId + expiry + HMAC signature هست
 // - در هر درخواست، علاوه بر session، زمان دسترسی هم چک می‌شه
 // ============================================================================
@@ -46,9 +46,10 @@ const SESSION_DURATION_HOURS = 24;
 // ----------------------------------------------------------------------------
 // hashPassword — هش کردن رمز عبور با bcrypt
 // ----------------------------------------------------------------------------
-// saltRounds = 10 یعنی 2^10 = 1024 دور hashing — سرعت خوب + امنیت کافی
+// saltRounds = 12 یعنی 2^12 = 4096 دور hashing — v1.1.2 (audit SEC-02): از 10 به 12
+// ارتقا یافت (سرعت خوب + امنیت بهتر در برابر brute-force)
 export async function hashPassword(password: string): Promise<string> {
-  const salt = await bcrypt.genSalt(10);
+  const salt = await bcrypt.genSalt(12);
   return bcrypt.hash(password, salt);
 }
 

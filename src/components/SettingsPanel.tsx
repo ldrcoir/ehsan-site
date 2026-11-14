@@ -137,7 +137,7 @@ const T = {
     status: "وضعیت",
     save: "ذخیره",
     passwordSection: "🔐 تغییر رمز",
-    newPassword: "رمز جدید (حداقل ۶ کاراکتر)",
+    newPassword: "رمز جدید (حداقل ۱۲ کاراکتر)",
     changePassword: "تغییر رمز",
     emailSection: "📧 ایمیل فوروارد",
     emailHint: "پیام‌های تماس به این ایمیل فوروارد می‌شن (رایگان با formsubmit.co)",
@@ -214,7 +214,7 @@ const T = {
     status: "Status",
     save: "Save",
     passwordSection: "🔐 Change Password",
-    newPassword: "New password (min 6 chars)",
+    newPassword: "New password (min 12 chars)",
     changePassword: "Change Password",
     emailSection: "📧 Forward Email",
     emailHint: "Contact messages are forwarded to this email (free with formsubmit.co)",
@@ -291,7 +291,7 @@ const T = {
     status: "Status",
     save: "Speichern",
     passwordSection: "🔐 Passwort ändern",
-    newPassword: "Neues Passwort (min 6 Zeichen)",
+    newPassword: "Neues Passwort (min 12 Zeichen)",
     changePassword: "Passwort ändern",
     emailSection: "📧 Weiterleitungs-E-Mail",
     emailHint: "Kontaktnachrichten werden an diese E-Mail weitergeleitet (kostenlos mit formsubmit.co)",
@@ -400,6 +400,8 @@ export default function SettingsPanel() {
   const [brandContactEmail, setBrandContactEmail] = useState("");
   const [brandMetaDescription, setBrandMetaDescription] = useState("");
   const [brandOgImage, setBrandOgImage] = useState("");
+  // v1.1.2 (audit FIX-5): sitekey عمومی reCAPTCHA — قابل ویرایش از پنل (fallback: env)
+  const [recaptchaSitekey, setRecaptchaSitekey] = useState("");
   // v1.1.1 (audit P4-G1): تصحیح دستی شمارنده بازدید
   const [visitorCountInput, setVisitorCountInput] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -496,6 +498,7 @@ export default function SettingsPanel() {
         setBrandContactEmail(s.contact_email || "");
         setBrandMetaDescription(s.meta_description || "");
         setBrandOgImage(s.og_image || "");
+        setRecaptchaSitekey(s.recaptcha_sitekey || "");
         // v1.1.1 (audit P4-G1): تصحیح دستی شمارنده بازدید
         setVisitorCountInput(s.visitorCount || "0");
         // V18.3: وضعیت نمایش بخش‌ها ("" یا "true" یعنی قابل نمایش)
@@ -756,6 +759,7 @@ export default function SettingsPanel() {
         contact_email: brandContactEmail.trim(),
         meta_description: brandMetaDescription.trim(),
         og_image: brandOgImage.trim(),
+        recaptcha_sitekey: recaptchaSitekey.trim(),
         ...(vc !== "" ? { visitorCount: vc } : {}),
       },
     });
@@ -1227,6 +1231,18 @@ export default function SettingsPanel() {
           value={brandOgImage}
           onChange={e => setBrandOgImage(e.target.value)}
           placeholder="https://ehsanmorad.ir/og.png"
+          className="settings-input"
+          dir="ltr"
+        />
+        {/* v1.1.2 (audit FIX-5): sitekey reCAPTCHA — مقدار عمومی (نه secret) */}
+        <label className="settings-label">
+          {panelLang === "fa" ? "کلید عمومی reCAPTCHA (sitekey)" : "reCAPTCHA site key (public)"}
+        </label>
+        <input
+          type="text"
+          value={recaptchaSitekey}
+          onChange={e => setRecaptchaSitekey(e.target.value)}
+          placeholder="6Le..." 
           className="settings-input"
           dir="ltr"
         />

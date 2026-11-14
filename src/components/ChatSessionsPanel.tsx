@@ -55,6 +55,12 @@ const T = {
     sendFailed: "ارسال پاسخ ناموفق بود",
     sessionDeleted: "این جلسه دیگر وجود ندارد.",
     deleteSession: "🗑 حذف جلسه",
+    deleteMessage: "حذف پیام",
+    banIp: "🚫 مسدودسازی IP این جلسه",
+    banConfirm: "IP {ip} مسدود (block) شود؟",
+    banSuccess: "✅ IP مسدود شد:",
+    banNoIp: "این جلسه IP ثبت‌شده ندارد.",
+    banFailed: "مسدودسازی ناموفق بود",
     deleteAll: "🗑 حذف همه چت‌ها",
     confirmDeleteSession: "این جلسه چت و همه پیام‌هایش حذف شود؟",
     confirmDeleteAll: "همه جلسات چت و پیام‌ها حذف شوند؟ قابل بازگشت نیست!",
@@ -82,6 +88,12 @@ const T = {
     sendFailed: "Reply could not be sent",
     sessionDeleted: "This session no longer exists.",
     deleteSession: "🗑 Delete session",
+    deleteMessage: "Delete message",
+    banIp: "🚫 Ban session IP",
+    banConfirm: "Block (ban) IP {ip}?",
+    banSuccess: "✅ IP blocked:",
+    banNoIp: "This session has no recorded IP.",
+    banFailed: "Ban failed",
     deleteAll: "🗑 Delete all chats",
     confirmDeleteSession: "Delete this chat session and all its messages?",
     confirmDeleteAll: "Delete ALL chat sessions and messages? This cannot be undone!",
@@ -109,6 +121,12 @@ const T = {
     sendFailed: "Antwort konnte nicht gesendet werden",
     sessionDeleted: "Diese Sitzung existiert nicht mehr.",
     deleteSession: "🗑 Sitzung löschen",
+    deleteMessage: "Nachricht löschen",
+    banIp: "🚫 IP der Sitzung sperren",
+    banConfirm: "IP {ip} sperren (blocken)?",
+    banSuccess: "✅ IP gesperrt:",
+    banNoIp: "Diese Sitzung hat keine gespeicherte IP.",
+    banFailed: "Sperren fehlgeschlagen",
     deleteAll: "🗑 Alle Chats löschen",
     confirmDeleteSession: "Diese Sitzung und alle Nachrichten löschen?",
     confirmDeleteAll: "ALLE Sitzungen und Nachrichten löschen? Nicht rückgängig machbar!",
@@ -129,6 +147,7 @@ export default function ChatSessionsPanel({ lang }: { lang: Lang }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
+  const [notice, setNotice] = useState("");
   const selectedRef = useRef<string | null>(null);
   selectedRef.current = selectedId;
   const loadedRef = useRef(false);
@@ -246,6 +265,60 @@ export default function ChatSessionsPanel({ lang }: { lang: Lang }) {
     }
   }
 
+  // --- FIX-2: مسدودسازی IP جلسه — POST /api/admin/security-dashboard {action:"block", ip}
+  // (شکل درخواست از خود route خوانده شد؛ نکته: action block در security-dashboard
+  //  هست نه /api/admin/security)
+  async function banSessionIp(session: ChatSession) {
+    const ip = (session.ip || "").trim();
+    if (!ip) {
+      setNotice("");
+      setError(t.banNoIp);
+      return;
+    }
+    if (!window.confirm(t.banConfirm.replace("{ip}", ip))) return;
+    try {
+      const res = await fetch("/api/admin/security-dashboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ action: "block", ip, reason: "Blocked from chat sessions panel" }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data && data.ok) {
+        setError("");
+        setNotice(`${t.banSuccess} ${ip}`);
+        await loadSessions(true);
+      } else {
+        setNotice("");
+        setError(`${t.banFailed}: ${(data && data.error) || "unknown"}`);
+      }
+    } catch {
+      setNotice("");
+      setError(t.networkError);
+    }
+  }
+
+  // --- FIX-2: حذف تکی پیام — POST /api/admin/clear {target:"chat_message", id}
+  async function deleteMessage(messageId: string) {
+    try {
+      const res = await fetch("/api/admin/clear", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ target: "chat_message", id: messageId }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data && data.ok) {
+        setError("");
+        await loadSessions(true);
+      } else {
+        setError(`${t.deleteFailed}: ${(data && data.error) || "unknown"}`);
+      }
+    } catch {
+      setError(t.networkError);
+    }
+  }
+
   const selected = sessions?.find(s => s.id === selectedId) || null;
 
   return (
@@ -257,6 +330,16 @@ export default function ChatSessionsPanel({ lang }: { lang: Lang }) {
           style={{ background: "rgba(255,0,64,0.1)", borderColor: "var(--red, #ff0040)", color: "var(--red, #ff0040)" }}
         >
           {t.error}: {error}
+        </div>
+      )}
+
+      {notice && (
+        <div
+          className="dashboard-access-warning"
+          role="status"
+          style={{ background: "rgba(0,255,65,0.08)", borderColor: "var(--green, #00ff41)", color: "var(--green-bright, #39ff14)" }}
+        >
+          {notice}
         </div>
       )}
 
@@ -322,9 +405,20 @@ export default function ChatSessionsPanel({ lang }: { lang: Lang }) {
               {sessions?.map(s => {
                 const isActive = s.id === selectedId;
                 return (
-                  <button
+                  // FIX-2: div با role="button" — button تو در تو (دکمه حذف داخل button)
+                  // نامعتبر بود و hydration mismatch می‌داد
+                  <div
                     key={s.id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => { setSelectedId(s.id); setReplyText(""); }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedId(s.id);
+                        setReplyText("");
+                      }
+                    }}
                     className="dashboard-message-card"
                     style={{
                       cursor: "pointer",
@@ -349,24 +443,40 @@ export default function ChatSessionsPanel({ lang }: { lang: Lang }) {
                       <span>
                         {t.lastUpdate}: {new Date(s.updatedAt).toLocaleString(localeOf(lang))}
                       </span>
-                      <button
-                        onClick={e => { e.stopPropagation(); deleteSession(s.id); }}
-                        title={t.deleteSession}
-                        style={{
-                          fontSize: "10px",
-                          padding: "2px 8px",
-                          cursor: "pointer",
-                          background: "transparent",
-                          border: "1px solid var(--red, #ff0040)",
-                          borderRadius: "6px",
-                          color: "var(--red, #ff0040)",
-                          flexShrink: 0,
-                        }}
-                      >
-                        🗑
-                      </button>
+                      <span style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
+                        <button
+                          onClick={e => { e.stopPropagation(); banSessionIp(s); }}
+                          title={t.banIp}
+                          style={{
+                            fontSize: "10px",
+                            padding: "2px 8px",
+                            cursor: "pointer",
+                            background: "transparent",
+                            border: "1px solid var(--red, #ff0040)",
+                            borderRadius: "6px",
+                            color: "var(--red, #ff0040)",
+                          }}
+                        >
+                          🚫
+                        </button>
+                        <button
+                          onClick={e => { e.stopPropagation(); deleteSession(s.id); }}
+                          title={t.deleteSession}
+                          style={{
+                            fontSize: "10px",
+                            padding: "2px 8px",
+                            cursor: "pointer",
+                            background: "transparent",
+                            border: "1px solid var(--red, #ff0040)",
+                            borderRadius: "6px",
+                            color: "var(--red, #ff0040)",
+                          }}
+                        >
+                          🗑
+                        </button>
+                      </span>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -421,8 +531,29 @@ export default function ChatSessionsPanel({ lang }: { lang: Lang }) {
                         color: "var(--text, #c8facc)",
                       }}
                     >
-                      <div style={{ fontSize: "9px", color: "var(--text-dim, #4a7a4a)", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "1px" }}>
-                        {isUser ? `👤 ${t.visitor}` : `🤖 ${t.you}`} — {new Date(m.createdAt).toLocaleString(localeOf(lang))}
+                      <div style={{ fontSize: "9px", color: "var(--text-dim, #4a7a4a)", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "1px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "6px" }}>
+                        <span>
+                          {isUser ? `👤 ${t.visitor}` : `🤖 ${t.you}`} — {new Date(m.createdAt).toLocaleString(localeOf(lang))}
+                        </span>
+                        {/* FIX-2: حذف تکی پیام (ادمین) — POST /api/admin/clear {target:"chat_message", id} */}
+                        <button
+                          onClick={() => deleteMessage(m.id)}
+                          title={t.deleteMessage}
+                          aria-label={t.deleteMessage}
+                          style={{
+                            fontSize: "11px",
+                            lineHeight: 1,
+                            padding: "1px 6px",
+                            cursor: "pointer",
+                            background: "transparent",
+                            border: "1px solid var(--red, #ff0040)",
+                            borderRadius: "6px",
+                            color: "var(--red, #ff0040)",
+                            flexShrink: 0,
+                          }}
+                        >
+                          ×
+                        </button>
                       </div>
                       {m.content}
                     </div>

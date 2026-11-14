@@ -38,6 +38,13 @@ export async function GET(request: NextRequest) {
       if (access.reason !== "session_revoked") {
         await logAccess(user.id, access.reason, getClientIp(request), request.headers.get("user-agent"));
       }
+      // v1.1.2 (audit SEC-02): انکارهای قطعی (revoke/inactive/expired/off_day) →
+      // ok:false تا dashboard کاربر را به login برگرداند؛ قبلاً ok:true با آبجکت
+      // کامل کاربر برمی‌گشت در حالی که همه‌ی APIهای بعدی 401 می‌دادند.
+      // off_hours باقی می‌ماند (کاربر بعداً در بازه‌ی مجاز برمی‌گردد).
+      if (access.reason !== "access_denied_off_hours") {
+        return NextResponse.json({ ok: false, error: access.reason });
+      }
     }
 
     return NextResponse.json({

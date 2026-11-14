@@ -48,6 +48,10 @@ export async function POST(req: Request) {
     if (action === "set_telegram") {
       const token = String(body.token || "").trim();
       const chatId = String(body.chatId || "").trim();
+      // v1.1.2 (hardening): cap string setting values (see bulk path below)
+      if (token.length > 5000 || chatId.length > 5000) {
+        return NextResponse.json({ ok: false, error: "value_too_long" }, { status: 400 });
+      }
       await Promise.all([
         setSetting("telegramBotToken", token),
         setSetting("telegramChatId", chatId),
@@ -99,6 +103,8 @@ export async function POST(req: Request) {
       // v1.1.1 (audit P4-G1): تصحیح دستی شمارنده بازدید — بعد از سوءاستفاده/اسپم
       // ادمین باید بتواند visitorCount را از پنل اصلاح کند (read-only بود)
       "visitorCount",
+      // v1.1.2 (hardening): reCAPTCHA site key (public — safe to expose via GET)
+      "recaptcha_sitekey",
     ];
     // V18.3: هر کلیدی به شکل section.<name>.visible پذیرفته می‌شه (کنترل نمایش بخش‌های سایت)
     const isAllowedKey = (key: string): boolean =>
@@ -122,6 +128,13 @@ export async function POST(req: Request) {
     for (const [key, value] of Object.entries(settings)) {
       if (isAllowedKey(key)) {
         let strValue = String(value);
+        // v1.1.2 (hardening): cap any string setting value at 5000 chars
+        if (strValue.length > 5000) {
+          return NextResponse.json(
+            { ok: false, error: "value_too_long", key },
+            { status: 400 }
+          );
+        }
         if (SOCIAL_KEYS.has(key)) {
           const okVal = safeUrl(strValue);
           if (okVal === null) {
@@ -188,6 +201,8 @@ export async function GET(req: Request) {
       "contact_email",
       "meta_description",
       "og_image",
+      // v1.1.2 (hardening): reCAPTCHA site key (public — safe to expose)
+      "recaptcha_sitekey",
       // V18.3: وضعیت نمایش بخش‌ها (10 بخش شناخته‌شده)
       "section.hero.visible",
       "section.about.visible",

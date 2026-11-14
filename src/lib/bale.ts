@@ -10,7 +10,7 @@ import { getSetting } from "@/lib/settings";
  * 3. Get your chat ID (message the bot, check /api/bale/getChatId)
  * 4. Set BALE_CHAT_ID in SiteSetting
  * 5. Set baleEnabled = "true" in admin panel
- * 6. Set up webhook: POST https://api.bale.ai/v1/bots{token}/setWebhook
+ * 6. Set up webhook: POST https://api.bale.ai/v1/bots/{token}/setWebhook
  *    with { url: "https://your-domain.com/api/bale/webhook" }
  * 
  * Commands admin can send to the bot:
@@ -72,7 +72,9 @@ export async function sendBaleMessage(text: string): Promise<boolean> {
   if (!config.enabled) return false;
 
   try {
-    const url = `${BALE_API_BASE}${config.token}/sendMessage`;
+    // v1.1.2 (audit CODE-01-H): اسلش بعد از /bots جا مانده بود — همه‌ی فراخوانی‌های
+    // Bale با 404 پاسخ می‌دادند و نوتیفیکیشن‌ها بی‌صدا از دست می‌رفتند.
+    const url = `${BALE_API_BASE}/${config.token}/sendMessage`;
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

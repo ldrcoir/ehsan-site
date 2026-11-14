@@ -39,6 +39,13 @@ const EMPTY_THEME: ThemeColors = {
   scanlines: false, visible: true,
 };
 
+// (b) Appending the "55" alpha suffix is only valid CSS for 6-digit hex colors.
+// For any other value (rgb(), named colors, 8-digit hex, partial input) the
+// color is used unchanged so we never emit invalid CSS like `rgb(0,0,0)55`.
+function isHex6(v: string): boolean {
+  return /^#[0-9a-fA-F]{6}$/.test(v);
+}
+
 const COLOR_FIELDS: { key: keyof ThemeColors; label: string; desc: string }[] = [
   { key: "bg", label: "Background", desc: "Main page background" },
   { key: "bgSoft", label: "BG Soft", desc: "Alt section background" },
@@ -228,6 +235,8 @@ export default function ThemeBuilder({ lang }: { lang: string }) {
             <div style={{
               background: editing.bg, border: `1px solid ${editing.borderBright}`,
               padding: 16, borderRadius: 2, minHeight: 200,
+              // (a) the scanlines overlay is position:absolute → container must establish positioning context
+              position: "relative",
             }}>
               {editing.scanlines && (
                 <div style={{
@@ -235,7 +244,7 @@ export default function ThemeBuilder({ lang }: { lang: string }) {
                   background: "repeating-linear-gradient(0deg, transparent 0, transparent 2px, rgba(0,0,0,0.2) 3px, transparent 4px)",
                 }} />
               )}
-              <h4 style={{ color: editing.primaryBright, fontSize: "1rem", marginBottom: 8, textShadow: `0 0 8px ${editing.primary}55` }}>
+              <h4 style={{ color: editing.primaryBright, fontSize: "1rem", marginBottom: 8, textShadow: `0 0 8px ${isHex6(editing.primary) ? `${editing.primary}55` : editing.primary}` }}>
                 {editing.name || "Theme Name"}
               </h4>
               <p style={{ color: editing.text, fontSize: "0.8rem", marginBottom: 8 }}>
@@ -253,7 +262,7 @@ export default function ThemeBuilder({ lang }: { lang: string }) {
               <button style={{
                 background: editing.primary, color: editing.bg, border: "none",
                 padding: "4px 12px", fontFamily: "monospace", fontSize: "0.75rem",
-                cursor: "pointer", boxShadow: `0 0 8px ${editing.primary}55`,
+                cursor: "pointer", boxShadow: `0 0 8px ${isHex6(editing.primary) ? `${editing.primary}55` : editing.primary}`,
               }}>
                 {fa ? "دکمه" : "button"}
               </button>
@@ -286,7 +295,7 @@ export default function ThemeBuilder({ lang }: { lang: string }) {
                 background: t.bgPanel, border: `1px solid ${t.border}`,
                 padding: 8, marginBottom: 8, minHeight: 60,
               }}>
-                <div style={{ color: t.primaryBright, fontSize: "0.8rem", fontWeight: 600, textShadow: `0 0 6px ${t.primary}55` }}>
+                <div style={{ color: t.primaryBright, fontSize: "0.8rem", fontWeight: 600, textShadow: `0 0 6px ${isHex6(t.primary) ? `${t.primary}55` : t.primary}` }}>
                   {t.name}
                 </div>
                 <div style={{ color: t.text, fontSize: "0.68rem" }}>

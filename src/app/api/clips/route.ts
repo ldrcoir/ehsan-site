@@ -9,6 +9,7 @@ export async function GET() {
     const clips = await db.aparatClip.findMany({
       where: { visible: true },
       orderBy: { order: "asc" },
+      take: 200, // v1.1.2 (hardening): cap list size
     });
 
     return NextResponse.json({ ok: true, clips });

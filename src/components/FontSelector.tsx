@@ -17,11 +17,21 @@ const FONTS = [
   { id: "geist-mono", label: "Geist Mono", desc: "مونو اسپیس مدرن" },
 ];
 
+// FIX-2: fallback درون‌حافظه‌ای وقتی localStorage در دسترس نیست (private mode)
+let fontMemoryFallback = "";
+
 export default function FontSelector() {
   const [currentFont, setCurrentFont] = useState("vazirmatn");
 
   useEffect(() => {
-    const saved = localStorage.getItem("site_font") || "vazirmatn";
+    // FIX-2: read در try/catch — private mode کرش نمی‌کند
+    let saved = "";
+    try {
+      saved = localStorage.getItem("site_font") || "";
+    } catch {
+      saved = fontMemoryFallback;
+    }
+    if (!saved) saved = "vazirmatn";
     setCurrentFont(saved);
     // V17.5: data-font رو روی mount هم اعمال کن (قبلاً فقط روی click اعمال می‌شد)
     document.documentElement.setAttribute("data-font", saved);
@@ -29,7 +39,13 @@ export default function FontSelector() {
 
   function selectFont(fontId: string) {
     setCurrentFont(fontId);
-    localStorage.setItem("site_font", fontId);
+    // FIX-2: write در try/catch با fallback درون‌حافظه‌ای
+    try {
+      localStorage.setItem("site_font", fontId);
+    } catch {
+      // storage unavailable — در حافظه‌ی همین tab نگه داشته می‌شود
+    }
+    fontMemoryFallback = fontId;
     document.documentElement.setAttribute("data-font", fontId);
   }
 

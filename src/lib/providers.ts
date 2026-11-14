@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { validateBaseUrl } from "@/lib/ssrf";
+import { validateBaseUrlAsync } from "@/lib/ssrf";
 
 /**
  * AI Provider management.
@@ -100,8 +100,8 @@ async function callProvider(
 /** OpenAI-compatible API (also works for Azure, Together, etc.) */
 async function callOpenAI(provider: ProviderConfig, messages: any[]): Promise<string> {
   const baseUrl = provider.baseUrl || "https://api.openai.com/v1";
-  // V17.9: SSRF protection
-  const baseUrlCheck = validateBaseUrl(baseUrl);
+  // V17.9: SSRF protection — v1.1.2 (SEC-08): async + DNS pre-resolve
+  const baseUrlCheck = await validateBaseUrlAsync(baseUrl);
   if (!baseUrlCheck.valid) throw new Error("Invalid or blocked baseUrl");
   const res = await fetch(`${baseUrl}/chat/completions`, {signal: AbortSignal.timeout(30000), // V17.8: 30s timeout
     redirect: "manual", // V18.3 (security): stop redirect-follow SSRF (302 → 169.254.169.254); 3xx → res.ok=false → error → fallback chain
@@ -127,7 +127,7 @@ async function callOpenAI(provider: ProviderConfig, messages: any[]): Promise<st
   const lenHeader = parseInt(res.headers.get("content-length") || "0", 10);
   if (lenHeader > maxBytes) throw new Error("Provider response too large");
   const data = await res.json();
-  return data.choices[0]?.message?.content || "";
+  return data?.choices?.[0]?.message?.content || "";
 }
 
 /** Anthropic Claude */
@@ -159,14 +159,15 @@ async function callAnthropic(provider: ProviderConfig, messages: any[]): Promise
   const lenHeaderA = parseInt(res.headers.get("content-length") || "0", 10);
   if (lenHeaderA > 5 * 1024 * 1024) throw new Error("Provider response too large");
   const data = await res.json();
-  return data.content?.[0]?.text || "";
+  return data?.content?.[0]?.text || "";
 }
 
 /** Ollama (local, no API key needed) */
 async function callOllama(provider: ProviderConfig, messages: any[]): Promise<string> {
   const baseUrl = provider.baseUrl || "http://localhost:11434";
   // V17.9: SSRF protection (localhost:11434 is allowed for Ollama)
-  const baseUrlCheck = validateBaseUrl(baseUrl);
+  // v1.1.2 (SEC-08): async + DNS pre-resolve
+  const baseUrlCheck = await validateBaseUrlAsync(baseUrl);
   if (!baseUrlCheck.valid) throw new Error("Invalid or blocked baseUrl");
   const res = await fetch(`${baseUrl}/api/chat`, {signal: AbortSignal.timeout(30000), // V17.8: 30s timeout
     redirect: "manual", // V18.3 (security): stop redirect-follow SSRF; 3xx → res.ok=false → error → fallback chain
@@ -186,14 +187,15 @@ async function callOllama(provider: ProviderConfig, messages: any[]): Promise<st
   const lenHeaderO = parseInt(res.headers.get("content-length") || "0", 10);
   if (lenHeaderO > 5 * 1024 * 1024) throw new Error("Provider response too large");
   const data = await res.json();
-  return data.message?.content || "";
+  return data?.message?.content || "";
 }
 
 /** Groq — ultra-fast inference (Llama, Mixtral) */
 async function callGroq(provider: ProviderConfig, messages: any[]): Promise<string> {
   const baseUrl = provider.baseUrl || "https://api.groq.com/openai/v1";
   // V17.9: SSRF protection
-  const baseUrlCheck = validateBaseUrl(baseUrl);
+  // v1.1.2 (SEC-08): async + DNS pre-resolve
+  const baseUrlCheck = await validateBaseUrlAsync(baseUrl);
   if (!baseUrlCheck.valid) throw new Error("Invalid or blocked baseUrl");
   const res = await fetch(`${baseUrl}/chat/completions`, {signal: AbortSignal.timeout(30000), // V17.8: 30s timeout
     redirect: "manual", // V18.3 (security): stop redirect-follow SSRF (302 → 169.254.169.254); 3xx → res.ok=false → error → fallback chain
@@ -217,7 +219,7 @@ async function callGroq(provider: ProviderConfig, messages: any[]): Promise<stri
   const lenHeaderG = parseInt(res.headers.get("content-length") || "0", 10);
   if (lenHeaderG > 5 * 1024 * 1024) throw new Error("Provider response too large");
   const data = await res.json();
-  return data.choices[0]?.message?.content || "";
+  return data?.choices?.[0]?.message?.content || "";
 }
 
 /** Custom OpenAI-compatible endpoint */

@@ -12,7 +12,9 @@ export async function isIpBlocked(ip: string): Promise<boolean> {
   if (!blocked) return false;
   // Check expiry
   if (blocked.expiresAt && blocked.expiresAt < new Date()) {
-    await db.blockedIp.delete({ where: { ip } });
+    // v1.1.2 (audit CODE-01-M): deleteMany — در حالت رقابتی دو درخواست همزمان
+    // هر دو ردیف منقضی را می‌بینند؛ delete دومی P2025 می‌داد و 500 می‌شد.
+    await db.blockedIp.deleteMany({ where: { ip } });
     return false;
   }
   return true;
