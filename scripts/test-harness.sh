@@ -18,7 +18,7 @@ mkdir -p "$T"
 cp -a "$ROOT/.next/standalone/." "$T/"
 mkdir -p "$T/db" "$T/scripts" "$T/backups"
 # اسکریپت‌های لازم
-cp "$ROOT/scripts/maintenance.sh" "$ROOT/scripts/maintenance-enc.mjs" "$ROOT/scripts/smoke-rbac.sh" "$ROOT/scripts/sync-from-online.sh" "$T/scripts/"
+cp "$ROOT/scripts/maintenance.sh" "$ROOT/scripts/maintenance-enc.mjs" "$ROOT/scripts/smoke-rbac.sh" "$ROOT/scripts/sync-from-online.sh" "$ROOT/scripts/sync-server-to-github.sh" "$ROOT/scripts/ai-edit-online.sh" "$T/scripts/"
 chmod +x "$T"/scripts/*.sh
 # v1.0 rev3: bcryptjs — در standalone trace نمی‌آید (فقط اسکریپت‌ها استفاده می‌کنند)
 # بدون آن reset/seed رمز ادمین در تست fatal می‌شود
@@ -150,5 +150,97 @@ echo "--- 4e) export-all رمزشده (برای sync آفلاین) ---"
 bash scripts/maintenance.sh export-all > /tmp/enc-export.json 2>&1 && grep -q '"ok"[[:space:]]*:[[:space:]]*true' /tmp/enc-export.json && grep -q '"siteTexts"' /tmp/enc-export.json && echo "  ✅ export-all رمزشده موفق" || { echo "  ❌ export-all شکست:"; head -3 /tmp/enc-export.json; }
 
 echo ""
+echo "=== [5] v1.0 rev5 — AI-bind + IP allowlist ==="
+cd "$T"
+
+echo "--- 5a) status بدون EDIT_TOKEN وقتی AI_BIND=1 نیست (legacy — انتظار: ok=true) ---"
+unset MAINTENANCE_AI_BIND
+bash scripts/maintenance.sh status > /tmp/legacy-status.json 2>&1
+grep -q '"ok"[[:space:]]*:[[:space:]]*true' /tmp/legacy-status.json && echo "  ✅ legacy mode بدون EDIT_TOKEN موفق" || { echo "  ❌ legacy شکست:"; head -3 /tmp/legacy-status.json; }
+
+echo "--- 5b) status بدون EDIT_TOKEN وقتی AI_BIND=1 (انتظار: 403 edit_token_required) ---"
+# سرور را با AI_BIND=1 ری‌استارت کن
+kill $SRV_PID 2>/dev/null || true
+sleep 1
+MAINTENANCE_AI_BIND=1 PORT=3100 HOSTNAME=127.0.0.1 DATABASE_URL="file:$T/db/test.db" NODE_ENV=production \
+    MAINTENANCE_TOKEN="$MAINT_TOKEN" MAINTENANCE_EDIT_TOKEN="$EDIT_TOKEN" MAINTENANCE_ENC_KEY="$ENC_KEY" \
+    TRUST_PROXY=true \
+    node server.js > "$T/server-aibind.log" 2>&1 &
+SRV_PID=$!
+for i in $(seq 1 20); do
+  curl -s -o /dev/null http://127.0.0.1:3100/ 2>/dev/null && break
+  sleep 0.5
+done
+# درخواست status بدون EDIT_TOKEN → باید 403
+NOEDIT_BODY=$(node scripts/maintenance-enc.mjs enc "$ENC_KEY" '{"action":"status"}')
+NOEDIT_CODE=$(curl -s -o /tmp/no-edit-resp.json -w "%{http_code}" -X POST http://127.0.0.1:3100/api/maintenance \
+  -H "X-Maintenance-Token: $MAINT_TOKEN" -H "Content-Type: application/json" --data-binary "$(printf '%s' "$NOEDIT_BODY")")
+node scripts/maintenance-enc.mjs dec "$ENC_KEY" "$(cat /tmp/no-edit-resp.json)" > /tmp/no-edit-dec.json 2>/dev/null || cp /tmp/no-edit-resp.json /tmp/no-edit-dec.json
+if [ "$NOEDIT_CODE" = "403" ] && grep -q "edit_token_required" /tmp/no-edit-dec.json; then
+    echo "  ✅ AI-bind بدون EDIT_TOKEN رد شد (403 edit_token_required)"
+else
+    echo "  ❌ انتظار 403 + edit_token_required بود، شد $NOEDIT_CODE — پاسخ:"; head -3 /tmp/no-edit-dec.json
+fi
+
+echo "--- 5c) status با EDIT_TOKEN در AI_BIND=1 (انتظار: ok=true) ---"
+bash scripts/maintenance.sh --ai-bind status > /tmp/aibind-status.json 2>&1
+grep -q '"ok"[[:space:]]*:[[:space:]]*true' /tmp/aibind-status.json && echo "  ✅ AI-bind با EDIT_TOKEN موفق" || { echo "  ❌ AI-bind شکست:"; head -3 /tmp/aibind-status.json; }
+
+echo "--- 5d) IP allowlist با IP مجاز (انتظار: ok=true) ---"
+# سرور را با IP allowlist فقط 127.0.0.1 ری‌استارت کن
+kill $SRV_PID 2>/dev/null || true
+sleep 1
+MAINTENANCE_IP_ALLOWLIST="127.0.0.1" PORT=3100 HOSTNAME=127.0.0.1 DATABASE_URL="file:$T/db/test.db" NODE_ENV=production \
+    MAINTENANCE_TOKEN="$MAINT_TOKEN" MAINTENANCE_EDIT_TOKEN="$EDIT_TOKEN" MAINTENANCE_ENC_KEY="$ENC_KEY" \
+    TRUST_PROXY=true \
+    node server.js > "$T/server-ip.log" 2>&1 &
+SRV_PID=$!
+for i in $(seq 1 20); do
+  curl -s -o /dev/null http://127.0.0.1:3100/ 2>/dev/null && break
+  sleep 0.5
+done
+# X-Forwarded-For: 127.0.0.1 → باید ok
+ALLOW_BODY=$(node scripts/maintenance-enc.mjs enc "$ENC_KEY" '{"action":"status"}')
+ALLOW_CODE=$(curl -s -o /tmp/allow-resp.json -w "%{http_code}" -X POST http://127.0.0.1:3100/api/maintenance \
+  -H "X-Maintenance-Token: $MAINT_TOKEN" -H "X-Forwarded-For: 127.0.0.1" -H "Content-Type: application/json" --data-binary "$(printf '%s' "$ALLOW_BODY")")
+[ "$ALLOW_CODE" = "200" ] && echo "  ✅ IP مجاز قبول شد (200)" || { echo "  ❌ انتظار 200 بود، شد $ALLOW_CODE"; head -3 /tmp/allow-resp.json; }
+
+echo "--- 5e) IP allowlist با IP غیرمجاز (انتظار: 403 forbidden) ---"
+BLOCK_BODY=$(node scripts/maintenance-enc.mjs enc "$ENC_KEY" '{"action":"status"}')
+BLOCK_CODE=$(curl -s -o /tmp/block-resp.json -w "%{http_code}" -X POST http://127.0.0.1:3100/api/maintenance \
+  -H "X-Maintenance-Token: $MAINT_TOKEN" -H "X-Forwarded-For: 8.8.8.8" -H "Content-Type: application/json" --data-binary "$(printf '%s' "$BLOCK_BODY")")
+if [ "$BLOCK_CODE" = "403" ] && grep -q "forbidden" /tmp/block-resp.json; then
+    echo "  ✅ IP غیرمجاز رد شد (403 forbidden)"
+else
+    echo "  ❌ انتظار 403 + forbidden بود، شد $BLOCK_CODE — پاسخ:"; head -3 /tmp/block-resp.json
+fi
+
+echo "--- 5f) CIDR تطبیق (198.51.100.0/24 با 198.51.100.50 → انتظار: 200) ---"
+# ری‌استارت با CIDR
+kill $SRV_PID 2>/dev/null || true
+sleep 1
+MAINTENANCE_IP_ALLOWLIST="198.51.100.0/24,127.0.0.1" PORT=3100 HOSTNAME=127.0.0.1 DATABASE_URL="file:$T/db/test.db" NODE_ENV=production \
+    MAINTENANCE_TOKEN="$MAINT_TOKEN" MAINTENANCE_EDIT_TOKEN="$EDIT_TOKEN" MAINTENANCE_ENC_KEY="$ENC_KEY" \
+    TRUST_PROXY=true \
+    node server.js > "$T/server-cidr.log" 2>&1 &
+SRV_PID=$!
+for i in $(seq 1 20); do
+  curl -s -o /dev/null http://127.0.0.1:3100/ 2>/dev/null && break
+  sleep 0.5
+done
+CIDR_BODY=$(node scripts/maintenance-enc.mjs enc "$ENC_KEY" '{"action":"status"}')
+CIDR_CODE=$(curl -s -o /tmp/cidr-resp.json -w "%{http_code}" -X POST http://127.0.0.1:3100/api/maintenance \
+  -H "X-Maintenance-Token: $MAINT_TOKEN" -H "X-Forwarded-For: 198.51.100.50" -H "Content-Type: application/json" --data-binary "$(printf '%s' "$CIDR_BODY")")
+[ "$CIDR_CODE" = "200" ] && echo "  ✅ CIDR تطبیق کرد (198.51.100.50 داخل 198.51.100.0/24)" || { echo "  ❌ انتظار 200 بود، شد $CIDR_CODE"; head -3 /tmp/cidr-resp.json; }
+
+echo "--- 5g) sync-server-to-github.sh syntax check ---"
+bash -n scripts/sync-server-to-github.sh && echo "  ✅ sync-server-to-github.sh syntax ok" || echo "  ❌ syntax خطا"
+
+echo "--- 5h) ai-edit-online.sh syntax check ---"
+bash -n scripts/ai-edit-online.sh && echo "  ✅ ai-edit-online.sh syntax ok" || echo "  ❌ syntax خطا"
+
+echo ""
 echo "=== نتیجه ==="
 echo "تست کامل شد — لاگ سرور: $T/server.log"
+echo "  rev3 کانال رمز: 4a/4b/4c/4d/4e"
+echo "  rev5 AI-bind + IP allowlist: 5a/5b/5c/5d/5e/5f/5g/5h"

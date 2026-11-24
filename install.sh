@@ -40,10 +40,51 @@ SITE_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$SITE_DIR"   # ریشه‌ی پروژه — حتی اگه پایین‌تر به standalone سوئیچ کنیم
 cd "$SITE_DIR"
 
+# v1.0 rev5 — flagهای «فقط دستیار» (AI-bind):
+#   --ai-bind              → MAINTENANCE_AI_BIND=1 در .env (خواندن هم به EDIT_TOKEN نیاز دارد)
+#   --ip-allowlist "<csv>"  → MAINTENANCE_IP_ALLOWLIST در .env (csv از IP/CIDR)
+#   --no-ai-bind           → صریح غیرفعال (در re-run)
+AI_BIND_FLAG=""
+IP_ALLOWLIST_FLAG=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --ai-bind)
+            AI_BIND_FLAG="1"
+            shift
+            ;;
+        --no-ai-bind)
+            AI_BIND_FLAG="0"
+            shift
+            ;;
+        --ip-allowlist)
+            IP_ALLOWLIST_FLAG="$2"
+            shift 2
+            ;;
+        --ip-allowlist=*)
+            IP_ALLOWLIST_FLAG="${1#*=}"
+            shift
+            ;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            # آرگومان‌های دیگر را نادیده می‌گیریم (مثلاً پرچم‌های قدیمی)
+            shift
+            ;;
+    esac
+done
+
 VERSION="1.0"
 echo "=========================================="
 echo "  نصب سایت شخصی v$VERSION (Pre-built)"
 echo "=========================================="
+if [ "$AI_BIND_FLAG" = "1" ]; then
+    echo "  🔒 حالت AI-bind فعال: خواندن هم به EDIT_TOKEN نیاز دارد"
+fi
+if [ -n "$IP_ALLOWLIST_FLAG" ]; then
+    echo "  🔒 IP allowlist: $IP_ALLOWLIST_FLAG"
+fi
 echo ""
 
 # ============================================================================
@@ -279,6 +320,37 @@ else
     ENC_KEY_IS_NEW="1"
 fi
 
+# v1.0 rev5 — محاسبه‌ی مقدار نهایی AI_BIND و IP_ALLOWLIST برای نوشتن در .env.
+# منطق: flag صریح > مقدار قبلی .env > پیش‌فرض خاموش.
+EXISTING_AI_BIND=$(grep "^MAINTENANCE_AI_BIND=" .env 2>/dev/null | cut -d'=' -f2- | tr -d '"' || true)
+EXISTING_IP_ALLOWLIST=$(grep "^MAINTENANCE_IP_ALLOWLIST=" .env 2>/dev/null | cut -d'=' -f2- | tr -d '"' || true)
+
+if [ "$AI_BIND_FLAG" = "1" ]; then
+    FINAL_AI_BIND="1"
+elif [ "$AI_BIND_FLAG" = "0" ]; then
+    FINAL_AI_BIND="0"
+else
+    FINAL_AI_BIND="${EXISTING_AI_BIND:-0}"
+fi
+
+if [ -n "$IP_ALLOWLIST_FLAG" ]; then
+    # flag خالی هم می‌تواند داده شود تا پاک شود
+    FINAL_IP_ALLOWLIST="$IP_ALLOWLIST_FLAG"
+else
+    FINAL_IP_ALLOWLIST="$EXISTING_IP_ALLOWLIST"
+fi
+
+if [ "$FINAL_AI_BIND" = "1" ]; then
+    echo "  ✅ MAINTENANCE_AI_BIND=1 (حالت فقط-دستیار)"
+else
+    echo "  ✅ MAINTENANCE_AI_BIND=0 (legacy — خواندن با توکن اصلی)"
+fi
+if [ -n "$FINAL_IP_ALLOWLIST" ]; then
+    echo "  ✅ MAINTENANCE_IP_ALLOWLIST ست شد ($FINAL_IP_ALLOWLIST)"
+else
+    echo "  ✅ MAINTENANCE_IP_ALLOWLIST خالی (همه‌ی IPها مجاز)"
+fi
+
 mkdir -p db
 chmod 700 db
 
@@ -327,6 +399,13 @@ MAINTENANCE_TOKEN="$MAINT_TOKEN"
 MAINTENANCE_EDIT_TOKEN="$EDIT_TOKEN"
 # v1.0 (rev3): کلید رمزنگاری کانال — پاکت AES-256-GCM (ببین src/lib/maintenance-crypto.ts)
 MAINTENANCE_ENC_KEY="$ENC_KEY"
+# v1.0 (rev5): حالت «فقط دستیار» — اگر =1 باشد، خواندن هم به EDIT_TOKEN نیاز دارد.
+# از flag --ai-bind install.sh ست می‌شود. اگر قبلاً ست شده و این بار --no-ai-bind
+# داده شده، به 0 برمی‌گردد. اگر هیچ فلگی داده نشده، مقدار قبلی .env حفظ می‌شود.
+MAINTENANCE_AI_BIND="$FINAL_AI_BIND"
+# v1.0 rev5: IP allowlist — اگر ست شود، کانال فقط از این IPها/CIDRها قبول می‌کند.
+# از flag --ip-allowlist install.sh ست می‌شود. ست نشدن = همه‌ی IPها مجاز.
+MAINTENANCE_IP_ALLOWLIST="$FINAL_IP_ALLOWLIST"
 # v1.1.2: سایت پشت nginx محلی است — app فقط وقتی TRUST_PROXY=true است به
 # X-Forwarded-For اعتماد می‌کند (rate limit بر اساس IP واقعی کاربر)
 # v1.0 (audit W36-40 #1 — HIGH): مقدار حفظ‌شده از .env قبلی نوشته می‌شود، نه همیشه "true" —

@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# maintenance.sh — کلاینت کانال نگهداری (v1.0)
+# maintenance.sh — کلاینت کانال نگهداری (v1.0 rev5)
 # ============================================================================
 # استفاده:
 #   bash scripts/maintenance.sh status
@@ -17,6 +17,14 @@
 #   bash scripts/maintenance.sh settings.get
 #   bash scripts/maintenance.sh settings.set --data '{"key":"contact_email","value":"info@ehsanmorad.ir"}'
 #   bash scripts/maintenance.sh nav.get | clip.add | equipment.set | content.get | export-all
+#
+# v1.0 rev5 — حالت AI-bind:
+#   bash scripts/maintenance.sh --ai-bind status
+# یا export MAINTENANCE_AI_BIND=1
+#   در این حالت، حتی actionهای خواندن هم نیاز به EDIT_TOKEN دارند. سرور باید
+#   MAINTENANCE_AI_BIND=1 در .env داشته باشد. مناسب «کانال کاملاً خصوصی با
+#   دستیار». وقتی سرور AI_BIND=1 باشد و کلاینت --ai-bind ندهد، خواندن‌ها
+#   403 می‌گیرند.
 #
 # توکن و آدرس از همین ترتیب خوانده می‌شود:
 #   1. متغیر محیطی  MAINTENANCE_TOKEN (و MAINTENANCE_EDIT_TOKEN) و MAINTENANCE_URL
@@ -38,6 +46,21 @@ set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ENV_FILE="$SCRIPT_DIR/../.env"
+
+# v1.0 rev5 — تشخیص flag --ai-bind (هر کجای argv) و حذفش از action
+AI_BIND=0
+NEW_ARGS=()
+for a in "$@"; do
+    if [ "$a" = "--ai-bind" ]; then
+        AI_BIND=1
+    else
+        NEW_ARGS+=("$a")
+    fi
+done
+set -- "${NEW_ARGS[@]}"
+if [ "$MAINTENANCE_AI_BIND" = "1" ] || [ "$MAINTENANCE_AI_BIND" = "true" ]; then
+    AI_BIND=1
+fi
 
 ACTION="${1:-help}"
 # v1.0: بدنه‌ی JSON اختیاری برای actionهای ویرایشی — بعد از --data
@@ -133,10 +156,14 @@ case "$ACTION" in
             echo "❌ curl نصب نیست:  sudo apt install -y curl"
             exit 1
         fi
-        # هدر ویرایش — فقط اگر توکن ویرایش موجود باشد
+        # هدر ویرایش — اگر توکن ویرایش موجود باشد یا AI_BIND=1 (حتماً لازم است)
         EDIT_HEADER_ARGS=()
         if [ -n "$EDIT_TOKEN" ]; then
             EDIT_HEADER_ARGS=(-H "X-Maintenance-Edit-Token: $EDIT_TOKEN")
+        elif [ "$AI_BIND" = "1" ]; then
+            echo "❌ حالت --ai-bind فعال است ولی MAINTENANCE_EDIT_TOKEN پیدا نشد."
+            echo "   یا export MAINTENANCE_EDIT_TOKEN=<token> کن یا در .env بگذار"
+            exit 1
         fi
         # بدنه — یا --data یا JSON ساده برای actionهای بدون بدنه
         if [ -n "$BODY_DATA" ]; then

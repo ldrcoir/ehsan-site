@@ -1,10 +1,40 @@
 ================================================================
   PERSONAL SITE — VERSION HISTORY & DEPLOYMENT GUIDE
-  آخرین نسخه: v1.0 rev4 (نسخه‌ی یک — باگ‌گیری پکیج انتشار)
+  آخرین نسخه: v1.0 rev5 (کانال خصوصی + همگام‌سازی سه‌لایه)
 ================================================================
 
-## 📌 نسخه فعلی: v1.0 rev4 — نسخه‌ی یک (پایه‌ی نهایی؛ تاریخچه‌ی قبلی v1.1.x/V18.x
+## 📌 نسخه فعلی: v1.0 rev5 — نسخه‌ی یک (پایه‌ی نهایی؛ تاریخچه‌ی قبلی v1.1.x/V18.x
    فقط به‌عنوان سابقه‌ی توسعه مونده و همه‌چیز زیر همین نسخه یک تحویل می‌شود)
+
+## 🆕 v1.0 rev5 (کانال خصوصی «فقط دستیار» + همگام‌سازی سه‌لایه online/GitHub/offline) :
+  + 🔒 لایه‌ی سوم احراز هویت — IP allowlist:
+    · MAINTENANCE_IP_ALLOWLIST (csv از IP/CIDR) — اگر ست شود، کانال نگهداری فقط
+      از این رنجها قبول می‌کند. مهاجم حتی با داشتن توکن از IP دیگر وصل نمی‌شود.
+    · تطبیق CIDR برای IPv4 و IPv6 + IPv6-mapped-IPv4 — بدون وابستگی external
+    · fail-closed: IP ناشناخته (مثلاً وقتی TRUST_PROXY=false) رد می‌شود
+    · لاگ جداگانه در SecurityLog: type=maintenance_ip_blocked
+    · ست‌کردن از install.sh:  sudo ./install.sh --ip-allowlist "203.0.113.42"
+  + 🔒 حالت «فقط دستیار» (AI-bind):
+    · MAINTENANCE_AI_BIND=1 — حتی actionهای خواندن (status و غیره) هم نیاز به
+      EDIT_TOKEN دارند. یعنی فقط کسی که توکن ویرایش را دارد اصلاً چیزی می‌بیند.
+    · کلاینت:  bash scripts/maintenance.sh --ai-bind status
+      یا:  export MAINTENANCE_AI_BIND=1
+    · ست‌کردن از install.sh:  sudo ./install.sh --ai-bind
+    · با IP allowlist ترکیب می‌شود — «فقط من، فقط از این IP، فقط با EDIT_TOKEN»
+  + 🔄 همگام‌سازی سه‌لایه (online / GitHub / offline):
+    · scripts/sync-server-to-github.sh — export-all از کانال → snapshot.json با
+      metadata (snapshotAt, snapshotHost, snapshotBy) → commit و push به شاخه‌ی
+      server-state در github.com/ldrcoir/ehsan-site. آماده‌ی cron (مثلاً هر ۶ ساعت).
+    · scripts/ai-edit-online.sh — فرمان واحد: ویرایش از طریق کانال + sync خودکار
+      به GitHub. بعد از هر ویرایش، snapshot جدید به repo می‌رود تا سه لایه هم‌رنگ
+      بمانند. flag --no-sync برای رد کردن sync (اگر GitHub موقتاً قطع است).
+    · snapshot شامل: siteTexts, siteSettings (با ماسک رازها), navItems, clips,
+      equipment, books, articles, tutorials, skills, themes — همان خروجی export-all
+    · توکن‌های bot در snapshot هرگز plaintext نمی‌آیند — فقط ماسک ••••••••last4
+  + 📦 نتیجه: سه لایه (online server / GitHub repo / offline local) با یک فرمان
+    همگام می‌شوند. کانال نگهداری حالا ۴ لایه‌ی امنیتی دارد:
+    1) IP allowlist  2) read token  3) edit token  4) AES-256-GCM encryption
+    + nonce replay protection + ±5min timestamp window.
 
 ## 🆕 v1.0 rev4 (باگ‌گیری پکیج انتشار — zip قبلی عملاً غیرقابل راه‌اندازی بود!) :
   + 🐞 بحرانی — zip انتشار خودش را راه نمی‌انداخت:

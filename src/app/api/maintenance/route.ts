@@ -1,5 +1,5 @@
 // ============================================================================
-// /api/maintenance — کانال نگهداری اختصاصی و امن (v1.0)
+// /api/maintenance — کانال نگهداری اختصاصی و امن (v1.0 rev5)
 // ============================================================================
 // هدف: یک مسیر امن و محدود برای «نگهدارنده‌ی سایت» (مالک + دستیار) که روی سرور
 // deployed است تا بدون SSH و بدون لاگین ادمین بتواند وضعیت سایت را بررسی و
@@ -23,6 +23,18 @@
 //    هست تا replay ممکن نباشد، و پاسخ هم با همان کلید رمز برمی‌گردد.
 //    درخواستِ متنیِ خام وقتی کلید موجود است با 426 رد می‌شود (fail-closed).
 //    کلاینت: scripts/maintenance-enc.mjs + scripts/maintenance.sh
+//
+// 7. v1.0 rev5 — قابلیت‌های «فقط دستیار» (AI-bind):
+//    a) MAINTENANCE_IP_ALLOWLIST (csv از IP/CIDR) — اگر ست شده باشد، درخواست
+//       فقط از این IPها/CIDRها قبول می‌شود. مهاجم حتی با داشتن توکن هم از
+//       یک IP دیگر نمی‌تواند وصل شود. مثال:
+//         MAINTENANCE_IP_ALLOWLIST="203.0.113.42,198.51.100.0/24,::ffff:203.0.113.42"
+//       این لایه بهترین راه برای «فقط من به سایت وصل شم» است چون IP متعلق به
+//       خروجیِ دستیار است. ست نشودن = همه‌ی IPها مجاز (legacy).
+//    b) MAINTENANCE_AI_BIND=1 — اگر ست شود، حتی actionهای خواندن (status و غیره)
+//       هم نیاز به توکن ویرایش دارند. یعنی تنها کسی که MAINTENANCE_EDIT_TOKEN
+//       را دارد می‌تواند اصلاً چیزی ببیند. برای حالت «کانال کاملاً خصوصی با
+//       دستیار» مناسب است. ست نشدن = actionهای خواندن با توکن اصلی کافی است.
 //
 // استفاده (روی VPS):
 //   curl -s -X POST https://<domain>/api/maintenance \
@@ -67,10 +79,129 @@ function tokenValid(provided: string | null, real: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// توکن ویرایش — سطح دوم، فقط برای actionهای نوشتن (v1.0)
-// حداقل ۴۸ کاراکتر؛ اگر ست نشده باشد، همه‌ی actionهای ویرایشی 503 می‌دهند
-// (fail-closed) — خواندن با توکن اصلی همچنان کار می‌کند. با timingSafeEqual
-// مقایسه می‌شود و هیچ cookie/session در کار نیست — CSRF ذاتاً بی‌معناست.
+// v1.0 rev5 — IP allowlist: اگر MAINTENANCE_IP_ALLOWLIST ست شده باشد (csv از
+// IP یا CIDR)، درخواست فقط از این رنجها قبول می‌شود. ست نشدن = همه‌ی IPها
+// مجاز (legacy). تطبیق با CIDR برای IPv4 و IPv6 — برای IPv6 mapped v4 هم کار
+// می‌کند. اگر هیچ ورودی معتبر نباشد، fail-closed: همه رد می‌شوند.
+// ---------------------------------------------------------------------------
+function getIpAllowlist(): string[] | null {
+  const raw = process.env.MAINTENANCE_IP_ALLOWLIST || "";
+  if (!raw.trim()) return null;
+  const entries = raw
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean);
+  if (entries.length === 0) return null;
+  return entries;
+}
+
+function ipToBytes(ip: string): Uint8Array | null {
+  // IPv4-mapped IPv6 → فقط IPv4 را برگردان
+  const mapped = ip.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i);
+  if (mapped) ip = mapped[1];
+  // IPv4
+  const v4 = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (v4) {
+    const bytes = v4.slice(1).map(Number);
+    if (bytes.some(b => b > 255)) return null;
+    return new Uint8Array(bytes);
+  }
+  // IPv6 — expand "::" و تبدیل به 16 بایت
+  let v = ip.replace(/^\[|\]$/g, "").split("%")[0];
+  // expand
+  const parts = v.split(":");
+  const idx = parts.indexOf("");
+  if (idx !== -1) {
+    // چندتا ":" پشت سر هم — پر کن
+    const fill = 8 - parts.filter(p => p !== "").length;
+    const expanded: string[] = [];
+    for (let i = 0; i < parts.length; i++) {
+      if (parts[i] === "") {
+        for (let j = 0; j < Math.max(fill, 1); j++) expanded.push("0");
+      } else {
+        expanded.push(parts[i]);
+      }
+    }
+    v = expanded.join(":");
+  }
+  const groups = v.split(":");
+  if (groups.length !== 8) return null;
+  const out = new Uint8Array(16);
+  for (let i = 0; i < 8; i++) {
+    const n = parseInt(groups[i], 16);
+    if (!Number.isFinite(n) || n < 0 || n > 0xffff) return null;
+    out[i * 2] = n >> 8;
+    out[i * 2 + 1] = n & 0xff;
+  }
+  return out;
+}
+
+function cidrMatch(ip: string, cidr: string): boolean {
+  const [base, prefixStr] = cidr.split("/");
+  const prefix = prefixStr ? parseInt(prefixStr, 10) : null;
+  const ipBytes = ipToBytes(ip);
+  const baseBytes = ipToBytes(base);
+  if (!ipBytes || !baseBytes) return false;
+  // IPv4 با IPv6-mapped را هم‌تراز کن — اگر ip mapped باشد و base نباشد (یا برعکس)
+  if (ipBytes.length !== baseBytes.length) {
+    // سعی کن هر دو را به 4 بایت بیاوری (IPv4-only مقایسه)
+    const ipV4 = ipToBytes(ip.replace(/^::ffff:/i, ""));
+    const baseV4 = ipToBytes(base.replace(/^::ffff:/i, ""));
+    if (ipV4 && baseV4 && ipV4.length === 4 && baseV4.length === 4) {
+      const p = prefix !== null ? prefix : 32;
+      if (p > 32) return false;
+      return matchBytes(ipV4, baseV4, p);
+    }
+    return false;
+  }
+  const isV4 = ipBytes.length === 4;
+  const maxPrefix = isV4 ? 32 : 128;
+  const p = prefix !== null ? prefix : maxPrefix;
+  if (p > maxPrefix) return false;
+  return matchBytes(ipBytes, baseBytes, p);
+}
+
+function matchBytes(a: Uint8Array, b: Uint8Array, prefix: number): boolean {
+  const fullBytes = Math.floor(prefix / 8);
+  const remainBits = prefix % 8;
+  for (let i = 0; i < fullBytes; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  if (remainBits > 0 && fullBytes < a.length) {
+    const mask = 0xff << (8 - remainBits);
+    if ((a[fullBytes] & mask) !== (b[fullBytes] & mask)) return false;
+  }
+  return true;
+}
+
+function ipAllowed(clientIp: string, allowlist: string[] | null): boolean {
+  if (!allowlist) return true; // ست نشده → همه مجاز
+  if (clientIp === "unknown") return false; // IP ناشناخته = fail-closed
+  for (const entry of allowlist) {
+    if (cidrMatch(clientIp, entry)) return true;
+    // تطبیق مستقیم بدون "/"
+    if (!entry.includes("/") && entry === clientIp) return true;
+    // IPv4-mapped تطبیق
+    if (entry === clientIp.replace(/^::ffff:/i, "")) return true;
+    if (entry.replace(/^::ffff:/i, "") === clientIp) return true;
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// v1.0 rev5 — AI-bind: اگر MAINTENANCE_AI_BIND=1 ست شده باشد، حتی actionهای
+// خواندن هم نیاز به توکن ویرایش دارند. ست نشدن = legacy (خواندن با توکن اصلی).
+// ---------------------------------------------------------------------------
+function isAiBindEnabled(): boolean {
+  return process.env.MAINTENANCE_AI_BIND === "1" ||
+         process.env.MAINTENANCE_AI_BIND === "true";
+}
+
+// ---------------------------------------------------------------------------
+// توکن ویرایش — سطح دوم، فقط برای actionهای نوشتن (v1.0) یا همه‌ی actionها
+// در حالت AI-bind (v1.0 rev5). حداقل ۴۸ کاراکتر؛ اگر ست نشده باشد، همه‌ی
+// actionهای ویرایشی 503 می‌دهند (fail-closed). با timingSafeEqual مقایسه می‌شود
+// و هیچ cookie/session در کار نیست — CSRF ذاتاً بی‌معناست.
 // ---------------------------------------------------------------------------
 function getEditToken(): string | null {
   const t = process.env.MAINTENANCE_EDIT_TOKEN;
@@ -605,6 +736,28 @@ async function runEditAction(action: string, body: any): Promise<EditResult | nu
 export async function POST(request: NextRequest) {
   const ip = getClientIpSafe(request);
 
+  // v1.0 rev5 — IP allowlist: قبل از هر احراز هویت دیگر، چک IP.
+  // این لایه «فقط دستیار» را قوی می‌کند: حتی اگر توکن لو رفته باشد، مهاجم
+  // از IP دیگر نمی‌تواند وصل شود. fail-closed: IP ناشناخته رد می‌شود.
+  const allowlist = getIpAllowlist();
+  if (allowlist && !ipAllowed(ip, allowlist)) {
+    await db.securityLog
+      .create({
+        data: {
+          type: "maintenance_ip_blocked",
+          ip,
+          detail: `ip not in allowlist (entries=${allowlist.length})`,
+        },
+      })
+      .catch(() => {});
+    // تاخیر تصادفی + 403 — مهاجم نباید بفهمد کانال هست یا IP رد شده
+    await new Promise(r => setTimeout(r, 300 + Math.random() * 400));
+    return NextResponse.json(
+      { ok: false, error: "forbidden" },
+      { status: 403, headers: { "Cache-Control": "no-store" } }
+    );
+  }
+
   // احراز هویت — قبل از هر چیز (حتی قبل از خواندن body)
   const token = getToken();
   if (!token) {
@@ -710,16 +863,22 @@ export async function POST(request: NextRequest) {
   };
 
   // -----------------------------------------------------------------------
-  // v1.0: اگر action از نوع ویرایشی است، توکن سطح دوم لازم است.
-  // ترتیب چک عمدی است: اول توکن اصلی (خواندن)، بعد توکن ویرایش — تا
-  // مهاجم با توکن اصلی نتواند actionهای نوشتن را اجرا کند.
+  // v1.0 rev5 — AI-bind mode: اگر MAINTENANCE_AI_BIND=1 ست شده باشد، حتی
+  // actionهای خواندن (status و غیره) هم نیاز به توکن ویرایش دارند. یعنی فقط
+  // کسی که MAINTENANCE_EDIT_TOKEN را دارد اصلاً می‌تواند چیزی ببیند.
+  // این چک قبل از اجرای action انجام می‌شود تا حتی leak اطلاعات هم نباشد.
   // -----------------------------------------------------------------------
-  if (EDIT_ACTIONS.has(action)) {
+  const requiresEditToken = EDIT_ACTIONS.has(action) || isAiBindEnabled();
+  if (requiresEditToken) {
     const editToken = getEditToken();
     if (!editToken) {
       await db.securityLog
         .create({
-          data: { type: "maintenance_edit_rejected", ip, detail: `edit token not configured — action=${action.slice(0, 40)}` },
+          data: {
+            type: "maintenance_edit_rejected",
+            ip,
+            detail: `edit token not configured — action=${action.slice(0, 40)}${isAiBindEnabled() ? " (ai-bind)" : ""}`,
+          },
         })
         .catch(() => {});
       return respond(
@@ -735,13 +894,22 @@ export async function POST(request: NextRequest) {
     if (!tokenValid(providedEdit, editToken)) {
       await db.securityLog
         .create({
-          data: { type: "maintenance_edit_auth_failed", ip, detail: `invalid edit token — action=${action.slice(0, 40)}` },
+          data: {
+            type: "maintenance_edit_auth_failed",
+            ip,
+            detail: `invalid edit token — action=${action.slice(0, 40)}${isAiBindEnabled() ? " (ai-bind)" : ""}`,
+          },
         })
         .catch(() => {});
       await new Promise(r => setTimeout(r, 300 + Math.random() * 400));
       return respond({ ok: false, error: "edit_token_required" }, 403);
     }
+  }
 
+  // -----------------------------------------------------------------------
+  // اجرای action — توکن ویرایش (در صورت نیاز) در بالا چک شد.
+  // -----------------------------------------------------------------------
+  if (EDIT_ACTIONS.has(action)) {
     try {
       const data = await runEditAction(action, inner);
       if (data === null) {
