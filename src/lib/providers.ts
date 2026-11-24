@@ -1,3 +1,9 @@
+// ============================================================================
+// providers.ts — v1.0
+// providers.ts — مدیریت ارائه‌دهنده‌های LLM (OpenAI/Anthropic/Groq/OpenRouter/Ollama)
+// با SSRF-guard روی baseUrl سفارشی، سقف حجم پاسخ و زنجیره‌ی fallback.
+// ============================================================================
+
 import { db } from "@/lib/db";
 import { validateBaseUrlAsync } from "@/lib/ssrf";
 

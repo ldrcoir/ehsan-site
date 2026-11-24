@@ -1,3 +1,9 @@
+// ============================================================================
+// ip.ts — v1.0
+// ip.ts — استخراج امن IP کلاینت از هدرها؛ فقط با TRUST_PROXY=true به X-Forwarded-For
+// اعتماد می‌شود (پیش‌فرض fail-closed) + نرمال‌سازی IPv6 به /64 برای rate limit.
+// ============================================================================
+
 // V1.1.1 (audit S4-H1 / S6-M5): harden IP extraction — fail-closed default.
 //
 // Old behaviour (v1.1): trusted client-controlled X-Forwarded-For / X-Real-IP

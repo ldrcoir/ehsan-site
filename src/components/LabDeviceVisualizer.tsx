@@ -1,5 +1,10 @@
 "use client";
 
+// ============================================================================
+// LabDeviceVisualizer.tsx — v1.0
+// LabDeviceVisualizer — تصویرسازی SVG هر دستگاه آزمایشگاه بر اساس category.
+// ============================================================================
+
 import { useEffect, useRef, useState } from "react";
 
 /**

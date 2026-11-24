@@ -43,6 +43,10 @@ const PERMISSION_SECTIONS = [
   { id: "themes", label: "🎨 تم‌ها" },
 ];
 
+// v1.0 (RBAC cleanup): نقش‌های ارشد — هم‌سو با ROLES در src/lib/rbac.ts
+// owner بالاتر از admin است و فقط از خود سرور ساخته می‌شود؛ در UI فقط نمایش داده می‌شود
+const ELEVATED_ROLES = new Set(["owner", "admin"]);
+
 const DAY_NAMES = [
   { value: 0, label: "یکشنبه" },
   { value: 1, label: "دوشنبه" },
@@ -62,6 +66,9 @@ export default function AccessUserManager() {
   const [showLogs, setShowLogs] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  // v1.0 (RBAC cleanup): نقش کاربرِ واردشده — تعیین می‌کند کدام دکمه‌ها/گزینه‌ها رندر شوند
+  // (اعمال واقعی قواعد همیشه سمت سرور در /api/admin/users انجام می‌شود؛ این فقط UI است)
+  const [viewerRole, setViewerRole] = useState<string>("user");
   // نام کاربری وقتی لاگ‌ها برای یک کاربر خاص فیلتر شدن (برای عنوان پنل)
   const [logsUser, setLogsUser] = useState("");
 
@@ -87,6 +94,11 @@ export default function AccessUserManager() {
 
   useEffect(() => {
     fetchUsers();
+    // v1.0 (RBAC cleanup): نقش کاربر فعلی را می‌خوانیم تا UI هم‌سو با قواعد سرور باشد
+    fetch("/api/user/verify", { cache: "no-store", credentials: "include" })
+      .then(r => r.json())
+      .then(d => { if (d?.ok && d?.user?.role) setViewerRole(d.user.role); })
+      .catch(() => {});
   }, []);
 
   async function fetchUsers() {
@@ -376,7 +388,7 @@ export default function AccessUserManager() {
                 onChange={e => setForm({ ...form, password: e.target.value })}
                 required={!editingUser}
                 // v1.0 (audit W56-60 #7): قاعده‌ی سمت کلاینت هم‌مثل سرور — ادمین ۱۲، کاربر ۸
-                minLength={form.role === "admin" ? 12 : 8}
+              minLength={ELEVATED_ROLES.has(form.role) ? 12 : 8}
                 style={{ ...inputStyle, flex: 1 }}
               />
               <button
@@ -404,7 +416,7 @@ export default function AccessUserManager() {
             </div>
             <small style={{ color: "var(--text-faint)", fontSize: 10, display: "block", marginTop: 4 }}>
               {form.password.length > 0
-                ? `طول رمز: ${form.password.length} کاراکتر${form.role === "admin" ? " (ادمین: حداقل ۱۲)" : " (حداقل ۸)"} — با دکمه‌ی 👁 می‌توانی رمز را ببینی`
+                ? `طول رمز: ${form.password.length} کاراکتر${ELEVATED_ROLES.has(form.role) ? " (ادمین/مالک: حداقل ۱۲)" : " (حداقل ۸)"} — با دکمه‌ی 👁 می‌توانی رمز را ببینی`
                 : "حداقل: ادمین ۱۲ و کاربر عادی ۸ کاراکتر — یا با 🎲 رمز قوی بساز"}
             </small>
           </div>
@@ -421,14 +433,23 @@ export default function AccessUserManager() {
 
           <div>
             <label style={labelStyle}>Role (نقش)</label>
+            {/* v1.0 (RBAC cleanup): ساخت ادمین فقط برای owner — هم‌سو با قاعده‌ی
+                only_owner_creates_admin سمت سرور؛ نقش owner هرگز از API ساخته نمی‌شود */}
             <select
               value={form.role}
               onChange={e => setForm({ ...form, role: e.target.value })}
               style={inputStyle}
             >
               <option value="user">user (عادی)</option>
-              <option value="admin">admin (ادمین — دسترسی کامل)</option>
+              {viewerRole === "owner" && (
+                <option value="admin">admin (ادمین — دسترسی کامل)</option>
+              )}
             </select>
+            {viewerRole !== "owner" && (
+              <small style={{ color: "var(--text-faint)", fontSize: 10, display: "block", marginTop: 4 }}>
+                ساخت ادمین فقط برای مالک سایت (Owner) — هم‌سو با قواعد RBAC سرور
+              </small>
+            )}
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
@@ -637,8 +658,9 @@ export default function AccessUserManager() {
                 <td style={tdStyle}>{user.username}</td>
                 <td style={tdStyle}>{user.displayName || "—"}</td>
                 <td style={tdStyle}>
-                  <span style={{ color: user.role === "admin" ? "var(--amber)" : "var(--text-dim)" }}>
-                    {user.role}
+                  {/* v1.0 (RBAC cleanup): برچسب فارسی + رنگ نقش owner */}
+                  <span style={{ color: user.role === "owner" ? "var(--primary-bright)" : user.role === "admin" ? "var(--amber)" : "var(--text-dim)" }}>
+                    {user.role === "owner" ? "owner (مالک) 👑" : user.role}
                   </span>
                 </td>
                 <td style={tdStyle}>
@@ -663,8 +685,20 @@ export default function AccessUserManager() {
                 </td>
                 <td style={tdStyle}>
                   <button onClick={() => fetchUserLogs(user)} disabled={logsLoading} className="signal-waveform-btn" style={{ padding: "4px 8px", marginRight: 4 }}>📋</button>
-                  <button onClick={() => startEdit(user)} className="signal-waveform-btn" style={{ padding: "4px 8px", marginRight: 4 }}>✏️</button>
-                  <button onClick={() => handleDelete(user)} className="signal-waveform-btn" style={{ padding: "4px 8px" }}>🗑️</button>
+                  {/* v1.0 (RBAC cleanup): دکمه‌های ویرایش/حذف برای حساب owner و حساب‌های
+                      خارج از محدوده‌ی نقشِ بیننده رندر نمی‌شوند — سرور هم 403 می‌دهد */}
+                  {viewerRole === "owner" && user.role !== "owner" && (
+                    <button onClick={() => startEdit(user)} className="signal-waveform-btn" style={{ padding: "4px 8px", marginRight: 4 }}>✏️</button>
+                  )}
+                  {viewerRole === "owner" && user.role !== "owner" && (
+                    <button onClick={() => handleDelete(user)} className="signal-waveform-btn" style={{ padding: "4px 8px" }}>🗑️</button>
+                  )}
+                  {viewerRole !== "owner" && user.role === "user" && (
+                    <button onClick={() => startEdit(user)} className="signal-waveform-btn" style={{ padding: "4px 8px", marginRight: 4 }}>✏️</button>
+                  )}
+                  {viewerRole !== "owner" && user.role === "user" && (
+                    <button onClick={() => handleDelete(user)} className="signal-waveform-btn" style={{ padding: "4px 8px" }}>🗑️</button>
+                  )}
                 </td>
               </tr>
             ))}

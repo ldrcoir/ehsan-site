@@ -13,28 +13,18 @@
 //     حالا checkAdminAuth(request, requiredTab?) برای تب‌های غیرمتمرکز (پیام‌ها،
 //     کلیپ‌ها، محتوا، متن، منو، تم‌ها) دسترسی کاربر limited را بر اساس همین فیلد
 //     می‌سنجد. تب‌های حساس (users، stats، settings، …) همچنان فقط ادمین‌اند.
+// v1.0 (RBAC cleanup): نقش‌ها/لیست‌های واگذارشدنی به lib/rbac.ts منتقل شدند
+//   (تک منبع حقیقت) — owner و admin هر دو elevated هستند؛ role واقعی در پاسخ
+//   برگردانده می‌شود تا مسیرهای مدیریت کاربران سلسله‌مراتب را اعمال کنند.
 // ============================================================================
 
 import crypto from "crypto";
 import { db } from "@/lib/db";
 import { getSessionFromRequest, pwTagOf, SESSION_DURATION_MS } from "@/lib/access-auth";
+import { isElevated, GRANTABLE_TABS, TAB_PERMISSIONS } from "@/lib/rbac";
 
-// تب‌هایی که با permissions کاربر limited قابل واگذاری‌اند (این لیست باید با
-// PERMISSION_SECTIONS در AccessUserManager.tsx و TAB_PERMISSIONS پایین همخوان بماند)
-const GRANTABLE_TABS = new Set(["messages", "clips", "content", "text", "nav", "themes"]);
-
-// نقشه‌ی API → تب — هر مسیر admin که قابل واگذاری است به تب خودش اشاره می‌کند
-export const TAB_PERMISSIONS: Record<string, string> = {
-  "/api/messages": "messages",
-  "/api/admin/reply": "messages",
-  "/api/admin/clear": "messages",
-  "/api/admin/clips": "clips",
-  "/api/admin/content": "content",
-  "/api/admin/equipment": "content",
-  "/api/admin/text": "text",
-  "/api/admin/nav": "nav",
-  "/api/admin/themes": "themes",
-};
+// re-export برای سازگاری با importهای قدیمی
+export { TAB_PERMISSIONS };
 
 // ----------------------------------------------------------------------------
 // checkScheduleWindow — بررسی انقضا + روز/ساعت مجاز روی آبجکت کاربر (بدون query اضافه)
@@ -122,8 +112,11 @@ export async function checkAdminAuth(
     const schedule = checkScheduleWindow(user);
     if (!schedule.ok) return { ok: false };
 
-    if (user.role === "admin") {
-      return { ok: true, userId: user.id, role: "admin" };
+    // v1.0 (RBAC cleanup): owner و admin هر دو بالاتر از محدودیت تب هستند —
+    // نقش واقعی برگردانده می‌شود تا مسیرهای مدیریت کاربران بتوانند
+    // سلسله‌مراتب owner > admin > user را اعمال کنند
+    if (isElevated(user.role)) {
+      return { ok: true, userId: user.id, role: user.role };
     }
 
     // v1.0: کاربر limited — فقط اگر مسیر واگذارشدنی باشد و permission داشته باشد.

@@ -79,3 +79,32 @@
 5. رمزهای رد شده‌ی verify در AccessLog (با throttle) به‌جای SecurityLog — صرفه‌جویی تغییر
 
 **وضعیت نهایی:** TypeScript 0 خطا · Build موفق · تست دود واقعی: صفحه 200، `/api/maintenance` با توکن درست 200 + بک‌آپ ساخته شد، توکن غلط/بدون توکن 401، مسیرهای encode‌شده fail-closed.
+
+---
+# v1.0 — دور ممیزی عمیق RBAC + کانال ویرایش از دور (rev2)
+
+## یافته‌های RBAC (اصلاح شد)
+- نقش مالک (owner) بالاتر از admin معرفی شد — seed/install.sh/migration idempotent.
+- ادمین فقط کاربران عادی را مدیریت می‌کند (canManageTarget)؛ ساخت ادمین فقط با مالک.
+- حساب مالک از پنل قابل حذف/تنزل/غیرفعال‌سازی نیست (owner_* error codes).
+- تغییر رمز مالک در /api/admin/security (قبلاً 404) → isElevated.
+- شمارش «آخرین ادمین فعال» شامل owner → قفل پنل ناممکن.
+- تعریف‌های تکراری GRANTABLE/TAB_PERMISSIONS تجمیع شد در src/lib/rbac.ts.
+- UI آگاه از نقش بیننده (AccessUserManager از /api/user/verify).
+
+## کانال ارتباطی امن (تکمیل شد)
+- کانال خواندن قبلی (MAINTENANCE_TOKEN) تایید شد؛ کانال ویرایش جدید
+  (MAINTENANCE_EDIT_TOKEN ≥48 کاراکتر، هدر X-Maintenance-Edit-Token) اضافه شد.
+- ۱۹ action سفید-لیست با اعتبارسنجی کامل؛ SecurityLog برای همه؛ secrets هرگز.
+- sync-from-online.sh + apply-online-export.mjs — همگام‌سازی آفلاین↔آنلاین + گیت.
+
+## تست دودی (production build)
+- scripts/smoke-rbac.sh — 28/28 PASS: logins، users CRUD با سلسله‌مراتب،
+  owner immutability، تغییر رمز مالک، دو توکن نگهداری، export-all، rate limit.
+
+## کامنت‌گذاری فارسی
+- ۳۱ فایل فاقد کامنت فارسی → سرصفحه فارسی؛ پوشش کامل src/**, scripts/*.
+
+## نسخه و بسته
+- همه‌چیز «نسخه‌ی یک (v1.0)»؛ zip رسمی: ehsan-site-v1.0-<تاریخ شمسی>.zip
+  (سورس + docs Word فارسی + install.sh + scripts) — در download/ و releases/.

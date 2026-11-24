@@ -1,3 +1,10 @@
+// ============================================================================
+// route.ts — v1.0
+// POST /api/admin/clear — حذف هدفمند پیام‌ها/چت‌ها/آمار
+// target: message|message_all (تب پیام‌ها — قابل واگذاری) یا
+// chat_session|chat_all|chat_message|stats (فقط ادمین) — overgrant بسته شد.
+// ============================================================================
+
 import { checkAdminAuth, TAB_PERMISSIONS } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";

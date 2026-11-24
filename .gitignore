@@ -97,3 +97,7 @@ __pycache__/
 *.zip
 *.docx
 __pycache__/
+
+# v1.0 rev2 — بسته‌ی انتشار رسمی داخل ریپو (به درخواست صاحب سایت):
+!releases/
+!releases/*.zip

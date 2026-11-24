@@ -1,5 +1,11 @@
 "use client";
 
+// ============================================================================
+// RealSignalGenerator.tsx — v1.0
+// RealSignalGenerator — سیگنال‌جنرتور واقعی با WebAudio (سینوس/مربع/دندان‌اره/نویز)
+// با کنترل فرکانس/دامنه و پخش از خروجی صدا.
+// ============================================================================
+
 import { useEffect, useRef, useState } from "react";
 
 type Waveform = "sine" | "square" | "triangle" | "sawtooth";

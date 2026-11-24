@@ -13,11 +13,13 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { hashPassword } from "@/lib/access-auth";
 import { checkAdminAuth } from "@/lib/admin-auth";
+import { ROLES, normalizeRole, isElevated, canManageTarget, GRANTABLE_TABS, minPasswordLength } from "@/lib/rbac";
 
 // v1.0 (audit W11-15 #2): نام کاربری همیشه lowercase — login همیشه lowercase می‌کند؛
 // وگرنه تغییر نام به «Bob» باعث اکانتِ غیرقابل‌لاگین + duplicate حساس به حروف می‌شد
 const USERNAME_RE = /^[a-zA-Z0-9._-]{3,64}$/;
-const GRANTABLE_PERMS = new Set(["messages", "clips", "content", "text", "nav", "themes"]);
+// v1.0 (RBAC cleanup): whitelist permission ها از rbac.ts — تک منبع حقیقت
+const GRANTABLE_PERMS = GRANTABLE_TABS;
 
 // ----------------------------------------------------------------------------
 // PUT /api/admin/users/[id] — ویرایش کاربر
@@ -36,6 +38,8 @@ export async function PUT(
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
     const adminId = authCheck.userId;
+    // v1.0 (RBAC cleanup): نقش واقعی requester — سلسله‌مراتب owner > admin > user
+    const requesterRole = authCheck.role || ROLES.USER;
 
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
@@ -44,6 +48,20 @@ export async function PUT(
   const existing = await db.accessUser.findUnique({ where: { id } });
   if (!existing) {
     return NextResponse.json({ ok: false, error: "user_not_found" }, { status: 404 });
+  }
+
+  // ==========================================================================
+  // v1.0 (RBAC cleanup) — قواعد سلسله‌مراتب:
+  //   1. حساب owner فقط توسط خودِ owner ویرایش می‌شود؛ بقیه → 403
+  //   2. نقش owner از طریق API قابل تغییر نیست (immutable)
+  //   3. admin فقط حساب‌های نقش user را ویرایش می‌کند
+  // ==========================================================================
+  if (existing.role === ROLES.OWNER) {
+    if (requesterRole !== ROLES.OWNER || id !== adminId) {
+      return NextResponse.json({ ok: false, error: "owner_account_immutable" }, { status: 403 });
+    }
+  } else if (!canManageTarget(requesterRole, existing.role)) {
+    return NextResponse.json({ ok: false, error: "forbidden_target" }, { status: 403 });
   }
 
   // ساخت data برای update
@@ -69,7 +87,21 @@ export async function PUT(
     }
     data.displayName = body.displayName.trim().slice(0, 100);
   }
-  if (body.role !== undefined) data.role = body.role === "admin" ? "admin" : "user";
+  // v1.0 (RBAC cleanup): تغییر نقش — فقط owner/admin معتبر است؛ نقش owner هرگز
+  // از طریق API قابل اختصاص نیست و نقش owner هدف هم قابل تغییر نیست
+  if (body.role !== undefined) {
+    if (existing.role === ROLES.OWNER) {
+      return NextResponse.json({ ok: false, error: "owner_role_immutable" }, { status: 403 });
+    }
+    const requestedRole = normalizeRole(body.role);
+    if (requestedRole === ROLES.OWNER) {
+      return NextResponse.json({ ok: false, error: "owner_cannot_be_assigned_via_api" }, { status: 403 });
+    }
+    if (requestedRole === ROLES.ADMIN && requesterRole !== ROLES.OWNER) {
+      return NextResponse.json({ ok: false, error: "only_owner_promotes_admin" }, { status: 403 });
+    }
+    data.role = requestedRole;
+  }
   if (body.allowedHourStart !== undefined) {
     const v = body.allowedHourStart === null ? null : Number(body.allowedHourStart);
     // v1.1: اعتبارسنجی بازه‌ی ساعت (قبلاً هر عددی قبول می‌شد)
@@ -122,9 +154,9 @@ export async function PUT(
     if (typeof body.password !== "string") {
       return NextResponse.json({ ok: false, error: "invalid_input" }, { status: 400 });
     }
-    // v1.1.1 (audit S1-M2): حداقل طول بر اساس نقش هدف — ادمین ۱۲، کاربر ۸
-    const targetRole = body.role !== undefined ? (body.role === "admin" ? "admin" : "user") : existing.role;
-    const minPw = targetRole === "admin" ? 12 : 8;
+    // v1.1.1 (audit S1-M2): حداقل طول رمز بر اساس نقش هدف — ادمین/مالک ۱۲، کاربر ۸
+    const targetRole = body.role !== undefined ? normalizeRole(body.role) : existing.role;
+    const minPw = minPasswordLength(targetRole);
     if (body.password.length < minPw) {
       return NextResponse.json({ ok: false, error: "password_too_short" }, { status: 400 });
     }
@@ -146,15 +178,23 @@ export async function PUT(
     return NextResponse.json({ ok: false, error: "cannot_deactivate_self" }, { status: 400 });
   }
 
+  // v1.0 (RBAC cleanup): غیرفعال‌کردن owner مطلقاً ممنوع است (قفل شدن کل سایت)
+  if (existing.role === ROLES.OWNER && data.active === false) {
+    return NextResponse.json({ ok: false, error: "cannot_deactivate_owner" }, { status: 403 });
+  }
+
   // V18.3: ادمین نمی‌تونه خودش رو به user تنزل بده (قفل شدن کامل پنل)
-  if (id === adminId && body.role !== undefined && body.role !== "admin") {
+  if (id === adminId && body.role !== undefined && body.role !== requesterRole) {
     return NextResponse.json({ ok: false, error: "cannot_demote_self" }, { status: 400 });
   }
 
-  // V18.3: تنزل یک ادمینِ فعال دیگه به user — نباید آخرین ادمین فعال باشه
-  if (data.role === "user" && existing.role === "admin" && existing.active) {
-    const activeAdminCount = await db.accessUser.count({ where: { role: "admin", active: true } });
-    if (activeAdminCount <= 1) {
+  // V18.3 + v1.0 (RBAC): تنزل ادمینِ فعال — نباید آخرین حساب ارشد فعال باشد
+  // (شمارش شامل owner هم هست — حداقل همیشه یک owner وجود دارد)
+  if (data.role === ROLES.USER && isElevated(existing.role) && existing.active) {
+    const elevatedCount = await db.accessUser.count({
+      where: { role: { in: [ROLES.OWNER, ROLES.ADMIN] }, active: true },
+    });
+    if (elevatedCount <= 1) {
       return NextResponse.json({ ok: false, error: "cannot_demote_last_admin" }, { status: 400 });
     }
   }
@@ -217,6 +257,8 @@ export async function DELETE(
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
     const adminId = authCheck.userId;
+    // v1.0 (RBAC cleanup): نقش واقعی requester — سلسله‌مراتب owner > admin > user
+    const requesterRole = authCheck.role || ROLES.USER;
 
   const { id } = await params;
 
@@ -231,10 +273,23 @@ export async function DELETE(
     return NextResponse.json({ ok: false, error: "user_not_found" }, { status: 404 });
   }
 
-  // V18.3: حذف آخرین ادمین فعال ممنوع — سایت بدون ادمین می‌مونه
-  if (existing.role === "admin" && existing.active) {
-    const activeAdminCount = await db.accessUser.count({ where: { role: "admin", active: true } });
-    if (activeAdminCount <= 1) {
+  // v1.0 (RBAC cleanup): حساب owner هرگز از طریق پنل حذف نمی‌شود —
+  // ریست رمز فقط از خود سرور با reset-admin-password.sh انجام می‌شود
+  if (existing.role === ROLES.OWNER) {
+    return NextResponse.json({ ok: false, error: "owner_cannot_be_deleted" }, { status: 403 });
+  }
+
+  // v1.0 (RBAC cleanup): admin فقط حساب‌های نقش user را حذف می‌کند
+  if (!canManageTarget(requesterRole, existing.role)) {
+    return NextResponse.json({ ok: false, error: "forbidden_target" }, { status: 403 });
+  }
+
+  // V18.3 + v1.0 (RBAC): حذف ادمینِ فعال — نباید آخرین حساب ارشد فعال باشد
+  if (isElevated(existing.role) && existing.active) {
+    const elevatedCount = await db.accessUser.count({
+      where: { role: { in: [ROLES.OWNER, ROLES.ADMIN] }, active: true },
+    });
+    if (elevatedCount <= 1) {
       return NextResponse.json({ ok: false, error: "cannot_delete_last_admin" }, { status: 400 });
     }
   }

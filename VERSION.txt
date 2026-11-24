@@ -1,10 +1,39 @@
 ================================================================
   PERSONAL SITE — VERSION HISTORY & DEPLOYMENT GUIDE
-  آخرین نسخه: v1.0 (نسخه‌ی یک — خروجی نهایی ممیزی ۶۰ کارگر)
+  آخرین نسخه: v1.0 (نسخه‌ی یک — خروجی نهایی ممیزی عمیق RBAC)
 ================================================================
 
 ## 📌 نسخه فعلی: v1.0 — نسخه‌ی یک (پایه‌ی نهایی؛ تاریخچه‌ی قبلی v1.1.x/V18.x
    فقط به‌عنوان سابقه‌ی توسعه مونده و همه‌چیز زیر همین نسخه یک تحویل می‌شود)
+
+## 🆕 v1.0 (دور ممیزی عمیق RBAC + کانال ویرایش) — تغییرات این دور:
+  + RBAC — پاک‌سازی کامل تعریف کاربر و دسترسی ادمین (یافته‌ی ممیزی: قبلاً ناتمام بود):
+    · نقش «owner» (مالک سایت) بالاتر از admin معرفی شد؛ seed و install.sh حساب
+      admin را owner می‌کنند و دیتابیس‌های قدیمی با UPDATE idempotent مهاجرت می‌شوند
+    · src/lib/rbac.ts — تک منبع حقیقت نقش‌ها/تب‌های واگذارشدنی (قبلاً در ۴ فایل تکرار
+      شده بود و بین UI و سرور ناهماهنگی داشت)
+    · ادمین دیگر نمی‌تواند ادمین/مالک دیگری را بسازد، ویرایش یا حذف کند
+      (canManageTarget — فقط کاربران عادی)؛ ساخت ادمین فقط با مالک
+    · حساب مالک از پنل قابل حذف/تنزل/غیرفعال‌سازی نیست
+      (owner_account_immutable / owner_cannot_be_deleted / cannot_deactivate_owner)
+    · تغییر رمز در /api/admin/security برای مالک هم کار می‌کند (قبلاً 404 می‌داد!)
+    · شمارش «آخرین ادمین فعال» شامل owner شد — قفل شدن پنل ناممکن است
+    · UI آگاه از نقش: برچسب «مالک 👑»، دراپ‌داون نقش فقط برای مالک، دکمه‌های
+      ویرایش/حذف فقط داخل محدوده‌ی اختیار بیننده رندر می‌شوند
+  + کانال ویرایش از دور (v1.0 rev2) — روی کانال نگهداری قبلی:
+    · MAINTENANCE_EDIT_TOKEN (حداقل ۴۸ کاراکتر) با هدر X-Maintenance-Edit-Token —
+      timing-safe + fail-closed؛ install.sh تولید و یک بار چاپ می‌کند
+    · actionهای ویرایشی سفید-لیست: texts.set، settings.set، nav.*، clip.*،
+      equipment.set، content.set-visible، export-all، help-edit، version
+    · هر ویرایش در SecurityLog با IP و target ثبت می‌شود؛ کلیدهای محرمانه هرگز
+      قابل نوشتن/خواندن نیستند؛ rate limit ۶۰/۵دقیقه
+    · scripts/maintenance.sh با --data؛ scripts/sync-from-online.sh +
+      scripts/apply-online-export.mjs — همگام‌سازی دقیق آفلاین↔آنلاین
+  + تست دودی scripts/smoke-rbac.sh — ۲۸ چک واقعی روی بیلد production: همه سبز
+    (سلسله‌مراتب نقش‌ها، immutability مالک، تغییر رمز مالک، دو توکن، export-all)
+  + کامنت‌گذاری فارسی سرصفحه برای ۳۱ فایل — پوشش کامل سورس
+  + مستندات: docs/TUTORIAL_FA_v1.docx (۱۴ فصل) + docs/AUDIT-REPORT-FA_v1.docx
+    (گزارش ممیزی فارسی) — داخل zip انتشار
 
 ⚠️ نکته‌ی تاریخچه: شماره‌های داخلی قبلی (V17.x/V18.x/v1.1.x) به‌عنوان revision
 توسعه مونده‌اند؛ نام انتشار رسمی از این به بعد «v1.0» است.
@@ -27,10 +56,11 @@ sudo ./install.sh
   ⚠️ حتماً از پنل → تنظیمات → تغییر رمز عوض کن!
 
 ================================================================
-  کانال نگهداری اختصاصی (v1.0)
+  کانال نگهداری و ویرایش اختصاصی (v1.0 rev2)
 ================================================================
-install.sh یک MAINTENANCE_TOKEN تولید می‌کند و یک بار چاپ می‌کند
-(کپی امن: sudo cat db/.maintenance-token.txt).
+install.sh دو توکن تولید می‌کند و یک بار چاپ می‌کند:
+- MAINTENANCE_TOKEN (خواندن) — کپی امن: sudo cat db/.maintenance-token.txt
+- MAINTENANCE_EDIT_TOKEN (ویرایش، ≥۴۸ کاراکتر) — sudo cat db/.maintenance-edit-token.txt
 
 روی خود سرور:
   cd /home/ehsan/personal-site
@@ -41,9 +71,12 @@ install.sh یک MAINTENANCE_TOKEN تولید می‌کند و یک بار چاپ
   export MAINTENANCE_TOKEN=... MAINTENANCE_URL=https://ehsanmorad.ir
   bash scripts/maintenance.sh security-logs
 
-action ها: status | db-stats | security-logs | messages | chats | backup | help
-امنیت: فقط هدر X-Maintenance-Token با timingSafeEqual — fail-closed بدون توکن؛
-rate limit ۲۰/۵دقیقه؛ همه‌ی فراخوانی‌ها در SecurityLog ثبت می‌شوند.
+actionهای خواندن: status | db-stats | security-logs | messages | chats | backup | help
+actionهای ویرایش (هدر دوم لازم): texts.get/set | settings.get/set | nav.* | clip.* |
+  equipment.get/set | content.get | content.set-visible | export-all | help-edit
+امنیت: دو هدر X-Maintenance-Token + X-Maintenance-Edit-Token با timingSafeEqual —
+fail-closed بدون توکن؛ rate limit ۶۰/۵دقیقه؛ همه‌ی فراخوانی‌ها در SecurityLog ثبت می‌شوند.
+همگام‌سازی آفلاین↔آنلاین: bash scripts/sync-from-online.sh && node scripts/apply-online-export.mjs <file>
 
 ================================================================
   تنظیم reCAPTCHA (بعد از نصب)

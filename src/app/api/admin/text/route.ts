@@ -1,6 +1,7 @@
 import { checkAdminAuth, TAB_PERMISSIONS } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { isElevated } from "@/lib/rbac";
 
 // v1.0 (audit W11-15 #2 — MEDIUM): کلیدهای حساس AI — فقط ادمین. تب «متن‌ها» قابل
 // واگذاری به کاربر limited است؛ ai.system_prompt مستقیماً system prompt چت را
@@ -53,7 +54,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
     // v1.0 (audit W11-15 #2): نوشتنِ کلیدهای ai.* فقط برای ادمین — کاربر limited 403 می‌گیرد
-    const isAdmin = authCheck.role === "admin";
+    // v1.0 (RBAC cleanup): isElevated — owner هم شامل می‌شود
+    const isAdmin = isElevated(authCheck.role);
 
     const action = String(body.action || "");
 

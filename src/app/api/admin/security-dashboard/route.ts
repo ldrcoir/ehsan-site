@@ -1,3 +1,9 @@
+// ============================================================================
+// route.ts — v1.0
+// GET /api/admin/security-dashboard — داده‌های تب امنیت (لاگ‌ها، IPهای مسدود، آمار).
+// POST: بلاک/آزادسازی دستی IP — فقط ادمین/مالک.
+// ============================================================================
+
 import { checkAdminAuth } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";

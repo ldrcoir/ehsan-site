@@ -1,5 +1,11 @@
 "use client";
 
+// ============================================================================
+// InteractiveTerminal.tsx — v1.0
+// InteractiveTerminal — ترمینال تعاملی هدر سایت؛ دستورات whoami/help/... و پاسخ‌های
+// مبتنی بر داده‌ی واقعی دیتابیس (نام، تیتر، آمار).
+// ============================================================================
+
 import { useEffect, useRef, useState } from "react";
 import { UI, PERSONAL, SKILLS, BOOKS, ARTICLES, TUTORIALS, SOCIALS, type Lang } from "@/lib/content";
 

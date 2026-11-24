@@ -1,5 +1,11 @@
 "use client";
 
+// ============================================================================
+// LabEquipmentRack.tsx — v1.0
+// LabEquipmentRack — رک دستگاه‌های آزمایشگاه؛ وضعیت زنده از /api/content.
+// دستگاه‌ها با زدن، پنل دستگاه باز می‌شود (دوربین سه‌بعدی ساده).
+// ============================================================================
+
 import { useState } from "react";
 import LabDeviceVisualizer from "./LabDeviceVisualizer";
 

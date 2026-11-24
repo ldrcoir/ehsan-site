@@ -246,6 +246,22 @@ else
     MAINT_TOKEN_IS_NEW="1"
 fi
 
+# v1.0 (rev2): MAINTENANCE_EDIT_TOKEN — کلید کانال ویرایش از دور (سطح دوم؛
+# actionهای نوشتن). حداقل ۴۸ کاراکتر → hex ۳۲ بایتی = ۶۴ کاراکتر.
+if [ -f .env ] && grep -q "^MAINTENANCE_EDIT_TOKEN=" .env; then
+    EDIT_TOKEN=$(grep "^MAINTENANCE_EDIT_TOKEN=" .env | cut -d'=' -f2- | tr -d '"')
+    if [ -z "$EDIT_TOKEN" ] || [ "${#EDIT_TOKEN}" -lt 48 ]; then
+        EDIT_TOKEN=$(openssl rand -hex 32)
+        EDIT_TOKEN_IS_NEW="1"
+        echo "  ✅ MAINTENANCE_EDIT_TOKEN قبلی ضعیف بود — جدید تولید شد"
+    else
+        echo "  ✅ MAINTENANCE_EDIT_TOKEN موجود نگه داشته شد"
+    fi
+else
+    EDIT_TOKEN=$(openssl rand -hex 32)
+    EDIT_TOKEN_IS_NEW="1"
+fi
+
 mkdir -p db
 chmod 700 db
 
@@ -289,6 +305,9 @@ BALE_WEBHOOK_SECRET="$BALE_SECRET"
 TELEGRAM_WEBHOOK_SECRET="$TG_SECRET"
 # v1.0: کانال نگهداری — فقط با این هدر: X-Maintenance-Token (ببین scripts/maintenance.sh)
 MAINTENANCE_TOKEN="$MAINT_TOKEN"
+# v1.0 (rev2): کانال ویرایش از دور — actionهای نوشتن هدر دوم لازم دارند:
+# X-Maintenance-Edit-Token (ببین scripts/maintenance.sh و scripts/sync-from-online.sh)
+MAINTENANCE_EDIT_TOKEN="$EDIT_TOKEN"
 # v1.1.2: سایت پشت nginx محلی است — app فقط وقتی TRUST_PROXY=true است به
 # X-Forwarded-For اعتماد می‌کند (rate limit بر اساس IP واقعی کاربر)
 # v1.0 (audit W36-40 #1 — HIGH): مقدار حفظ‌شده از .env قبلی نوشته می‌شود، نه همیشه "true" —
@@ -308,8 +327,13 @@ echo "  ✅ Webhook secrets تولید شد"
 umask 077
 echo "$MAINT_TOKEN" > "$PROJECT_ROOT/db/.maintenance-token.txt"
 chmod 600 "$PROJECT_ROOT/db/.maintenance-token.txt"
+echo "$EDIT_TOKEN" > "$PROJECT_ROOT/db/.maintenance-edit-token.txt"
+chmod 600 "$PROJECT_ROOT/db/.maintenance-edit-token.txt"
 if [ "${MAINT_TOKEN_IS_NEW:-}" = "1" ]; then
     echo "  ✅ MAINTENANCE_TOKEN تولید شد (در انتهای نصب یک بار چاپ می‌شود)"
+fi
+if [ "${EDIT_TOKEN_IS_NEW:-}" = "1" ]; then
+    echo "  ✅ MAINTENANCE_EDIT_TOKEN تولید شد (در انتهای نصب یک بار چاپ می‌شود)"
 fi
 
 # v1.1: کلیدهای سفارشی .env قدیمی که تو تمپلیت نیستن (به‌جز DATABASE_URL)
@@ -409,6 +433,17 @@ if [ "$ADMIN_EXISTS" = "0" ] || [ -z "$ADMIN_EXISTS" ]; then
     fi
 else
     echo "  ✅ دیتابیس آماده (admin user exists)"
+fi
+
+# v1.0 (RBAC cleanup): تضمین نقش مالک — حساب admin همیشه owner است (بالاتر از
+# admin؛ از پنل قابل حذف/تنزل نیست). این UPDATE idempotent است و در هر نصب/آپگرید
+# اجرا می‌شود تا دیتابیس‌های قدیمی هم به مدل RBAC جدید مهاجرت شوند.
+sqlite3 db/custom.db "UPDATE AccessUser SET role='owner' WHERE username='admin' AND role!='owner';" 2>/dev/null || true
+OWNER_ROLE=$(sqlite3 db/custom.db "SELECT role FROM AccessUser WHERE username='admin';" 2>/dev/null || echo "?")
+if [ "$OWNER_ROLE" = "owner" ]; then
+    echo "  ✅ نقش حساب admin = owner (مالک سایت — محافظت‌شده در RBAC)"
+else
+    echo "  ⚠ نقش حساب admin قابل بررسی نیست ($OWNER_ROLE) — ادامه می‌دهیم"
 fi
 
 # ============================================================================
@@ -699,6 +734,22 @@ else
     echo "  🔑 MAINTENANCE_TOKEN: قبلاً ست شده — با 'sudo grep MAINTENANCE_TOKEN $PROJECT_ROOT/.env' ببین"
     echo ""
 fi
+if [ "${EDIT_TOKEN_IS_NEW:-}" = "1" ]; then
+    echo "  🔑 MAINTENANCE_EDIT_TOKEN (یک بار نمایش — در .env هم ذخیره شد):"
+    echo "     $EDIT_TOKEN"
+    echo "     ⚠️ این توکن دسترسی ویرایش محتوای سایت از دور می‌دهد (texts/nav/clips/settings)"
+    echo "     ⚠️ فقط به خودت/نگهدارنده‌ی کاملاً مطمئن بده — همه‌ی فراخوانی‌ها در SecurityLog ثبت می‌شود"
+    echo ""
+else
+    echo "  🔑 MAINTENANCE_EDIT_TOKEN: قبلاً ست شده — با 'sudo grep MAINTENANCE_EDIT_TOKEN $PROJECT_ROOT/.env' ببین"
+    echo ""
+fi
+echo "  کانال ویرایش از دور (v1.0 rev2):"
+echo "    export MAINTENANCE_URL=https://ehsanmorad.ir MAINTENANCE_TOKEN=... MAINTENANCE_EDIT_TOKEN=..."
+echo "    bash scripts/maintenance.sh texts.get        # خواندن متن‌ها"
+echo "    bash scripts/maintenance.sh texts.set --data '{\"key\":\"hero.greeting\",\"valueFa\":\"سلام\"}'"
+echo "    bash scripts/sync-from-online.sh             # همگام‌سازی نسخه‌ی آفلاین با آنلاین"
+echo ""
 echo "  دستورات:"
 echo "    systemctl status personal-site"
 echo "    systemctl restart personal-site"

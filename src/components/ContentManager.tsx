@@ -1,5 +1,11 @@
 "use client";
 
+// ============================================================================
+// ContentManager.tsx — v1.0
+// ContentManager — تب مدیریت محتوای پنل ادمین (CRUD کتاب/مقاله/آموزش/مهارت/قواعد AI)
+// با فیلدهای سه‌زبانه و به‌روزرسانی زنده.
+// ============================================================================
+
 import { useEffect, useRef, useState } from "react";
 
 type ContentType = "book" | "article" | "tutorial" | "skill" | "aiInstruction" | "equipment";

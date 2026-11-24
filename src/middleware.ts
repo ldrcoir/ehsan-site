@@ -26,8 +26,9 @@ const RATE_LIMIT_PATHS: Record<string, { max: number; windowMs: number }> = {
   "/api/contact": { max: 8, windowMs: 15 * 60 * 1000 },
   "/api/chat": { max: 8, windowMs: 15 * 60 * 1000 },
   "/api/track": { max: 30, windowMs: 60 * 1000 },
-  // v1.0: کانال نگهداری — ۲۰ درخواست در ۵ دقیقه برای هر IP
-  "/api/maintenance": { max: 20, windowMs: 5 * 60 * 1000 },
+  // v1.0: کانال نگهداری — ۶۰ درخواست در ۵ دقیقه برای هر IP
+  // (v1.0 rev2: از ۲۰ به ۶۰ — یک نشست همگام‌سازی export-all چند فراخوانی دارد)
+  "/api/maintenance": { max: 60, windowMs: 5 * 60 * 1000 },
   // v1.0 (audit W31-35 #2): webhook ها — بدون محدودیت، CPU-DoS با بدنه‌ی ۱MB ممکن بود
   "/api/bale/webhook": { max: 60, windowMs: 60 * 1000 },
   "/api/telegram/webhook": { max: 60, windowMs: 60 * 1000 },

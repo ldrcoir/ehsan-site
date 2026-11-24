@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { verifyPassword, hashPassword, logAccess, getClientIp } from "@/lib/access-auth";
 import { checkAdminAuth } from "@/lib/admin-auth";
+import { isElevated } from "@/lib/rbac";
 
 // ----------------------------------------------------------------------------
 // GET /api/admin/security?password=xxx
@@ -68,11 +69,12 @@ export async function POST(req: Request) {
         }
 
         // V17.9: از authCheck.userId استفاده کن (نه findFirst که ممکنه admin اشتباه رو پیدا کنه)
+        // v1.0 (RBAC cleanup): owner هم می‌تواند رمز خودش را عوض کند (isElevated)
         const adminUser = await db.accessUser.findUnique({
           where: { id: authCheck.userId! },
         });
 
-        if (!adminUser || adminUser.role !== "admin") {
+        if (!adminUser || !isElevated(adminUser.role)) {
           return NextResponse.json({ ok: false, error: "no_admin_user" }, { status: 404 });
         }
 

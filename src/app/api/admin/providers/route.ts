@@ -1,3 +1,9 @@
+// ============================================================================
+// route.ts — v1.0
+// GET/POST /api/admin/providers — مدیریت ارائه‌دهنده‌های AI (کلید، baseUrl، مدل، اولویت)
+// — فقط ادمین/مالک؛ کلیدها هرگز در خروجی عمومی نمی‌آیند.
+// ============================================================================
+
 import { checkAdminAuth } from "@/lib/admin-auth";
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";

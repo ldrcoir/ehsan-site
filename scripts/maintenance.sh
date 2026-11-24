@@ -11,8 +11,15 @@
 #   bash scripts/maintenance.sh backup
 #   bash scripts/maintenance.sh help
 #
+# actionهای ویرایشی (نیاز به MAINTENANCE_EDIT_TOKEN — با هدر X-Maintenance-Edit-Token):
+#   bash scripts/maintenance.sh texts.get
+#   bash scripts/maintenance.sh texts.set --data '{"key":"hero.greeting","valueFa":"سلام"}'
+#   bash scripts/maintenance.sh settings.get
+#   bash scripts/maintenance.sh settings.set --data '{"key":"contact_email","value":"info@ehsanmorad.ir"}'
+#   bash scripts/maintenance.sh nav.get | clip.add | equipment.set | content.get | export-all
+#
 # توکن و آدرس از همین ترتیب خوانده می‌شود:
-#   1. متغیر محیطی  MAINTENANCE_TOKEN و MAINTENANCE_URL
+#   1. متغیر محیطی  MAINTENANCE_TOKEN (و MAINTENANCE_EDIT_TOKEN) و MAINTENANCE_URL
 #   2. فایل .env همین پوشه (MAINTENANCE_TOKEN=...) و NEXT_PUBLIC_SITE_URL
 #
 # مثال روی سرور (بعد از نصب):
@@ -27,6 +34,11 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ENV_FILE="$SCRIPT_DIR/../.env"
 
 ACTION="${1:-help}"
+# v1.0: بدنه‌ی JSON اختیاری برای actionهای ویرایشی — بعد از --data
+BODY_DATA=""
+if [ "$2" = "--data" ] && [ -n "$3" ]; then
+    BODY_DATA="$3"
+fi
 
 # v1.0 (audit W56-60 #5): فایل خروجی موقت با mktemp (غیرقابل حدس) + پاکسازی با trap
 OUT=$(mktemp /tmp/maintenance-out.XXXXXX) || { echo "❌ ساخت فایل موقت ناموفق بود"; exit 1; }
@@ -46,6 +58,17 @@ if [ -z "$TOKEN" ]; then
     exit 1
 fi
 
+# --- توکن ویرایش (اختیاری — فقط برای actionهای ویرایشی) ----------------------
+EDIT_TOKEN="${MAINTENANCE_EDIT_TOKEN:-}"
+if [ -z "$EDIT_TOKEN" ] && [ -f "$ENV_FILE" ]; then
+    EDIT_TOKEN=$(grep -E '^MAINTENANCE_EDIT_TOKEN=' "$ENV_FILE" | head -1 \
+        | sed -e 's/^MAINTENANCE_EDIT_TOKEN=//' -e 's/\r$//' -e "s/[\"']//g" -e 's/[[:space:]]*#.*//' -e 's/[[:space:]]*$//')
+fi
+# اگر توکن ویرایش در .env نبود ولی فایل 600 کنار دیتابیس بود، از همان بخوان
+if [ -z "$EDIT_TOKEN" ] && [ -f "$SCRIPT_DIR/../db/.maintenance-edit-token.txt" ]; then
+    EDIT_TOKEN=$(cat "$SCRIPT_DIR/../db/.maintenance-edit-token.txt" | head -1 | tr -d '\r\n')
+fi
+
 # --- پیدا کردن URL ----------------------------------------------------------
 URL="${MAINTENANCE_URL:-}"
 if [ -z "$URL" ]; then
@@ -63,15 +86,25 @@ fi
 
 case "$ACTION" in
     help|--help|-h)
-        echo "استفاده: bash scripts/maintenance.sh <action>"
+        echo "استفاده: bash scripts/maintenance.sh <action> [--data '<json>']"
         echo ""
-        echo "action ها:"
+        echo "actionهای خواندن (فقط MAINTENANCE_TOKEN):"
         echo "  status         — وضعیت کلی سایت (نسخه، uptime، حافظه، رکوردها، سلامت دیتابیس)"
         echo "  db-stats       — آمار کامل جدول‌ها + integrity_check"
         echo "  security-logs  — ۵۰ لاگ امنیتی آخر"
         echo "  messages       — ۲۰ پیام تماس آخر"
         echo "  chats          — آمار چت + ۱۰ نشست آخر"
         echo "  backup         — بک‌آپ فوری دیتابیس"
+        echo ""
+        echo "actionهای ویرایشی (همچنین MAINTENANCE_EDIT_TOKEN لازم است):"
+        echo "  texts.get / texts.set / settings.get / settings.set"
+        echo "  nav.get / nav.add / nav.set-visible / nav.delete"
+        echo "  clips.get / clip.add / clip.set-visible / clip.delete"
+        echo "  equipment.get / equipment.set / content.get / content.set-visible"
+        echo "  export-all     — dump کامل برای همگام‌سازی نسخه‌ی آفلاین (ببین sync-from-online.sh)"
+        echo ""
+        echo "مثال ویرایش:"
+        echo "  bash scripts/maintenance.sh texts.set --data '{\"key\":\"hero.greeting\",\"valueFa\":\"سلام\"}'"
         echo ""
         echo "خروجی JSON زیباسازی‌شده با jq (اگر نصب باشد):"
         echo "  bash scripts/maintenance.sh status | jq ."
@@ -81,16 +114,35 @@ case "$ACTION" in
             echo "❌ curl نصب نیست:  sudo apt install -y curl"
             exit 1
         fi
+        # هدر ویرایش — فقط اگر توکن ویرایش موجود باشد
+        EDIT_HEADER_ARGS=()
+        if [ -n "$EDIT_TOKEN" ]; then
+            EDIT_HEADER_ARGS=(-H "X-Maintenance-Edit-Token: $EDIT_TOKEN")
+        fi
+        # بدنه — یا --data یا JSON ساده برای actionهای بدون بدنه
+        if [ -n "$BODY_DATA" ]; then
+            # کلیدهای JSON کاربر در سطح اول body merge می‌شوند (سرور فیلدها را
+            # از سطح اول می‌خواند): {"action":"...","key":...}
+            PAYLOAD=$(printf '{"action":"%s",%s}' "$ACTION" "$(printf '%s' "$BODY_DATA" | sed -e 's/^{//' -e 's/}$//')")
+        else
+            PAYLOAD="{\"action\":\"$ACTION\"}"
+        fi
         HTTP_CODE=$(curl -s -o "$OUT" -w "%{http_code}" \
             -X POST "$URL/api/maintenance" \
             -H "X-Maintenance-Token: $TOKEN" \
+            "${EDIT_HEADER_ARGS[@]}" \
             -H "Content-Type: application/json" \
-            -d "{\"action\":\"$ACTION\"}") || { echo "❌ اتصال به $URL برقرار نشد"; exit 1; }
+            -d "$PAYLOAD") || { echo "❌ اتصال به $URL برقرار نشد"; exit 1; }
         if [ "$HTTP_CODE" = "401" ]; then
             echo "❌ توکن نامعتبر است (401) — مقدار MAINTENANCE_TOKEN را با .env سرور مقایسه کن"
             exit 1
+        elif [ "$HTTP_CODE" = "403" ]; then
+            echo "❌ توکن ویرایش لازم است (403) — MAINTENANCE_EDIT_TOKEN را export کن یا در .env بگذار"
+            cat "$OUT" 2>/dev/null; echo ""
+            exit 1
         elif [ "$HTTP_CODE" = "503" ]; then
-            echo "❌ کانال نگهداری روی سرور خاموش است (503) — MAINTENANCE_TOKEN در .env سرور ست نشده"
+            echo "❌ کانال روی سرور خاموش است (503) — توکن مربوطه در .env سرور ست نشده"
+            cat "$OUT" 2>/dev/null; echo ""
             exit 1
         elif [ "$HTTP_CODE" = "429" ]; then
             echo "❌ محدودیت تعداد درخواست (429) — ۵ دقیقه صبر کن"

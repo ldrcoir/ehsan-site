@@ -16,13 +16,14 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { hashPassword } from "@/lib/access-auth";
 import { checkAdminAuth } from "@/lib/admin-auth";
+import { ROLES, normalizeRole, GRANTABLE_TABS, minPasswordLength } from "@/lib/rbac";
 
 // v1.0 (audit W11-15 #1 / W1-5 #7): قاعده‌ی واحد username — مشابه PUT در [id]/route.ts
 // و login (که همیشه lowercase می‌کند). POST قبلاً فقط length چک می‌کرد: unicode،
 // فاصله و usernameهای چندمگابایتی قبول می‌شدند و بعداً قابل لاگین نبودند.
 const USERNAME_RE = /^[a-zA-Z0-9._-]{3,64}$/;
-// v1.0 (audit W16-20 #1): whitelist permission های واگذارشدنی — همان GRANTABLE_TABS
-const GRANTABLE_PERMS = new Set(["messages", "clips", "content", "text", "nav", "themes"]);
+// v1.0 (RBAC cleanup): whitelist permission ها از rbac.ts — تک منبع حقیقت
+const GRANTABLE_PERMS = GRANTABLE_TABS;
 
 // ----------------------------------------------------------------------------
 // GET /api/admin/users — لیست کاربران
@@ -71,6 +72,8 @@ export async function POST(request: NextRequest) {
     if (!authCheck.ok) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
+    // v1.0 (RBAC cleanup): نقش واقعی requester — سلسله‌مراتب owner > admin > user
+    const requesterRole = authCheck.role || ROLES.USER;
 
     const body = await request.json().catch(() => ({}));
   // v1.0 (audit W11-15 #6): ورودی‌ها باید string باشند — عدد/آبجکت قبلاً در
@@ -81,7 +84,16 @@ export async function POST(request: NextRequest) {
   const username: string = (body.username || "").trim().toLowerCase();
   const password: string = body.password || "";
   const displayName: string = typeof body.displayName === "string" ? body.displayName.trim().slice(0, 100) : "";
-  const role: string = body.role === "admin" ? "admin" : "user";
+  // v1.0 (RBAC cleanup): ساخت ادمین فقط با owner؛ ساخت owner از طریق API ممنوع
+  // (owner فقط از خود سرور: install.sh / seed — RBAC_RULES.owner_immutable_via_api)
+  const requestedRole = normalizeRole(body.role);
+  if (requestedRole === ROLES.OWNER) {
+    return NextResponse.json({ ok: false, error: "owner_cannot_be_created_via_api" }, { status: 403 });
+  }
+  if (requestedRole === ROLES.ADMIN && requesterRole !== ROLES.OWNER) {
+    return NextResponse.json({ ok: false, error: "only_owner_creates_admin" }, { status: 403 });
+  }
+  const role: string = requestedRole;
   const allowedHourStart = body.allowedHourStart === null || body.allowedHourStart === undefined ? null : Number(body.allowedHourStart);
   const allowedHourEnd = body.allowedHourEnd === null || body.allowedHourEnd === undefined ? null : Number(body.allowedHourEnd);
   const allowedDays: string | null = typeof body.allowedDays === "string" && /^[0-6](,[0-6])*$/.test(body.allowedDays) ? body.allowedDays : null;
@@ -99,8 +111,8 @@ export async function POST(request: NextRequest) {
   if (!username || !USERNAME_RE.test(username)) {
     return NextResponse.json({ ok: false, error: "username_too_short" }, { status: 400 });
   }
-  // v1.1.1 (audit S1-M2): ادمین حداقل ۱۲ کاراکتر، کاربر عادی حداقل ۸ (قبل‌تر ۶ بود)
-  const minPw = role === "admin" ? 12 : 8;
+  // v1.1.1 (audit S1-M2): رمز ادمین/مالک حداقل ۱۲ کاراکتر، کاربر عادی حداقل ۸ (قبل‌تر ۶ بود)
+  const minPw = minPasswordLength(role);
   if (!password || password.length < minPw) {
     return NextResponse.json({ ok: false, error: "password_too_short" }, { status: 400 });
   }
@@ -167,7 +179,7 @@ export async function POST(request: NextRequest) {
       data: {
         type: "user_admin_action",
         ip: null,
-        detail: `admin=${authCheck.userId} action=create target=${username} role=${role}`,
+        detail: `admin=${authCheck.userId}(${requesterRole}) action=create target=${username} role=${role}`,
       },
     }).catch(() => {});
     return NextResponse.json({ ok: true, user });

@@ -119,8 +119,10 @@ def main():
         "admin-seed-" + os.urandom(4).hex(),
         "admin",
         password_hash,
-        "Administrator",
-        "admin",
+        "Owner — Ehsan Morad",
+        # v1.0 (RBAC): حساب admin = مالک سایت است → نقش owner (بالاتر از admin؛
+        # از پنل قابل حذف/تنزل/غیرفعال‌سازی نیست — ببین src/lib/rbac.ts)
+        "owner",
         1,  # active = true
         0,
         "",

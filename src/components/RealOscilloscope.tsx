@@ -1,5 +1,11 @@
 "use client";
 
+// ============================================================================
+// RealOscilloscope.tsx — v1.0
+// RealOscilloscope — اسیلوسکوپ واقعی با WebAudio: ورودی میکروفون/فایل، تنظیم
+// زمان/دامنه/تریگر و فریز موج.
+// ============================================================================
+
 import { useEffect, useRef, useState } from "react";
 
 type Waveform = "sine" | "square" | "triangle" | "sawtooth";

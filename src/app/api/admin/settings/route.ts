@@ -1,3 +1,9 @@
+// ============================================================================
+// route.ts — v1.0
+// GET/POST /api/admin/settings — تنظیمات سایت (whitelist کلیدها؛ توکن‌های ربات ماسک
+// می‌شوند؛ visitorCount فقط عدد؛ URLهای شبکه‌های اجتماعی اعتبارسنجی می‌شوند).
+// ============================================================================
+
 import { checkAdminAuth } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";

@@ -1,3 +1,9 @@
+// ============================================================================
+// ssrf.ts — v1.0
+// ssrf.ts — سپر SSRF: فقط https، فقط پورت ۴۴۳، resolve DNS قبل از هر درخواست و
+// رد همه‌ی IPهای رزرو/لوکال (شامل ۱۳ الگوی IPv6-mapped IPv4) — ضد DNS rebinding.
+// ============================================================================
+
 // V18.1: SSRF protection utility — shared between admin/providers route and providers lib
 // V18.3 (security): hardened —
 //   - IPv6 hostnames are bracketed by new URL() ("[fe80::1]") — brackets are now

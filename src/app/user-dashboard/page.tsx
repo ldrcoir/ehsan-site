@@ -187,7 +187,8 @@ export default function UserDashboardPage() {
 
   if (!user) return null;
 
-  const isAdmin = user.role === "admin";
+  // v1.0 (RBAC cleanup): owner هم پنل کامل را می‌بیند — هم‌سو با isElevated در rbac.ts
+  const isAdmin = user.role === "admin" || user.role === "owner";
 
   function hasTabAccess(tabId: Tab): boolean {
     if (isAdmin) return true;
@@ -310,7 +311,10 @@ export default function UserDashboardPage() {
                 </div>
                 <div className="dashboard-info-card">
                   <div className="dashboard-info-label">{t.role}</div>
-                  <div className="dashboard-info-value">{user.role === "admin" ? t.admin : t.regularUser}</div>
+                  {/* v1.0 (RBAC cleanup): برچسب نقش owner اضافه شد */}
+                  <div className="dashboard-info-value">
+                    {user.role === "owner" ? (lang === "fa" ? "مالک سایت (Owner)" : lang === "de" ? "Besitzer (Owner)" : "Site Owner") : user.role === "admin" ? t.admin : t.regularUser}
+                  </div>
                 </div>
                 <div className="dashboard-info-card">
                   <div className="dashboard-info-label">{t.lastLogin}</div>

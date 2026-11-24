@@ -1,3 +1,9 @@
+// ============================================================================
+// route.ts — v1.0
+// GET/POST /api/admin/equipment — مدیریت دستگاه‌های آزمایشگاه (وضعیت، specs، visible)
+// با tab محتوا قابل واگذاری است.
+// ============================================================================
+
 import { checkAdminAuth, TAB_PERMISSIONS } from "@/lib/admin-auth";
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";

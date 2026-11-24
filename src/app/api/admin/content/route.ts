@@ -1,7 +1,14 @@
+// ============================================================================
+// route.ts — v1.0
+// GET/POST /api/admin/content — مدیریت محتوا (book/article/tutorial/skill/aiInstruction).
+// field-whitelist برای جلوگیری از mass-assignment؛ قواعد AI فقط برای ادمین/مالک.
+// ============================================================================
+
 import { checkAdminAuth, TAB_PERMISSIONS } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { isElevated } from "@/lib/rbac";
 
 /**
  * /api/admin/content
@@ -70,7 +77,8 @@ export async function POST(req: Request) {
 
     // v1.0 (audit W11-15 #2 — MEDIUM): aiInstruction = قواعد مستقیم system prompt چت.
     // تب content قابل واگذاری به کاربر limited است — نوشتن/تغییر/حذف قواعد AI فقط ادمین.
-    if (type === "aiInstruction" && authCheck.role !== "admin" && action !== "list") {
+    // v1.0 (RBAC cleanup): isElevated — owner هم شامل می‌شود
+    if (type === "aiInstruction" && !isElevated(authCheck.role) && action !== "list") {
       return NextResponse.json({ ok: false, error: "admin_only_type" }, { status: 403 });
     }
 

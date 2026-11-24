@@ -1,4 +1,10 @@
 // ============================================================================
+// content.ts — v1.0
+// content.ts — لایه‌ی خواندن محتوای عمومی سایت برای /api/content: شکل‌دهی داده‌ها،
+// فیلتر public keys و حذف فیلدهای حساس (مثل متن دستورالعمل AI) از خروجی.
+// ============================================================================
+
+// ============================================================================
 //  CONTENT FILE  —  edit this file to update your site's text & data.
 //  The template reads everything from here. You don't need to touch page.tsx
 //  to change name, books, articles, tutorials, social links, etc.

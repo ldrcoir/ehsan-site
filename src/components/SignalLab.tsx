@@ -1,5 +1,10 @@
 "use client";
 
+// ============================================================================
+// SignalLab.tsx — v1.0
+// SignalLab — آزمایشگاه سیگنال: ترکیب اسیلوسکوپ واقعی + جنرتور واقعی + رک دستگاه‌ها.
+// ============================================================================
+
 import { useState } from "react";
 import RealSignalGenerator from "./RealSignalGenerator";
 import RealOscilloscope from "./RealOscilloscope";
