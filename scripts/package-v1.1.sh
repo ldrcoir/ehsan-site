@@ -40,7 +40,7 @@ esac
 mkdir -p "$(dirname "$OUT")"
 MAX_BYTES=$((25 * 1024 * 1024))   # 25MB سقف پکیج
 
-SCRIPTS_KEEP="apply_schema.py seed_access_users.py seed_content.py seed_equipment.py seed_texts.py reset-admin-password.sh auto-backup.sh export-site.sh import-site.sh restore-db.sh maintenance.sh maintenance-enc.mjs sync-from-online.sh apply-online-export.mjs push-to-github.sh sync-server-to-github.sh ai-edit-online.sh"
+SCRIPTS_KEEP="apply_schema.py seed_access_users.py seed_content.py seed_equipment.py seed_texts.py reset-admin-password.sh auto-backup.sh export-site.sh import-site.sh restore-db.sh maintenance.sh maintenance-enc.mjs sync-from-online.sh apply-online-export.mjs push-to-github.sh sync-server-to-github.sh ai-edit-online.sh sync-from-github-to-offline.sh apply-snapshot.mjs"
 # v1.1: list_messages.py حذف شد — ابزار dump مستقیم DB بود و دلیلی برای ارسال به نصب‌کننده نداشت
 # v1.1.2: آموزش از dist/ هم پیدا می‌شود (از public/ خارج شد تا build لاغر بماند)
 PUBLIC_KEEP="icon-192.png icon-512.png favicon.ico manifest.json robots.txt"
