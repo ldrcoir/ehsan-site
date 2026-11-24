@@ -30,6 +30,14 @@ STAGE="$STAGE_ROOT/personal-site"
 # v1.0 rev3: خروجی قابل override — برای zip رسمی با تاریخ شمسی:
 #   RELEASE_OUT=releases/ehsan-site-v1.0-1405-09-03.zip bash scripts/package-v1.1.sh
 OUT="${RELEASE_OUT:-$PROJECT_DIR/public/install-v1.0.zip}"
+# v1.0 rev4 (باگ‌گیری): اسکریپت قبل از zip به STAGE_ROOT سوییچ می‌شود؛ مسیرِ
+# نسبی OUT آنجا بی‌معناست و zip با «Could not create output file» می‌میرد.
+# پس هر مسیر نسبی را نسبت به ریشه‌ی پروژه مطلق می‌کنیم.
+case "$OUT" in
+    /*) ;;  # مطلق — دست‌نخورده
+    *)  OUT="$PROJECT_DIR/$OUT" ;;
+esac
+mkdir -p "$(dirname "$OUT")"
 MAX_BYTES=$((25 * 1024 * 1024))   # 25MB سقف پکیج
 
 SCRIPTS_KEEP="apply_schema.py seed_access_users.py seed_content.py seed_equipment.py seed_texts.py reset-admin-password.sh auto-backup.sh export-site.sh import-site.sh restore-db.sh maintenance.sh maintenance-enc.mjs sync-from-online.sh apply-online-export.mjs push-to-github.sh"
@@ -161,8 +169,58 @@ if [ -d "$PR_RUNTIME" ]; then
     done
 fi
 
+# v1.0 rev4 (باگ‌گیری پکیج): Prisma 6.11 چیدمانش عوض شده — engineهای wasm/
+# base64/binary/edge/react-native همه در runtime و .prisma/client هستن ولی
+# برای مسیرِ native sqlite هرگز load نمی‌شوند (خودِ library.js فقط engine
+# native *.so.node را load می‌کند — با grep ثابت شد). حذفشان ~۲۴MB صرفه است
+# وگرنه پکیج از سقف ۲۵MB می‌گذرد.
+if [ -d "$PR_RUNTIME" ]; then
+    rm -f "$PR_RUNTIME"/binary.js "$PR_RUNTIME"/binary.mjs \
+          "$PR_RUNTIME"/edge.js "$PR_RUNTIME"/edge-esm.js \
+          "$PR_RUNTIME"/index-browser.js "$PR_RUNTIME"/index-browser.mjs "$PR_RUNTIME"/index-browser.d.mts \
+          "$PR_RUNTIME"/react-native.js \
+          "$PR_RUNTIME"/wasm-compiler-edge.js "$PR_RUNTIME"/wasm-compiler-edge.mjs \
+          "$PR_RUNTIME"/wasm-engine-edge.js "$PR_RUNTIME"/wasm-engine-edge.mjs \
+          "$PR_RUNTIME"/client.js "$PR_RUNTIME"/client.mjs "$PR_RUNTIME"/client.d.mts \
+          "$PR_RUNTIME"/library.d.mts \
+          "$PR_RUNTIME"/query_compiler_bg.sqlite.wasm-base64.js "$PR_RUNTIME"/query_compiler_bg.sqlite.wasm-base64.mjs \
+          "$PR_RUNTIME"/query_engine_bg.sqlite.wasm-base64.js "$PR_RUNTIME"/query_engine_bg.sqlite.wasm-base64.mjs \
+          "$PR_RUNTIME"/query_compiler_bg.sqlite.js "$PR_RUNTIME"/query_compiler_bg.sqlite.mjs
+    echo "✅ prisma runtime wasm/binary/edge حذف شد (مسیر native دست‌نخورده ماند)"
+fi
+PR_CLIENT="$STAGE/node_modules/.prisma/client"
+if [ -d "$PR_CLIENT" ]; then
+    rm -f "$PR_CLIENT"/query_engine_bg.wasm "$PR_CLIENT"/wasm.js \
+          "$PR_CLIENT"/wasm-worker-loader.mjs "$PR_CLIENT"/wasm-edge-light-loader.mjs \
+          "$PR_CLIENT"/index-browser.js "$PR_CLIENT"/edge.js "$PR_CLIENT"/query_engine_bg.js
+fi
+
+# v1.0 rev4 — تست واقعی engine بعد از لاغرکردن: اگر فایلِ لازم حذف شده باشد
+# اینجا loud fail می‌کنیم، نه روی سرور مشتری!
+if [ -d "$PR_CLIENT" ]; then
+    PR_TEST_DB="/tmp/prisma-slim-test-$$.db"
+    if DATABASE_URL="file:$PR_TEST_DB" node -e "
+const { PrismaClient } = require(process.argv[1]);
+const p = new PrismaClient();
+p.\$queryRawUnsafe('SELECT 42 AS v').then((r) => {
+    if (r[0] && Number(r[0].v) === 42) { console.log('prisma-slim-sanity OK'); process.exit(0); }
+    console.error('unexpected result'); process.exit(1);
+}).catch((e) => { console.error('prisma-slim-sanity FAIL: ' + e.message); process.exit(1); });
+" "$PR_CLIENT/index.js" 2>/tmp/prisma-slim-test.log; then
+        rm -f "$PR_TEST_DB" "$PR_TEST_DB-journal"
+        echo "✅ صحت‌سنجی engine پس از لاغرکردن: OK (SELECT 42)"
+    else
+        echo "❌ بعد از لاغرکردن، prisma engine خراب شد! لاگ:"; cat /tmp/prisma-slim-test.log
+        exit 1
+    fi
+fi
+
 # باقی بلادها
-rm -rf "$STAGE/.next/node_modules"
+# v1.0 rev4 (باگ‌گیری بحرانی): .next/node_modules را حذف نکن! توربوپک
+# پکیج‌های external شده (مثل @prisma/client-<hash>) را به‌صورت symlink داخل
+# همین پوشه می‌نویسد؛ حذفش یعنی سرور روی نصبِ تمیز با «Cannot find module
+# @prisma/client-…» روی همه‌ی صفحات ۵۰۰ می‌داد — zip قبلی دقیقاً همین
+# معضل را داشت و عملاً غیرقابل راه‌اندازی بود. (فقط ۱MB است.)
 rm -rf "$STAGE/.next/cache"
 find "$STAGE" -type f -name '*.map' -delete
 rm -f "$STAGE/node_modules/next/dist/server/capsize-font-metrics.json"

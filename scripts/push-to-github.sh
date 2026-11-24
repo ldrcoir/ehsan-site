@@ -34,9 +34,9 @@ trap cleanup EXIT
 echo "۱/۲ — پشتیبان‌گیری از main فعلی گیت‌هاب در backup/v1.1-pre-v1-reset ..."
 git push public-auth "refs/remotes/public/main:refs/heads/backup/v1.1-pre-v1-reset" --force 2>&1 | tail -2
 
-echo "۲/۲ — push نسخه‌ی v1.0 rev3 به main ..."
+echo "۲/۲ — push نسخه‌ی v1.0 به main ..."
 git push public-auth main:main --force 2>&1 | tail -3
 
 echo ""
-echo "✅ تمام شد. main روی گیت‌هاب الان v1.0 rev3 است؛"
+echo "✅ تمام شد. main روی گیت‌هاب الان آخرین rev محلی (v1.0 rev4) است؛"
 echo "   تاریخچه‌ی قدیمی هم در شاخه‌ی backup/v1.1-pre-v1-reset محفوظ ماند."

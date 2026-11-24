@@ -113,7 +113,9 @@ function dbFilePath(): string | null {
   // v1.0 (audit W56-60 #3): query params مثل ?connection_limit=1 جدا می‌شوند —
   // همان قرارداد lib/db.ts — وگرنه stat/backup روی مسیر اشتباه می‌رفت
   const raw = m[1].split("?")[0];
-  return path.isAbsolute(raw) ? raw : path.resolve(process.cwd(), raw);
+  // v1.0 rev4: turbopackIgnore — resolveِ مسیر runtime؛ بدون آن کل پروژه trace
+  // می‌شد و standalone باد می‌کرد (فقط راهنمای ترسر، رفتار runtime تغییری نمی‌کند)
+  return path.isAbsolute(raw) ? raw : path.resolve(/*turbopackIgnore: true*/ process.cwd(), raw);
 }
 
 async function dbFileStats(): Promise<{ sizeBytes: number; integrity: string }> {
@@ -121,7 +123,7 @@ async function dbFileStats(): Promise<{ sizeBytes: number; integrity: string }> 
   let sizeBytes = 0;
   if (file) {
     try {
-      sizeBytes = (await fs.stat(file)).size;
+      sizeBytes = (await fs.stat(/*turbopackIgnore: true*/ file)).size;
     } catch {
       sizeBytes = 0;
     }

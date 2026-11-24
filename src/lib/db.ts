@@ -26,7 +26,10 @@ function resolveDbPath(): { dbPath: string; envParams: URLSearchParams } {
       const bare = qIdx === -1 ? raw : raw.slice(0, qIdx);
       const params = qIdx === -1 ? new URLSearchParams() : new URLSearchParams(raw.slice(qIdx + 1));
       // v1.0: مسیر نسبی نسبت به cwd نرمال می‌شود
-      const abs = path.isAbsolute(bare) ? bare : path.join(process.cwd(), bare);
+      // v1.0 rev4: turbopackIgnore — این فقط resolve مسیر runtime است (DATABASE_URL
+      // از env می‌آید)؛ بدون آن ترسر توربوپک کل ریشه‌ی پروژه را داخل standalone
+      // کپی می‌کرد (۱۸۱MB!). رفتار runtime ذره‌ای عوض نمی‌شود.
+      const abs = path.isAbsolute(bare) ? bare : path.join(/*turbopackIgnore: true*/ process.cwd(), bare);
       return { dbPath: abs, envParams: params };
     }
   }

@@ -25,15 +25,12 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-  // فایل‌های ضروری برای standalone build
-  // توجه: db/custom.db و .env به‌صورت خودکار کپی نمی‌شن — install.sh اون‌ها رو می‌سازه
-  outputFileTracingIncludes: {
-    // v1.1.2: "/**" به‌جای "/" — API routeها هم prisma schema را نیاز دارند
-    // v1.0 rev3 (audit DEPLOY-d CRITICAL): bcryptjs — فقط اسکریپت‌های نصب/ریست
-    // (seed_access_users.py، reset-admin-password.sh، smoke-rbac.sh) استفاده‌اش
-    // می‌کنند و در trace نمی‌آمد؛ بدون آن روی نصبِ تمیز seed ادمین fatal می‌شد
-    "/**": ["./prisma/schema.prisma", "./node_modules/bcryptjs/**"],
-  },
+  // v1.0 rev4 (باگ‌گیری بحرانی): block قبلی outputFileTracingIncludes با کلید
+  // "/**" در Next 16 باعث می‌شد کل ریشه‌ی پروژه (releases/، skills/، db/، src/،
+  // dockerها، حتی خودِ zip انتشار = ۱۸۱MB) داخل standalone کپی شود — و zip
+  // انتشار خودش را داخل خودش ببرد! نیازهای واقعی (schema.prisma + bcryptjs)
+  // توسط scripts/package-v1.1.sh به‌صورت صریح به پکیج اضافه می‌شوند؛ پس این
+  // block به‌کلی حذف شد تا standalone فقط خروجی trace شده باشد.
 };
 
 export default nextConfig;
