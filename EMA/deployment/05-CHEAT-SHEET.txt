@@ -1,0 +1,243 @@
+================================================================
+  CHEAT SHEET — Bara-ye Ehsan Morad (ehsanmorad.ir)
+  Version 1.0 rev5 — 1405-09-05
+================================================================
+
+Hameh farman-ha dar in file mokhtasar hastand. Bara-ye tozih-e mofassal
+be sanad-ha-ye Word (02, 03, 04) raje besheid.
+
+
+================================================================
+  QESMAT 1: NASB-E AVVALI (yek bar)
+================================================================
+
+# 1. Upload-e zip be VPS (az laptop):
+scp EMA/deployment/01-UPLOAD-ZIP/ehsan-site-v1.0-rev5-1405-09-05.zip \
+    root@31.70.76.10:/root/
+
+# 2. Dar VPS:
+ssh root@31.70.76.10
+mkdir -p /home/ehsan/personal-site-rev5
+cd /home/ehsan/personal-site-rev5
+unzip -q /root/ehsan-site-v1.0-rev5-1405-09-05.zip
+cd personal-site
+
+# 3. IP-e khareji-e khod ra peyda kon (az laptop, baa VPN):
+curl -s https://api.ipify.org && echo
+
+# 4. Run-e install.sh baa AI-bind va IP allowlist:
+sudo ./install.sh --ai-bind --ip-allowlist "203.0.113.42"
+# (IP ra avaz konid)
+
+# 5. Token-ha ra yad daashteh bashid (yek bar chap mishavand):
+sudo cat db/.maintenance-token.txt         # Read token
+sudo cat db/.maintenance-edit-token.txt    # Edit token
+sudo cat db/.maintenance-enc-key.txt       # Encryption key
+
+
+================================================================
+  QESMAT 2: TANZIM-E reCAPTCHA (yek bar, baed az nasb)
+================================================================
+
+# Dar .env server:
+RECAPTCHA_SECRET="<secret-key>"
+NEXT_PUBLIC_RECAPTCHA_SITEKEY="<site-key>"
+
+# Restart service:
+sudo systemctl restart personal-site
+
+
+================================================================
+  QESMAT 3: TEST-E KANAL-E MAINTENANCE
+================================================================
+
+# Az server:
+cd /home/ehsan/personal-site-rev5/personal-site
+bash scripts/maintenance.sh --ai-bind status
+
+# Az laptop (ba env variable-ha set shodeh):
+export MAINTENANCE_TOKEN="..."
+export MAINTENANCE_EDIT_TOKEN="..."
+export MAINTENANCE_ENC_KEY="..."
+export MAINTENANCE_URL="https://ehsanmorad.ir"
+bash scripts/maintenance.sh --ai-bind status
+
+
+================================================================
+  QESMAT 4: TAGHIR-E IP (agar IP-e AI taghir kard)
+================================================================
+
+# Dar server:
+cd /home/ehsan/personal-site-rev5/personal-site
+sudo ./install.sh --ip-allowlist "IP-E-JADID"
+# ya chand IP:
+sudo ./install.sh --ip-allowlist "IP1,IP2,IP3"
+# ya CIDR:
+sudo ./install.sh --ip-allowlist "203.0.113.0/24"
+
+
+================================================================
+  QESMAT 5: ACTION-HA-YE KHOOONDAN
+================================================================
+
+bash scripts/maintenance.sh --ai-bind status          # hal-e server
+bash scripts/maintenance.sh --ai-bind db-stats        # tedad-e records
+bash scripts/maintenance.sh --ai-bind security-logs   # 50 rokhad-e amniyati
+bash scripts/maintenance.sh --ai-bind messages        # 50 payam-e contact
+bash scripts/maintenance.sh --ai-bind chats           # chat-ha-ye faal
+bash scripts/maintenance.sh --ai-bind backup          # backup-e fori
+bash scripts/maintenance.sh --ai-bind texts.get       # hameh matn-ha
+bash scripts/maintenance.sh --ai-bind settings.get    # hameh settings
+bash scripts/maintenance.sh --ai-bind nav.get         # menu items
+bash scripts/maintenance.sh --ai-bind clips.get       # clip-ha-ye Aparat
+bash scripts/maintenance.sh --ai-bind equipment.get   # dastgah-ha
+bash scripts/maintenance.sh --ai-bind content.get     # books/articles/...
+bash scripts/maintenance.sh --ai-bind export-all      # snapshot-e kamel
+
+
+================================================================
+  QESMAT 6: ACTION-HA-YE VIRAYESH
+================================================================
+
+# Taghir-e matn:
+bash scripts/maintenance.sh --ai-bind texts.set --data '{
+  "key": "hero.greeting",
+  "valueFa": "Salam, man Ehsan Morad hastam",
+  "valueEn": "Hello, I am Ehsan Morad",
+  "valueDe": "Hallo, ich bin Ehsan Morad"
+}'
+
+# Taghir-e contact email:
+bash scripts/maintenance.sh --ai-bind settings.set --data '{
+  "key": "contact_email",
+  "value": "info@ehsanmorad.ir"
+}'
+
+# Ezafeh-e clip-e Aparat:
+bash scripts/maintenance.sh --ai-bind clip.add --data '{
+  "title": "Moqaddeme-ye Azmayeshgah",
+  "embedCode": "<iframe src=\"https://www.aparat.com/video/...\" ...></iframe>",
+  "category": "intro",
+  "visible": true
+}'
+
+# Ezafeh-e nav item:
+bash scripts/maintenance.sh --ai-bind nav.add --data '{
+  "labelFa": "Blog",
+  "labelEn": "Blog",
+  "labelDe": "Blog",
+  "href": "/blog",
+  "visible": true
+}'
+
+# Taghir-e visible-e yek clip:
+bash scripts/maintenance.sh --ai-bind clip.set-visible --data '{
+  "id": "<clip-id>",
+  "visible": false
+}'
+
+
+================================================================
+  QESMAT 7: SYNC BE GITHUB (baed az har taghir)
+================================================================
+
+# Yek farman: virayesh + sync-e khodkar:
+bash scripts/ai-edit-online.sh texts.set --data '{...}'
+
+# Ya faghat sync (bedoon-e virayesh):
+bash scripts/sync-server-to-github.sh
+
+
+================================================================
+  QESMAT 8: SYNC AZ GITHUB BE OFFLINE
+================================================================
+
+# Dar laptop (offline):
+cd /home/z/my-project
+bash AI/sync-from-github-to-offline.sh
+
+# Dry-run (bedoon-e apply):
+bash AI/sync-from-github-to-offline.sh --dry-run
+
+
+================================================================
+  QESMAT 9: KHATA-HA-YE MOMKEN
+================================================================
+
+403 Forbidden          → IP dar allowlist nist: curl ifconfig.me + install.sh --ip-allowlist
+401 Unauthorized       → TOKEN eshtebah: sudo cat db/.maintenance-token.txt
+403 edit_token_required → AI_BIND=1 vali EDIT_TOKEN nist: export MAINTENANCE_EDIT_TOKEN=...
+426 encryption_required → ENC_KEY nist: export MAINTENANCE_ENC_KEY=...
+503 maintenance_disabled → TOKEN kamtar az 32 char: sudo ./install.sh
+400 enc_stale_timestamp → saat-e client/server >5min: sudo systemctl restart systemd-timesyncd
+400 enc_replay_detected → haman request dobarh: script khod nonce mikonad
+429 rate_limit         → 60 req/5min: sabr kon
+502 Bad Gateway        → service run nist: sudo systemctl status personal-site
+
+
+================================================================
+  QESMAT 10: AGENT-E ARZONTAR (agar in AI gheymati shod)
+================================================================
+
+1. Yek agent-e arzontar entekhab kon (mesl-e Claude Haiku, GPT-4o-mini, GLM-4 Flash).
+2. In 5 chiz ra behesh bedeh:
+   - scripts/maintenance.sh (az GitHub: github.com/ldrcoir/ehsan-site)
+   - scripts/maintenance-enc.mjs
+   - MAINTENANCE_TOKEN (az server: sudo cat db/.maintenance-token.txt)
+   - MAINTENANCE_EDIT_TOKEN (az server: sudo cat db/.maintenance-edit-token.txt)
+   - MAINTENANCE_ENC_KEY (az server: sudo cat db/.maintenance-enc-key.txt)
+3. In system prompt ra behesh bedeh (az sanad-e 04 be-gir).
+4. IP-e mashin-e an ra be install.sh --ip-allowlist ezafeh kon.
+5. Test kon: bash scripts/maintenance.sh --ai-bind status
+
+
+================================================================
+  QESMAT 11: RESET-E PASSWORD-E ADMIN
+================================================================
+
+# Agar password-e admin ra faramoosh kardi:
+cd /home/ehsan/personal-site-rev5/personal-site
+sudo bash scripts/reset-admin-password.sh
+# Password-e jadid yek bar chap mishavad.
+
+
+================================================================
+  QESMAT 12: BACKUP-E KHODKAR
+================================================================
+
+# Cron nasb shodeh: /etc/cron.d/personal-site-backup
+# Har shab saat 3: auto-backup.sh run mishavad.
+# Output: backups/db_*.db.gz (7 version-e akhar negah midarad).
+
+# Backup-e fori:
+bash scripts/maintenance.sh --ai-bind backup
+
+
+================================================================
+  QESMAT 13: PUSH-E CODE BE GITHUB (bara-ye developer)
+================================================================
+
+# Dar laptop-e developer (ke GITHUB_TOKEN darad):
+cd /home/z/my-project
+bash AI/push-to-github.sh
+
+
+================================================================
+  QESMAT 14: TEST-E KAMEL (43 test)
+================================================================
+
+# Dar posheh-e project:
+cd /home/z/my-project
+bash AI/test-harness.sh
+# Bayad 43/43 sabz shavad.
+
+
+================================================================
+  SANAD-HA-YE WORD
+================================================================
+
+- 02-Rahnama-ye-Nasb.docx          → rahnama-ye mofassal-e nasb
+- 03-Rahnama-ye-Vasl-e-AI.docx     → rahnama-ye vasl-e AI
+- 04-Rahnama-ye-Agent-Arzontar.docx → rahnama-ye estefadeh az agent-e arzontar
+
+================================================================

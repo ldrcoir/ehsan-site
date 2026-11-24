@@ -1,8 +1,31 @@
 # PROJECT LOG — Personal Site (سایت شخصی)
 
-> این فایل تاریخچه‌ی پروژه است. برای راهنمای نصب به `VERSION.txt` و `TUTORIAL_FA_1.0.docx` مراجعه کن.
+> این فایل تاریخچه‌ی پروژه است. برای راهنمای نصب به `VERSION.txt` و `EMA/deployment/02-Rahnama-ye-Nasb.docx` مراجعه کن.
 
 ---
+
+## 📌 نسخه فعلی: v1.0 rev5 — 1405-09-05
+
+### v1.0 rev5 (2026-11-25 / 1405-09-05) — EMA/deployment/ pakejh-e nasb-e mofassal
+
+Ezafeh shodan-e yek pakejh-e nasb-e kamel-e mofassal dar `EMA/deployment/`:
+
+- **01-UPLOAD-ZIP/** — zip-e ke bayad be VPS upload shavad (ehsan-site-v1.0-rev5-1405-09-05.zip, 13.8MB)
+- **02-Rahnama-ye-Nasb.docx** — rahnama-ye mofassal-e nasb-e site (12 bakhsh, gham be gham)
+- **03-Rahnama-ye-Vasl-e-AI.docx** — rahnama-ye tanzim-e kanal-e maintenance (4 laayeheh amniyati)
+- **04-Rahnama-ye-Agent-Arzontar.docx** — rahnama-ye estefadeh az agent-e arzontar agar in AI gheymati shavad
+- **05-CHEAT-SHEET.txt** — hameh farman-ha dar yek file-e matni
+- **README.md** — mokhaddameh-e posheh
+
+Motekhases be dark-e ehteaj-e karbar bara-ye estefadeh az agent-e arzontar
+(agar gheymat-e in AI bish az 20 darsad-e budget shavad), yek system prompt-e
+aamad-e-khonneh dar sanad-e 04 gharar gereft. In system prompt har agent-e
+AI (Claude Haiku, GPT-4o-mini, GLM-4 Flash, ya hata Llama 3 local) ra
+qader mikonad az kanal-e maintenance estefadeh konad.
+
+---
+
+## 📌 Tarihcheh-e Qabl az rev5 (sabegheh-e tose-eh)
 
 ## 📌 نسخه فعلی: v1.0 — نسخه‌ی یک (خروجی نهایی)
 

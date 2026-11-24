@@ -105,6 +105,16 @@ __pycache__/
 !EMA/releases/
 !EMA/releases/*.zip
 
+# v1.0 rev5 — EMA/deployment/ sanad-ha-ye Word va zip-e nasb-e mofassal
+!EMA/deployment/
+!EMA/deployment/**
+!EMA/deployment/**/*.docx
+!EMA/deployment/**/*.zip
+!EMA/deployment/**/*.txt
+!EMA/deployment/**/*.md
+# PDFs are auto-generated from docx — do not commit
+EMA/deployment/**/*.pdf
+
 # v1.0 rev5 — GitHub token (never commit; 600 perms; user-provided for AI push)
 .gh-token
 .gh-token-*
