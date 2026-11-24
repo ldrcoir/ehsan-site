@@ -395,7 +395,7 @@ TELEGRAM_WEBHOOK_SECRET="$TG_SECRET"
 # v1.0: کانال نگهداری — فقط با این هدر: X-Maintenance-Token (ببین scripts/maintenance.sh)
 MAINTENANCE_TOKEN="$MAINT_TOKEN"
 # v1.0 (rev2): کانال ویرایش از دور — actionهای نوشتن هدر دوم لازم دارند:
-# X-Maintenance-Edit-Token (ببین scripts/maintenance.sh و scripts/sync-from-online.sh)
+# X-Maintenance-Edit-Token (ببین scripts/maintenance.sh و scripts/sync-server-to-github.sh)
 MAINTENANCE_EDIT_TOKEN="$EDIT_TOKEN"
 # v1.0 (rev3): کلید رمزنگاری کانال — پاکت AES-256-GCM (ببین src/lib/maintenance-crypto.ts)
 MAINTENANCE_ENC_KEY="$ENC_KEY"
@@ -868,7 +868,7 @@ if [ "${ENC_KEY_IS_NEW:-}" = "1" ]; then
     echo "  🔑 MAINTENANCE_ENC_KEY (یک بار نمایش — در .env هم ذخیره شد):"
     echo "     $ENC_KEY"
     echo "     ⚠️ کلید رمزنگاری کانال (AES-256-GCM) — کپی امن: sudo cat db/.maintenance-enc-key.txt"
-    echo "     با ست‌شدن این کلید، scripts/maintenance.sh و sync-from-online.sh خودکار رمز می‌کنند"
+    echo "     با ست‌شدن این کلید، scripts/maintenance.sh و sync-server-to-github.sh خودکار رمز می‌کنند"
     echo ""
 else
     echo "  🔑 MAINTENANCE_ENC_KEY: قبلاً ست شده — با 'sudo grep MAINTENANCE_ENC_KEY $PROJECT_ROOT/.env' ببین"
@@ -878,7 +878,8 @@ echo "  کانال ویرایش از دور (v1.0 rev3 — رمزنگاری‌ش
 echo "    export MAINTENANCE_URL=https://ehsanmorad.ir MAINTENANCE_TOKEN=... MAINTENANCE_EDIT_TOKEN=... MAINTENANCE_ENC_KEY=..."
 echo "    bash scripts/maintenance.sh texts.get        # خواندن متن‌ها (درخواست و پاسخ رمز می‌شوند)"
 echo "    bash scripts/maintenance.sh texts.set --data '{\"key\":\"hero.greeting\",\"valueFa\":\"سلام\"}'"
-echo "    bash scripts/sync-from-online.sh             # همگام‌سازی نسخه‌ی آفلاین با آنلاین"
+echo "    bash scripts/ai-edit-online.sh texts.set --data '{\"key\":\"hero.greeting\",\"valueFa\":\"سلام\"}'  # ویرایش + sync خودکار"
+echo "    bash scripts/sync-server-to-github.sh    # snapshot سرور به GitHub (شاخه‌ی server-state)"
 echo ""
 echo "  دستورات:"
 echo "    systemctl status personal-site"

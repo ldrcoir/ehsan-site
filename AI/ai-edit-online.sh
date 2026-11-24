@@ -48,6 +48,21 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_DIR"
 
+# v1.0 rev5 — maintenance.sh ممکن است در همان پوشه باشد (در zip: scripts/)
+# یا در پوشه‌ی کناری (در development: AI/ ولی maintenance.sh در scripts/)
+find_script() {
+    local name="$1"
+    if [ -f "$SCRIPT_DIR/$name" ]; then
+        echo "$SCRIPT_DIR/$name"
+    elif [ -f "$SCRIPT_DIR/../scripts/$name" ]; then
+        echo "$SCRIPT_DIR/../scripts/$name"
+    else
+        echo ""
+    fi
+}
+MAINT_SCRIPT=$(find_script "maintenance.sh")
+SYNC_SCRIPT=$(find_script "sync-server-to-github.sh")
+
 # flag --no-sync برای رد کردن مرحله‌ی sync (در صورت خرابی GitHub)
 NO_SYNC=0
 NEW_ARGS=()
@@ -98,7 +113,11 @@ echo "  action: $ACTION"
 echo "  server: ${MAINTENANCE_URL:-http://127.0.0.1:3000 (default)}"
 echo ""
 
-if ! bash "$SCRIPT_DIR/maintenance.sh" "$@"; then
+if [ -z "$MAINT_SCRIPT" ]; then
+    echo "❌ maintenance.sh پیدا نشد — نه در $SCRIPT_DIR/ و نه در $SCRIPT_DIR/../scripts/"
+    exit 1
+fi
+if ! bash "$MAINT_SCRIPT" "$@"; then
     echo ""
     echo "❌ ویرایش ناموفق بود — sync به GitHub انجام نشد"
     exit 1
@@ -113,15 +132,15 @@ fi
 
 echo ""
 echo "=== [2] sync snapshot جدید به GitHub ==="
-if [ ! -f "$SCRIPT_DIR/sync-server-to-github.sh" ]; then
+if [ -z "$SYNC_SCRIPT" ]; then
     echo "  ⚠️  sync-server-to-github.sh پیدا نشد — sync رد شد"
     exit 0
 fi
 
-if ! bash "$SCRIPT_DIR/sync-server-to-github.sh"; then
+if ! bash "$SYNC_SCRIPT"; then
     echo ""
     echo "⚠️  sync به GitHub ناموفق بود — ویرایش روی سرور اعمال شده ولی snapshot در GitHub نیست"
-    echo "    بعداً می‌توانی دستی اجرا کنی:  bash scripts/sync-server-to-github.sh"
+    echo "    بعداً می‌توانی دستی اجرا کنی:  bash $SYNC_SCRIPT"
     exit 2  # exit code 2 = ویرایش موفق، sync ناموفق
 fi
 

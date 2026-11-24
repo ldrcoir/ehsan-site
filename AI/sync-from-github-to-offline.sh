@@ -89,7 +89,17 @@ if [ ! -d "$PROJECT_DIR/node_modules/@prisma/client" ]; then
     (cd "$PROJECT_DIR" && npx prisma generate)
 fi
 
-node "$SCRIPT_DIR/apply-snapshot.mjs" "$SNAPSHOT_DIR/snapshot.json" $DRY_RUN
+# v1.0 rev5 — apply-snapshot.mjs ممکن است در همان پوشه باشد (در zip: scripts/)
+# یا در پوشه‌ی کناری (در development: AI/ ولی apply-snapshot.mjs در AI/)
+if [ -f "$SCRIPT_DIR/apply-snapshot.mjs" ]; then
+    APPLY_SCRIPT="$SCRIPT_DIR/apply-snapshot.mjs"
+elif [ -f "$SCRIPT_DIR/../AI/apply-snapshot.mjs" ]; then
+    APPLY_SCRIPT="$SCRIPT_DIR/../AI/apply-snapshot.mjs"
+else
+    echo "❌ apply-snapshot.mjs پیدا نشد"
+    exit 1
+fi
+node "$APPLY_SCRIPT" "$SNAPSHOT_DIR/snapshot.json" $DRY_RUN
 RESULT=$?
 
 if [ $RESULT -eq 0 ]; then

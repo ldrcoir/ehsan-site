@@ -18,7 +18,7 @@ mkdir -p "$T"
 cp -a "$ROOT/.next/standalone/." "$T/"
 mkdir -p "$T/db" "$T/scripts" "$T/backups"
 # اسکریپت‌های لازم
-cp "$ROOT/scripts/maintenance.sh" "$ROOT/scripts/maintenance-enc.mjs" "$ROOT/scripts/smoke-rbac.sh" "$ROOT/scripts/sync-from-online.sh" "$ROOT/scripts/sync-server-to-github.sh" "$ROOT/scripts/ai-edit-online.sh" "$T/scripts/"
+cp "$ROOT/scripts/maintenance.sh" "$ROOT/scripts/maintenance-enc.mjs" "$ROOT/AI/sync-server-to-github.sh" "$ROOT/AI/ai-edit-online.sh" "$ROOT/AI/sync-from-github-to-offline.sh" "$ROOT/AI/apply-snapshot.mjs" "$ROOT/AI/smoke-rbac.sh" "$T/scripts/"
 chmod +x "$T"/scripts/*.sh
 # v1.0 rev3: bcryptjs — در standalone trace نمی‌آید (فقط اسکریپت‌ها استفاده می‌کنند)
 # بدون آن reset/seed رمز ادمین در تست fatal می‌شود
@@ -239,8 +239,14 @@ bash -n scripts/sync-server-to-github.sh && echo "  ✅ sync-server-to-github.sh
 echo "--- 5h) ai-edit-online.sh syntax check ---"
 bash -n scripts/ai-edit-online.sh && echo "  ✅ ai-edit-online.sh syntax ok" || echo "  ❌ syntax خطا"
 
+echo "--- 5i) sync-from-github-to-offline.sh syntax check ---"
+bash -n scripts/sync-from-github-to-offline.sh && echo "  ✅ sync-from-github-to-offline.sh syntax ok" || echo "  ❌ syntax خطا"
+
+echo "--- 5j) apply-snapshot.mjs syntax check ---"
+node -c scripts/apply-snapshot.mjs && echo "  ✅ apply-snapshot.mjs syntax ok" || echo "  ❌ syntax خطا"
+
 echo ""
 echo "=== نتیجه ==="
 echo "تست کامل شد — لاگ سرور: $T/server.log"
 echo "  rev3 کانال رمز: 4a/4b/4c/4d/4e"
-echo "  rev5 AI-bind + IP allowlist: 5a/5b/5c/5d/5e/5f/5g/5h"
+echo "  rev5 AI-bind + IP allowlist: 5a/5b/5c/5d/5e/5f/5g/5h/5i/5j"

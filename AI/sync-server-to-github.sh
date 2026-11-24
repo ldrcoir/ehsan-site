@@ -30,6 +30,17 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_DIR"
 
+# v1.0 rev5 — maintenance.sh ممکن است در همان پوشه باشد (در zip: scripts/)
+# یا در پوشه‌ی کناری (در development: AI/ ولی maintenance.sh در scripts/)
+if [ -f "$SCRIPT_DIR/maintenance.sh" ]; then
+    MAINT_SCRIPT="$SCRIPT_DIR/maintenance.sh"
+elif [ -f "$SCRIPT_DIR/../scripts/maintenance.sh" ]; then
+    MAINT_SCRIPT="$SCRIPT_DIR/../scripts/maintenance.sh"
+else
+    echo "❌ maintenance.sh پیدا نشد"
+    exit 1
+fi
+
 # --- پیکربندی ---------------------------------------------------------------
 REPO_URL_DEFAULT="github.com/ldrcoir/ehsan-site"
 BRANCH_DEFAULT="server-state"
@@ -65,7 +76,7 @@ echo "=== [1] گرفتن snapshot از کانال نگهداری ==="
 TMP_OUT=$(mktemp /tmp/sync-snapshot.XXXXXX.json)
 trap 'rm -f "$TMP_OUT"' EXIT
 
-if ! bash "$SCRIPT_DIR/maintenance.sh" export-all > "$TMP_OUT" 2>&1; then
+if ! bash "$MAINT_SCRIPT" export-all > "$TMP_OUT" 2>&1; then
     echo "❌ export-all ناموفق بود:"
     cat "$TMP_OUT" | head -20
     exit 1

@@ -40,9 +40,19 @@ esac
 mkdir -p "$(dirname "$OUT")"
 MAX_BYTES=$((25 * 1024 * 1024))   # 25MB سقف پکیج
 
-SCRIPTS_KEEP="apply_schema.py seed_access_users.py seed_content.py seed_equipment.py seed_texts.py reset-admin-password.sh auto-backup.sh export-site.sh import-site.sh restore-db.sh maintenance.sh maintenance-enc.mjs sync-from-online.sh apply-online-export.mjs push-to-github.sh sync-server-to-github.sh ai-edit-online.sh sync-from-github-to-offline.sh apply-snapshot.mjs"
+# v1.0 rev5 — repo reorganized:
+#   scripts/ = scripts used by installer/server (maintenance, sync, seed, etc.)
+#   AI/     = AI development scripts (packaging, testing, push-to-github) — NOT shipped
+#   EMA/    = user-facing docs (VERSION.txt, AUDIT, PROJECT_LOG, deployment guide)
+#
+# SCRIPTS_SHIP = scripts that go INTO the install zip (server-side runtime scripts)
+# AI_SHIP = AI scripts that go INTO the install zip (sync + ai-edit for online editing)
+SCRIPTS_SHIP="apply_schema.py seed_access_users.py seed_content.py seed_equipment.py seed_texts.py reset-admin-password.sh auto-backup.sh export-site.sh import-site.sh restore-db.sh maintenance.sh maintenance-enc.mjs"
+AI_SHIP="sync-server-to-github.sh ai-edit-online.sh sync-from-github-to-offline.sh apply-snapshot.mjs"
 # v1.1: list_messages.py حذف شد — ابزار dump مستقیم DB بود و دلیلی برای ارسال به نصب‌کننده نداشت
-# v1.1.2: آموزش از dist/ هم پیدا می‌شود (از public/ خارج شد تا build لاغر بماند)
+# v1.0 rev5: sync-from-online.sh + apply-online-export.mjs حذف شدند (superseded by
+#   sync-from-github-to-offline.sh + apply-snapshot.mjs). package-v1.sh/package-dated.sh
+#   حذف شدند (superseded by this single package-v1.1.sh with RELEASE_OUT override).
 PUBLIC_KEEP="icon-192.png icon-512.png favicon.ico manifest.json robots.txt"
 
 echo "=========================================="
@@ -119,9 +129,9 @@ for f in download/TUTORIAL_FA_v1.docx download/AUDIT-REPORT-FA_v1.docx; do
     if [ -f "$PROJECT_DIR/$f" ]; then cp "$PROJECT_DIR/$f" "$STAGE/docs/"; else echo "  ⚠ $f نیست — docs ناقص می‌ماند"; fi
 done
 
-# scripts — فقط زیرمجموعه‌ی allow-list (بدون ابزارهای dev)
+# v1.0 rev5 — scripts from scripts/ (server runtime) + AI/ (sync + edit)
 mkdir -p "$STAGE/scripts"
-for s in $SCRIPTS_KEEP; do
+for s in $SCRIPTS_SHIP; do
     if [ -f "$PROJECT_DIR/scripts/$s" ]; then
         cp "$PROJECT_DIR/scripts/$s" "$STAGE/scripts/$s"
         chmod +x "$STAGE/scripts/$s"
@@ -129,11 +139,25 @@ for s in $SCRIPTS_KEEP; do
         echo "  ⚠ scripts/$s تو پروژه نیست — بدون همین میریم"
     fi
 done
+for s in $AI_SHIP; do
+    if [ -f "$PROJECT_DIR/AI/$s" ]; then
+        # در zip، اسکریپت‌های AI هم داخل scripts/ می‌روند تا installer پیدایشان کند
+        cp "$PROJECT_DIR/AI/$s" "$STAGE/scripts/$s"
+        chmod +x "$STAGE/scripts/$s"
+    else
+        echo "  ⚠ AI/$s تو پروژه نیست — بدون همین میریم"
+    fi
+done
 
 # فایلهای ریشه
 mkdir -p "$STAGE/prisma"
 cp "$PROJECT_DIR/prisma/schema.prisma" "$STAGE/prisma/schema.prisma"
-cp "$PROJECT_DIR/VERSION.txt" "$STAGE/VERSION.txt"
+# v1.0 rev5: VERSION.txt حالا در EMA/ است
+if [ -f "$PROJECT_DIR/EMA/VERSION.txt" ]; then
+    cp "$PROJECT_DIR/EMA/VERSION.txt" "$STAGE/VERSION.txt"
+elif [ -f "$PROJECT_DIR/VERSION.txt" ]; then
+    cp "$PROJECT_DIR/VERSION.txt" "$STAGE/VERSION.txt"
+fi
 cp "$PROJECT_DIR/package.json" "$STAGE/package.json"
 cp "$PROJECT_DIR/install.sh" "$STAGE/install.sh"
 chmod +x "$STAGE/install.sh"
