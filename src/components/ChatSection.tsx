@@ -98,6 +98,12 @@ export default function ChatSection({ lang, welcomeText, title, subtitle, callsi
       try {
         const res = await fetch(`/api/chat/messages?sessionId=${sessionId}&since=${lastPollTsRef.current}&visitorId=${encodeURIComponent(visitorId)}`, { signal: controller.signal });
         const data = await res.json();
+        // v1.0 rev3 (audit BUG-c MEDIUM): ساعتِ مرجع بی‌قیدوشرط از سرور گرفته می‌شود —
+        // قبلاً فقط وقتی پیام تازه بود serverTime پذیرفته می‌شد؛ اگر ساعت کلاینت
+        // جلوتر از سرور بود، پاسخ‌های داخل پنجره‌ی skew برای همیشه فیلتر می‌شدند
+        if (data.ok && typeof data.serverTime === "number") {
+          lastPollTsRef.current = data.serverTime;
+        }
         if (data.ok && data.messages && data.messages.length > 0) {
           setMessages((prev) => {
             // فقط پیام‌هایی که قبلاً دیده نشده‌اند (assistant های جدید)
@@ -114,7 +120,6 @@ export default function ChatSection({ lang, welcomeText, title, subtitle, callsi
             }));
             return [...prev, ...newMsgs];
           });
-          lastPollTsRef.current = data.serverTime || lastPollTsRef.current;
         }
       } catch {
         // abort یا شبکه — بی‌صدا؛ tick بعدی دوباره تلاش می‌کند
@@ -152,7 +157,6 @@ export default function ChatSection({ lang, welcomeText, title, subtitle, callsi
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.ok) {
         setSessionId(data.sessionId);
-        let appended = false;
         setMessages((prev) => {
           // FIX-2: poll (GET /api/chat/messages) با POST مسابقه دارد — اگر همین reply
           // (با id یکسان یا محتوای یکسان) از قبل در state هست، append نکن تا حباب تکراری نیاید.
@@ -161,7 +165,6 @@ export default function ChatSection({ lang, welcomeText, title, subtitle, callsi
           const duplicateContent =
             prev.some((m) => m.role === "assistant" && m.content === data.reply);
           if (alreadySeen || duplicateContent) return prev;
-          appended = true;
           return [
             ...prev,
             { role: "assistant" as const, content: data.reply, ts: Date.now() },
@@ -170,7 +173,8 @@ export default function ChatSection({ lang, welcomeText, title, subtitle, callsi
         // v1.1.1 (audit Q1): این پاسخ AI را از dedupe poll مستثنا کن — id آن را
         // در Set ببین‌ها ثبت می‌کنیم تا poll بعدی همان را تکرار نکند
         if (data.messageId) seenMsgIdsRef.current.add(data.messageId);
-        if (appended) lastPollTsRef.current = Date.now();
+        // v1.0 rev3 (audit BUG-c MEDIUM): reset با ساعت کلاینت حذف شد — send() دیگر
+        // پنجره‌ی since را با Date.now() کلاینت نمی‌بندد؛ poll بعدی از serverTime ادامه می‌دهد
       } else {
         const err = data.error || "server_error";
         const msg =

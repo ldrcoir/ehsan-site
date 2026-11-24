@@ -22,6 +22,18 @@ if (typeof setInterval !== "undefined") {
       if (fresh.length === 0) hits.delete(k);
       else hits.set(k, fresh);
     }
+    // v1.0 rev3 (audit SEC-a LOW): سقف سخت اندازه‌ی map — هم‌مثل middleware؛
+    // بین دو sweep هم map نمی‌تواند بی‌رویه رشد کند
+    while (hits.size >= 10000) {
+      const oldest = hits.keys().next().value;
+      if (oldest === undefined) break;
+      hits.delete(oldest);
+    }
+    while (chatDailyUsage.size >= 10000) {
+      const oldest = chatDailyUsage.keys().next().value;
+      if (oldest === undefined) break;
+      chatDailyUsage.delete(oldest);
+    }
   }, 5 * 60 * 1000).unref?.();
 }
 

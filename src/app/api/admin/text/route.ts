@@ -32,9 +32,13 @@ export async function GET(req: Request) {
     }
 
     // Admin — return all languages
+    // v1.0 rev3 (audit SEC-a LOW): خواندن هم هم‌تراز با نوشتن محدود شد —
+    // کاربر limited با تب «متن‌ها» نباید ai.* (system prompt چت) را بخواند
+    const isAdminRead = isElevated(authCheck.role);
     const texts = await db.siteText.findMany();
     const result: Record<string, { en: string; fa: string; de: string }> = {};
     for (const t of texts) {
+      if (!isAdminRead && isAiAdminOnlyKey(t.key)) continue;
       result[t.key] = { en: t.valueEn, fa: t.valueFa, de: t.valueDe };
     }
     return NextResponse.json({ ok: true, texts: result });

@@ -262,6 +262,23 @@ else
     EDIT_TOKEN_IS_NEW="1"
 fi
 
+# v1.0 (rev3): MAINTENANCE_ENC_KEY — کلید رمزنگاری کانال نگهداری (AES-256-GCM).
+# درخواست و پاسخ هر دو رمز می‌شوند؛ داخل پاکت ts (±۵ دقیقه) و nonce یک‌بارمصرف
+# هست (ضد replay). سرور وقتی این کلید هست، درخواست متنیِ خام را با 426 رد می‌کند.
+if [ -f .env ] && grep -q "^MAINTENANCE_ENC_KEY=" .env; then
+    ENC_KEY=$(grep "^MAINTENANCE_ENC_KEY=" .env | cut -d'=' -f2- | tr -d '"')
+    if ! echo "$ENC_KEY" | grep -qE '^[0-9a-fA-F]{64}$'; then
+        ENC_KEY=$(openssl rand -hex 32)
+        ENC_KEY_IS_NEW="1"
+        echo "  ✅ MAINTENANCE_ENC_KEY قبلی نامعتبر بود — جدید تولید شد"
+    else
+        echo "  ✅ MAINTENANCE_ENC_KEY موجود نگه داشته شد"
+    fi
+else
+    ENC_KEY=$(openssl rand -hex 32)
+    ENC_KEY_IS_NEW="1"
+fi
+
 mkdir -p db
 chmod 700 db
 
@@ -308,6 +325,8 @@ MAINTENANCE_TOKEN="$MAINT_TOKEN"
 # v1.0 (rev2): کانال ویرایش از دور — actionهای نوشتن هدر دوم لازم دارند:
 # X-Maintenance-Edit-Token (ببین scripts/maintenance.sh و scripts/sync-from-online.sh)
 MAINTENANCE_EDIT_TOKEN="$EDIT_TOKEN"
+# v1.0 (rev3): کلید رمزنگاری کانال — پاکت AES-256-GCM (ببین src/lib/maintenance-crypto.ts)
+MAINTENANCE_ENC_KEY="$ENC_KEY"
 # v1.1.2: سایت پشت nginx محلی است — app فقط وقتی TRUST_PROXY=true است به
 # X-Forwarded-For اعتماد می‌کند (rate limit بر اساس IP واقعی کاربر)
 # v1.0 (audit W36-40 #1 — HIGH): مقدار حفظ‌شده از .env قبلی نوشته می‌شود، نه همیشه "true" —
@@ -329,6 +348,8 @@ echo "$MAINT_TOKEN" > "$PROJECT_ROOT/db/.maintenance-token.txt"
 chmod 600 "$PROJECT_ROOT/db/.maintenance-token.txt"
 echo "$EDIT_TOKEN" > "$PROJECT_ROOT/db/.maintenance-edit-token.txt"
 chmod 600 "$PROJECT_ROOT/db/.maintenance-edit-token.txt"
+echo "$ENC_KEY" > "$PROJECT_ROOT/db/.maintenance-enc-key.txt"
+chmod 600 "$PROJECT_ROOT/db/.maintenance-enc-key.txt"
 if [ "${MAINT_TOKEN_IS_NEW:-}" = "1" ]; then
     echo "  ✅ MAINTENANCE_TOKEN تولید شد (در انتهای نصب یک بار چاپ می‌شود)"
 fi
@@ -472,6 +493,15 @@ elif [ -d .next/standalone ]; then
     # در قدم ۸ ست می‌شوند (کاربر ehsansite آنجا ساخته می‌شود) وگرنه سرویس نمی‌توانست
     # دیتابیس را باز کند.
     echo "  ✅ آماده شد"
+else
+    # v1.0 rev3 (audit DEPLOY-d CRITICAL): پکیج فقط-سورس → server.js وجود ندارد →
+    # قبلاً نصب ادامه می‌یافت و systemd unit روی فایل ناموجود crash-loop می‌کرد
+    # و seed ادمین هم (بدون node_modules) fatal می‌شد. حالا fail-fast با پیام شفاف:
+    echo "  ❌ FATAL: نه server.js هست نه .next/standalone — این zip فقط-سورس است!"
+    echo "     install.sh به بیلدِ pre-built نیاز دارد (standalone)."
+    echo "     ✔ zip رسمی «ehsan-site-v1.0-<تاریخ شمسی>.zip» را دانلود کن (شامل standalone است)"
+    echo "     ✔ یا خودت اول: npm install && npm run build  و بعد دوباره install.sh"
+    exit 1
 fi
 
 # ============================================================================
@@ -591,9 +621,20 @@ echo "[10/11] Nginx..."
 # v1.0 (audit W46-50 #1 — HIGH): مسیر مطلق — در شاخه‌ی standalone، cd به
 # .next/standalone انجام شده بود و cp نسبی فایل conf را پیدا نمی‌کرد و کل نصب
 # بعد از تمام شدن کارهای سنگین abort می‌شد
-if ! cp "$PROJECT_ROOT/nginx-ehsanmorad.conf" /etc/nginx/sites-available/nginx-ehsanmorad.conf; then
-    echo "  ❌ کپی nginx config ناموفق بود — فایل nginx-ehsanmorad.conf کنار install.sh هست؟"
-    exit 1
+echo "" 
+echo "[10/11] Nginx..."
+# v1.0 rev3 (audit DEPLOY-d MEDIUM): اگر کانفیگِ نصب‌شده از قبل TLS دارد (certbot
+# بلوک‌های 443/redirect را داخل همان فایل می‌نویسد)، بازنویسی با نسخه‌ی HTTP-only
+# ریپو «HTTPS فعال» را بی‌صدا می‌شکست — پس کانفیگ TLS-دار دست‌نخورده می‌ماند.
+INSTALLED_NGINX_CONF=/etc/nginx/sites-available/nginx-ehsanmorad.conf
+if [ -f "$INSTALLED_NGINX_CONF" ] && grep -qE 'ssl_certificate|443 ssl' "$INSTALLED_NGINX_CONF"; then
+    echo "  ⏭ کانفیگ nginx نصب‌شده TLS/certbot-managed است — بازنویسی نشد"
+    echo "    (برای اعمال نسخه‌ی جدید: اول بک‌آپ بگیر و بلوک‌های TLS را دستی منتقل کن)"
+else
+    if ! cp "$PROJECT_ROOT/nginx-ehsanmorad.conf" "$INSTALLED_NGINX_CONF"; then
+        echo "  ❌ کپی nginx config ناموفق بود — فایل nginx-ehsanmorad.conf کنار install.sh هست؟"
+        exit 1
+    fi
 fi
 ln -sf /etc/nginx/sites-available/nginx-ehsanmorad.conf /etc/nginx/sites-enabled/nginx-ehsanmorad.conf 2>/dev/null || true
 # v1.0 (audit W36-40 #11): symlink بی‌صدا نباید فرض شود — در چیدمان‌های بدون sites-enabled،
@@ -744,9 +785,19 @@ else
     echo "  🔑 MAINTENANCE_EDIT_TOKEN: قبلاً ست شده — با 'sudo grep MAINTENANCE_EDIT_TOKEN $PROJECT_ROOT/.env' ببین"
     echo ""
 fi
-echo "  کانال ویرایش از دور (v1.0 rev2):"
-echo "    export MAINTENANCE_URL=https://ehsanmorad.ir MAINTENANCE_TOKEN=... MAINTENANCE_EDIT_TOKEN=..."
-echo "    bash scripts/maintenance.sh texts.get        # خواندن متن‌ها"
+if [ "${ENC_KEY_IS_NEW:-}" = "1" ]; then
+    echo "  🔑 MAINTENANCE_ENC_KEY (یک بار نمایش — در .env هم ذخیره شد):"
+    echo "     $ENC_KEY"
+    echo "     ⚠️ کلید رمزنگاری کانال (AES-256-GCM) — کپی امن: sudo cat db/.maintenance-enc-key.txt"
+    echo "     با ست‌شدن این کلید، scripts/maintenance.sh و sync-from-online.sh خودکار رمز می‌کنند"
+    echo ""
+else
+    echo "  🔑 MAINTENANCE_ENC_KEY: قبلاً ست شده — با 'sudo grep MAINTENANCE_ENC_KEY $PROJECT_ROOT/.env' ببین"
+    echo ""
+fi
+echo "  کانال ویرایش از دور (v1.0 rev3 — رمزنگاری‌شده با AES-256-GCM):"
+echo "    export MAINTENANCE_URL=https://ehsanmorad.ir MAINTENANCE_TOKEN=... MAINTENANCE_EDIT_TOKEN=... MAINTENANCE_ENC_KEY=..."
+echo "    bash scripts/maintenance.sh texts.get        # خواندن متن‌ها (درخواست و پاسخ رمز می‌شوند)"
 echo "    bash scripts/maintenance.sh texts.set --data '{\"key\":\"hero.greeting\",\"valueFa\":\"سلام\"}'"
 echo "    bash scripts/sync-from-online.sh             # همگام‌سازی نسخه‌ی آفلاین با آنلاین"
 echo ""

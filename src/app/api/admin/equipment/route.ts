@@ -138,6 +138,8 @@ export async function POST(req: Request) {
         let failed = 0;
         const errors: string[] = [];
         for (const item of items) {
+          // v1.0 rev3: نام برای پیام خطای generic — خارج از try تا در catch هم در دسترس باشد
+          const rowName = String(item?.name || "?").slice(0, 40);
           try {
             // V17.6: فیلدها مطابق schema.prisma (LabEquipment مدل)
             const data: any = {
@@ -155,13 +157,15 @@ export async function POST(req: Request) {
             } else if (item.specs && typeof item.specs === "string") {
               // اعتبارسنجی JSON
               try { JSON.parse(item.specs); data.specs = item.specs; }
-              catch { failed++; errors.push(`invalid specs JSON for ${data.name}`); continue; }
+              catch { failed++; errors.push(`invalid specs JSON for ${rowName}`); continue; }
             }
             await db.labEquipment.create({ data });
             created++;
           } catch (e: any) {
             failed++;
-            errors.push(e?.message || "unknown");
+            // v1.0 rev3 (audit SEC-a LOW): پیام generic — e.message خام پرisma
+            // می‌تواند نام ستون/مدل داخلی را لو بدهد (هم‌مثل admin/content)
+            errors.push(`row invalid: ${rowName}`);
           }
         }
         return NextResponse.json({ ok: true, created, failed, total: items.length, errors: errors.slice(0, 10) });

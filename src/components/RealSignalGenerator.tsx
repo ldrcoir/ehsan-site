@@ -111,6 +111,12 @@ export default function RealSignalGenerator({
     ro.observe(canvas);
 
     let t = 0;
+    // v1.0 rev3 (audit BUG-c MEDIUM): import واترمارک از حلقه‌ی RAF بیرون کشیده شد
+    let watermark: ((ctx: CanvasRenderingContext2D, w: number, h: number) => void) | null = null;
+    import("@/lib/canvas-protect")
+      .then(m => { watermark = m.watermarkCanvas; })
+      .catch(() => {}); // v1.1.1 (Q3)
+
     const draw = (now: number) => {
       rafRef.current = requestAnimationFrame(draw);
 
@@ -228,9 +234,8 @@ export default function RealSignalGenerator({
       ctx.fillText(outputOn ? "● OUTPUT" : "○ OFF", w - 60, 12);
 
       // === ANTI-COPY PROTECTION ===
-      import("@/lib/canvas-protect").then(({ watermarkCanvas }) => {
-        watermarkCanvas(ctx, w, h);
-      }).catch(() => {}); // v1.1.1 (Q3)
+      // v1.0 rev3: هم‌گام — ماژول از قبل لود شده (قبلاً هر فریم promise می‌ساخت)
+      watermark?.(ctx, w, h);
     };
 
     if (!reduce) {

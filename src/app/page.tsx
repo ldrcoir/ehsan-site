@@ -510,9 +510,34 @@ export default function Home() {
     }
 
     // Verify reCAPTCHA
-    const recaptchaResponse = (window as any).grecaptcha?.getResponse();
+    // v1.0 rev3 (audit BUG-c MEDIUM): getResponse بدون گارد بود — اگر اسکریپت لود
+    // شده ولی ویجت رندر نشده باشد (sitekey خالی) throw می‌کرد و submitting برای
+    // همیشه true می‌ماند (دکمه قفل ابدی). حالا گارد شده و خطا درست نمایش داده می‌شود.
+    let recaptchaResponse = "";
+    try {
+      recaptchaResponse = (window as any).grecaptcha?.getResponse?.() || "";
+    } catch {
+      recaptchaResponse = "";
+    }
     if (!recaptchaResponse) {
       setFormStatus({ text: lang === "fa" ? "لطفاً تأیید ربات را انجام دهید." : "Please complete the robot check.", kind: "error" });
+      setSubmitting(false);
+      return;
+    }
+
+    // v1.0 rev3 (audit BUG-c LOW): time-trap سمت کلاینت هم چک می‌شود — قبلاً اگر
+    // فرم خیلی سریع (autofill) فرستاده می‌شد، سرور پیام را بی‌صدا دور می‌ریخت ولی
+    // UI «موفق» نشان می‌داد؛ حالا قبل از ارسال رد می‌شود و کاربر پیام واقعی می‌بیند
+    const elapsedMs = Date.now() - (formLoadTime || Date.now());
+    if (formLoadTime > 0 && elapsedMs < 2000) {
+      setFormStatus({
+        text: lang === "fa"
+          ? "لطفاً چند لحظه صبر کنید و دوباره بفرستید."
+          : lang === "de"
+          ? "Bitte warten Sie einen Moment und senden Sie erneut."
+          : "Please wait a moment and send again.",
+        kind: "error",
+      });
       setSubmitting(false);
       return;
     }
@@ -529,7 +554,8 @@ export default function Home() {
           // honeypot — فیلد مخفی که بات‌ها پر می‌کنن (انسان‌ها نباید)
           website: (e.target as HTMLFormElement).website?.value || "",
           // time-trap — زمان نمایش فرم (اگه زیر ۲ ثانیه submit شد، باته)
-          _t: (e.target as HTMLFormElement)._t?.value || Date.now(),
+          // v1.0 rev3: مقدار state مستقیم — خواندن DOM در لحظه‌ی submit می‌توانست "0" بدهد
+          _t: formLoadTime || Date.now(),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -594,7 +620,8 @@ export default function Home() {
                 cursor: "pointer",
               }}
             >
-              بستن
+            {/* v1.0 rev3 (audit BUG-c LOW): «بستن» چندزبانه شد — برای en/de هم فارسی بود */}
+            {tx("tutorials.close", tt.tutorials.close)}
             </button>
           </div>
         </div>

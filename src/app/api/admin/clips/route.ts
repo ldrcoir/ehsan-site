@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
 
     const clips = await db.aparatClip.findMany({
       orderBy: { order: "asc" },
+      take: 200, // v1.0 rev3 (audit SEC-a LOW): هم‌مثل بقیه‌ی لیست‌ها
     });
 
     return NextResponse.json({ ok: true, clips });

@@ -46,6 +46,12 @@ export default function LabDeviceVisualizer({ category, specs }: Props) {
       data = new Array(80).fill(0).map(() => Math.random() * 0.3 + 0.1);
     }
 
+    // v1.0 rev3 (audit BUG-c MEDIUM): import واترمارک از حلقه‌ی RAF بیرون کشیده شد
+    let watermark: ((ctx: CanvasRenderingContext2D, w: number, h: number) => void) | null = null;
+    import("@/lib/canvas-protect")
+      .then(m => { watermark = m.watermarkCanvas; })
+      .catch(() => {}); // v1.1.1 (Q3)
+
     const draw = (now: number) => {
       rafRef.current = requestAnimationFrame(draw);
       const dt = lastTime === 0 ? 0.016 : (now - lastTime) / 1000;
@@ -404,9 +410,8 @@ export default function LabDeviceVisualizer({ category, specs }: Props) {
       }
 
       // === ANTI-COPY PROTECTION ===
-      import("@/lib/canvas-protect").then(({ watermarkCanvas }) => {
-        watermarkCanvas(ctx, w, h);
-      }).catch(() => {}); // v1.1.1 (Q3)
+      // v1.0 rev3: هم‌گام — ماژول از قبل لود شده (قبلاً هر فریم promise می‌ساخت)
+      watermark?.(ctx, w, h);
     };
 
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;

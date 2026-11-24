@@ -233,6 +233,9 @@ export default function ChatSessionsPanel({ lang }: { lang: Lang }) {
       if (data && data.ok) {
         if (selectedRef.current === sessionId) setSelectedId(null);
         setError("");
+        // v1.0 rev3 (audit PANEL-b A3): بازخورد موفقیت — برچسب t.deleted از قبل
+        // تعریف شده بود ولی هیچ‌جا استفاده نمی‌شد
+        setNotice(t.deleted);
         await loadSessions(true);
       } else {
         setError((data && data.error) || t.deleteFailed);
@@ -310,6 +313,8 @@ export default function ChatSessionsPanel({ lang }: { lang: Lang }) {
       const data = await res.json().catch(() => null);
       if (data && data.ok) {
         setError("");
+        // v1.0 rev3 (audit PANEL-b A3): بازخورد موفقیت
+        setNotice(t.deleted);
         await loadSessions(true);
       } else {
         setError(`${t.deleteFailed}: ${(data && data.error) || "unknown"}`);

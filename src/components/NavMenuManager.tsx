@@ -171,7 +171,7 @@ export default function NavMenuManager({ lang }: { lang: string }) {
               {item.visible ? "● " : "○ "}{item.labelEn || item.labelFa}
             </span>
             <span style={{ color: "var(--text-dim)", fontSize: "0.72rem", marginLeft: 8 }}>
-              {item.href} {item.target === "_blank" ? "(new tab)" : ""}
+              <span dir="ltr">{item.href}</span> {item.target === "_blank" ? "(new tab)" : ""}
             </span>
           </div>
           <div style={{ display: "flex", gap: 4 }}>

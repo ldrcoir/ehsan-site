@@ -21,6 +21,12 @@
 # توکن و آدرس از همین ترتیب خوانده می‌شود:
 #   1. متغیر محیطی  MAINTENANCE_TOKEN (و MAINTENANCE_EDIT_TOKEN) و MAINTENANCE_URL
 #   2. فایل .env همین پوشه (MAINTENANCE_TOKEN=...) و NEXT_PUBLIC_SITE_URL
+#   3. فایل‌های 600 کنار دیتابیس: db/.maintenance-token.txt / .maintenance-edit-token.txt
+#
+# v1.0 rev3 — رمزنگاری: اگر MAINTENANCE_ENC_KEY ست باشد (env / .env /
+#   db/.maintenance-enc-key.txt)، بدنه با AES-256-GCM رمز می‌شود
+#   (scripts/maintenance-enc.mjs) و پاسخ رمزشده هم خودکار باز می‌شود.
+#   سرور وقتی کلید دارد، درخواست متنیِ خام را با 426 رد می‌کند.
 #
 # مثال روی سرور (بعد از نصب):
 #   cd /home/ehsan/personal-site
@@ -51,6 +57,10 @@ if [ -z "$TOKEN" ] && [ -f "$ENV_FILE" ]; then
     TOKEN=$(grep -E '^MAINTENANCE_TOKEN=' "$ENV_FILE" | head -1 \
         | sed -e 's/^MAINTENANCE_TOKEN=//' -e 's/\r$//' -e "s/[\"']//g" -e 's/[[:space:]]*#.*//' -e 's/[[:space:]]*$//')
 fi
+if [ -z "$TOKEN" ] && [ -f "$SCRIPT_DIR/../db/.maintenance-token.txt" ]; then
+    # v1.0 rev3 (audit DEPLOY-d LOW): fallback فایل برای توکن اصلی — مثل توکن ویرایش
+    TOKEN=$(cat "$SCRIPT_DIR/../db/.maintenance-token.txt" | head -1 | tr -d '\r\n')
+fi
 if [ -z "$TOKEN" ]; then
     echo "❌ MAINTENANCE_TOKEN پیدا نشد."
     echo "   یا متغیر محیطی ست کن:  export MAINTENANCE_TOKEN=<token>"
@@ -67,6 +77,15 @@ fi
 # اگر توکن ویرایش در .env نبود ولی فایل 600 کنار دیتابیس بود، از همان بخوان
 if [ -z "$EDIT_TOKEN" ] && [ -f "$SCRIPT_DIR/../db/.maintenance-edit-token.txt" ]; then
     EDIT_TOKEN=$(cat "$SCRIPT_DIR/../db/.maintenance-edit-token.txt" | head -1 | tr -d '\r\n')
+fi
+
+# --- کلید رمزنگاری (v1.0 rev3 — اختیاری) -------------------------------------
+ENC_KEY="${MAINTENANCE_ENC_KEY:-}"
+if [ -z "$ENC_KEY" ] && [ -f "$ENV_FILE" ]; then
+    ENC_KEY=$(grep -E '^MAINTENANCE_ENC_KEY=' "$ENV_FILE" | head -1 | cut -d'=' -f2- | tr -d '"\r')
+fi
+if [ -z "$ENC_KEY" ] && [ -f "$SCRIPT_DIR/../db/.maintenance-enc-key.txt" ]; then
+    ENC_KEY=$(cat "$SCRIPT_DIR/../db/.maintenance-enc-key.txt" | head -1 | tr -d '\r\n')
 fi
 
 # --- پیدا کردن URL ----------------------------------------------------------
@@ -127,12 +146,23 @@ case "$ACTION" in
         else
             PAYLOAD="{\"action\":\"$ACTION\"}"
         fi
+        # v1.0 rev3 — رمز کردن بدنه اگر کلید هست (مقصد: TMPBODY)
+        TMPBODY=""
+        BODY_ARGS=()
+        if [ -n "$ENC_KEY" ]; then
+            TMPBODY=$(mktemp /tmp/maintenance-body.XXXXXX) || { echo "❌ ساخت فایل موقت ناموفق بود"; exit 1; }
+            trap 'rm -f "$OUT" "$TMPBODY"' EXIT
+            printf '%s' "$PAYLOAD" | node "$SCRIPT_DIR/maintenance-enc.mjs" enc "$ENC_KEY" > "$TMPBODY"
+            BODY_ARGS=(--data-binary "@$TMPBODY")
+        else
+            BODY_ARGS=(-d "$PAYLOAD")
+        fi
         HTTP_CODE=$(curl -s -o "$OUT" -w "%{http_code}" \
             -X POST "$URL/api/maintenance" \
             -H "X-Maintenance-Token: $TOKEN" \
             "${EDIT_HEADER_ARGS[@]}" \
             -H "Content-Type: application/json" \
-            -d "$PAYLOAD") || { echo "❌ اتصال به $URL برقرار نشد"; exit 1; }
+            "${BODY_ARGS[@]}") || { echo "❌ اتصال به $URL برقرار نشد"; exit 1; }
         if [ "$HTTP_CODE" = "401" ]; then
             echo "❌ توکن نامعتبر است (401) — مقدار MAINTENANCE_TOKEN را با .env سرور مقایسه کن"
             exit 1
@@ -147,10 +177,18 @@ case "$ACTION" in
         elif [ "$HTTP_CODE" = "429" ]; then
             echo "❌ محدودیت تعداد درخواست (429) — ۵ دقیقه صبر کن"
             exit 1
+        elif [ "$HTTP_CODE" = "426" ]; then
+            echo "❌ سرور رمزنگاری می‌خواهد (426) — MAINTENANCE_ENC_KEY را export کن یا در .env بگذار"
+            cat "$OUT" 2>/dev/null; echo ""
+            exit 1
         elif [ "$HTTP_CODE" != "200" ]; then
             echo "❌ خطای HTTP $HTTP_CODE:"
             cat "$OUT" 2>/dev/null
             exit 1
+        fi
+        # v1.0 rev3 — باز کردن پاسخ رمزشده (اگر کلید هست و پاسخ پاکت بود)
+        if [ -n "$ENC_KEY" ] && grep -q '"enc":"v1"' "$OUT" 2>/dev/null; then
+            node "$SCRIPT_DIR/maintenance-enc.mjs" dec "$ENC_KEY" "$(cat "$OUT")" > "${OUT}.dec" && mv "${OUT}.dec" "$OUT"
         fi
         if command -v jq &>/dev/null; then
             jq . "$OUT"

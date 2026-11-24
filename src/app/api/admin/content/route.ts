@@ -44,6 +44,13 @@ export async function GET(req: Request) {
       db.aiInstruction.findMany({ orderBy: { order: "asc" }, take: 500 }),
     ]);
 
+    // v1.0 rev3 (audit SEC-a LOW): خواندن قواعد AI هم‌تراز با نوشتنش محدود شد —
+    // کاربر limited با تب content نباید متن قواعد/system prompt را بخواند
+    const canReadAi = isElevated(authCheck.role);
+    const visibleAi = canReadAi
+      ? aiInstructions
+      : aiInstructions.map((a: any) => ({ ...a, content: "" }));
+
     const results: any = {
       books,
       articles,
@@ -52,8 +59,8 @@ export async function GET(req: Request) {
         ...s,
         items: s.items.split(",").map((i: string) => i.trim()).filter(Boolean),
       })),
-      aiInstructions,
-      aiInstruction: aiInstructions, // alias for backward compat
+      aiInstructions: visibleAi,
+      aiInstruction: visibleAi, // alias for backward compat
     };
     return NextResponse.json({ ok: true, ...results });
   } catch (err) {

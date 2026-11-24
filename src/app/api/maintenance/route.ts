@@ -13,10 +13,16 @@
 //      (معاف از Origin-check) ولی در RATE_LIMIT_PATHS محدود و no-store است.
 // 2. Fail-closed: اگر MAINTENANCE_TOKEN در .env ست نشده باشد یا کوتاه‌تر از
 //    ۳۲ کاراکتر باشد، همه‌ی درخواست‌ها 503 می‌گیرند — کانال خاموش است.
-// 3. Rate limit: ۲۰ درخواست در ۵ دقیقه (middleware) + لاگ همه‌ی تلاش‌ها
+// 3. Rate limit: ۶۰ درخواست در ۵ دقیقه (middleware) + لاگ همه‌ی تلاش‌ها
 //    (موفق و ناموفق) در SecurityLog.
 // 4. Actions سفید-لیست شده — هیچ action دلخواه اجرا نمی‌شود.
 // 5. هیچ رازی در پاسخ برنمی‌گردد (نه SESSION_SECRET نه توکن‌ها نه webhook secrets).
+// 6. رمزنگاری کانال (v1.0 rev3): اگر MAINTENANCE_ENC_KEY در .env ست شده باشد
+//    (۶۴ hex = ۳۲ بایت)، بدنه‌ی درخواست باید پاکتِ AES-256-GCM باشد:
+//    {"enc":"v1","data":"<b64>"} — داخل پیام ts (±۵ دقیقه) و nonce یک‌بارمصرف
+//    هست تا replay ممکن نباشد، و پاسخ هم با همان کلید رمز برمی‌گردد.
+//    درخواستِ متنیِ خام وقتی کلید موجود است با 426 رد می‌شود (fail-closed).
+//    کلاینت: scripts/maintenance-enc.mjs + scripts/maintenance.sh
 //
 // استفاده (روی VPS):
 //   curl -s -X POST https://<domain>/api/maintenance \
@@ -34,6 +40,12 @@ import path from "path";
 import { db } from "@/lib/db";
 import { getClientIpSafe } from "@/lib/ip";
 import { sanitizeEmbed } from "@/lib/sanitize-embed";
+import {
+  getEncKeyHex,
+  decryptEnvelope,
+  encryptEnvelope,
+  hashEqSecure,
+} from "@/lib/maintenance-crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,12 +59,11 @@ function getToken(): string | null {
   return t;
 }
 
+// v1.0 rev3 (audit SEC-a LOW): مقایسه روی digest SHA-256 انجام می‌شود تا حتی
+// «طول» توکن هم از روی زمان اجرا قابل حدس نباشد (همان الگوی SEC-09 وب‌هوک‌ها).
 function tokenValid(provided: string | null, real: string): boolean {
   if (!provided) return false;
-  const a = Buffer.from(provided, "utf8");
-  const b = Buffer.from(real, "utf8");
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
+  return hashEqSecure(provided, real);
 }
 
 // ---------------------------------------------------------------------------
@@ -613,7 +624,88 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const action = typeof body?.action === "string" ? body.action : "";
+
+  // -----------------------------------------------------------------------
+  // v1.0 rev3 — کانال رمز شده (AES-256-GCM): اگر MAINTENANCE_ENC_KEY ست باشد،
+  // بدنه باید {"enc":"v1","data":"<b64>"} باشد؛ داخل پیام ts (±۵ دقیقه) و
+  // nonce یک‌بارمصرف است (ضد replay). پاسخ هم با همان کلید رمز برمی‌گردد.
+  // درخواست متنیِ خام وقتی کلید موجود است با 426 رد می‌شود (fail-closed).
+  // -----------------------------------------------------------------------
+  const encKeyHex = getEncKeyHex();
+  let encrypted = false;
+  let inner: Record<string, unknown> = body;
+
+  if (body && (body as Record<string, unknown>).enc === "v1") {
+    if (!encKeyHex) {
+      await db.securityLog
+        .create({
+          data: {
+            type: "maintenance_enc_rejected",
+            ip,
+            detail: "encrypted request but MAINTENANCE_ENC_KEY not configured",
+          },
+        })
+        .catch(() => {});
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "enc_channel_disabled",
+          hint: "MAINTENANCE_ENC_KEY (64 hex chars) در .env لازم است",
+        },
+        { status: 503, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+    const dec = decryptEnvelope((body as Record<string, unknown>).data, encKeyHex);
+    if (!dec.ok) {
+      await db.securityLog
+        .create({
+          data: { type: "maintenance_enc_rejected", ip, detail: dec.error },
+        })
+        .catch(() => {});
+      return NextResponse.json(
+        { ok: false, error: dec.error },
+        { status: 400, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+    inner = dec.body;
+    encrypted = true;
+  } else if (encKeyHex) {
+    // کلید هست ولی پیام بدون پاکت آمده — fail-closed (audit SEC-a: کانال باید رمز باشد)
+    await db.securityLog
+      .create({
+        data: {
+          type: "maintenance_plaintext_rejected",
+          ip,
+          detail: "plaintext request while encryption key is configured",
+        },
+      })
+      .catch(() => {});
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "encryption_required",
+        hint: "بدنه باید با MAINTENANCE_ENC_KEY رمز شود — scripts/maintenance.sh خودکار این کار را می‌کند",
+      },
+      { status: 426, headers: { "Cache-Control": "no-store" } }
+    );
+  }
+
+  const action = typeof inner?.action === "string" ? inner.action : "";
+
+  // پاسخ‌دهنده — اگر درخواست رمز شده بود، پاسخ هم با همان کلید رمز می‌شود
+  const respond = (
+    payload: Record<string, unknown>,
+    status = 200
+  ): NextResponse => {
+    const headers = { "Cache-Control": "no-store" };
+    if (!encrypted || !encKeyHex) {
+      return NextResponse.json(payload, { status, headers });
+    }
+    return NextResponse.json(
+      { enc: "v1", data: encryptEnvelope(JSON.stringify(payload), encKeyHex) },
+      { status, headers }
+    );
+  };
 
   // -----------------------------------------------------------------------
   // v1.0: اگر action از نوع ویرایشی است، توکن سطح دوم لازم است.
@@ -628,9 +720,13 @@ export async function POST(request: NextRequest) {
           data: { type: "maintenance_edit_rejected", ip, detail: `edit token not configured — action=${action.slice(0, 40)}` },
         })
         .catch(() => {});
-      return NextResponse.json(
-        { ok: false, error: "edit_channel_disabled", hint: "MAINTENANCE_EDIT_TOKEN >= 48 chars در .env لازم است" },
-        { status: 503 }
+      return respond(
+        {
+          ok: false,
+          error: "edit_channel_disabled",
+          hint: "MAINTENANCE_EDIT_TOKEN >= 48 chars در .env لازم است",
+        },
+        503
       );
     }
     const providedEdit = request.headers.get("x-maintenance-edit-token");
@@ -641,41 +737,37 @@ export async function POST(request: NextRequest) {
         })
         .catch(() => {});
       await new Promise(r => setTimeout(r, 300 + Math.random() * 400));
-      return NextResponse.json({ ok: false, error: "edit_token_required" }, { status: 403 });
+      return respond({ ok: false, error: "edit_token_required" }, 403);
     }
 
     try {
-      const data = await runEditAction(action, body);
+      const data = await runEditAction(action, inner);
       if (data === null) {
         await db.securityLog
           .create({
             data: { type: "maintenance_edit_rejected", ip, detail: `unknown edit action: ${action.slice(0, 60)}` },
           })
           .catch(() => {});
-        return NextResponse.json(
+        return respond(
           { ok: false, error: "unknown_action", hint: "action=help-edit برای دیدن لیست" },
-          { status: 400 }
+          400
         );
       }
       // ردپای کامل هر ویرایش — با جزئیات target (بدون مقدار)
       const targetHint =
-        typeof body?.key === "string" ? ` key=${body.key.slice(0, 60)}` :
-        typeof body?.id === "string" ? ` id=${body.id.slice(0, 40)}` : "";
+        typeof inner?.key === "string" ? ` key=${(inner.key as string).slice(0, 60)}` :
+        typeof inner?.id === "string" ? ` id=${(inner.id as string).slice(0, 40)}` : "";
       await db.securityLog
         .create({
           data: { type: "maintenance_edit", ip, detail: `action=${action}${targetHint}` },
         })
         .catch(() => {});
-      return NextResponse.json(
-        { ok: true, action, data, ...(data.error ? { error: data.error } : {}) },
-        { headers: { "Cache-Control": "no-store" } }
+      return respond(
+        { ok: true, action, data, ...(data.error ? { error: data.error } : {}) }
       );
     } catch (err) {
       console.error("[/api/maintenance edit] error:", err);
-      return NextResponse.json(
-        { ok: false, error: "server_error" },
-        { status: 500, headers: { "Cache-Control": "no-store" } }
-      );
+      return respond({ ok: false, error: "server_error" }, 500);
     }
   }
 
@@ -687,9 +779,9 @@ export async function POST(request: NextRequest) {
           data: { type: "maintenance_action_rejected", ip, detail: `unknown action: ${action.slice(0, 60)}` },
         })
         .catch(() => {});
-      return NextResponse.json(
+      return respond(
         { ok: false, error: "unknown_action", hint: "action=help برای دیدن لیست" },
-        { status: 400 }
+        400
       );
     }
     await db.securityLog
@@ -697,16 +789,10 @@ export async function POST(request: NextRequest) {
         data: { type: "maintenance_action", ip, detail: `action=${action}` },
       })
       .catch(() => {});
-    return NextResponse.json(
-      { ok: true, action, data },
-      { headers: { "Cache-Control": "no-store" } }
-    );
+    return respond({ ok: true, action, data });
   } catch (err) {
     console.error("[/api/maintenance] error:", err);
-    return NextResponse.json(
-      { ok: false, error: "server_error" },
-      { status: 500, headers: { "Cache-Control": "no-store" } }
-    );
+    return respond({ ok: false, error: "server_error" }, 500);
   }
 }
 
@@ -715,6 +801,7 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     service: "maintenance",
+    enc: "اگر MAINTENANCE_ENC_KEY ست شده باشد، بدنه باید پاکت AES-256-GCM باشد (scripts/maintenance.sh خودکار رمز می‌کند) و پاسخ هم رمز شده برمی‌گردد",
     usage: "POST { action: 'status'|'db-stats'|'security-logs'|'messages'|'chats'|'backup'|'help'|'help-edit'|'texts.get'|'texts.set'|'settings.get'|'settings.set'|'nav.get'|'nav.add'|'clips.get'|'clip.add'|'equipment.get'|'equipment.set'|'content.get'|'export-all'|... } با هدر X-Maintenance-Token — actionهای ویرایشی هدر دوم X-Maintenance-Edit-Token هم لازم دارند",
   }, { headers: { "Cache-Control": "no-store" } });
 }

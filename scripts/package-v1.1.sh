@@ -27,10 +27,12 @@ cd "$PROJECT_DIR"
 
 STAGE_ROOT="/tmp/install-v1.0"
 STAGE="$STAGE_ROOT/personal-site"
-OUT="$PROJECT_DIR/public/install-v1.0.zip"
+# v1.0 rev3: خروجی قابل override — برای zip رسمی با تاریخ شمسی:
+#   RELEASE_OUT=releases/ehsan-site-v1.0-1405-09-03.zip bash scripts/package-v1.1.sh
+OUT="${RELEASE_OUT:-$PROJECT_DIR/public/install-v1.0.zip}"
 MAX_BYTES=$((25 * 1024 * 1024))   # 25MB سقف پکیج
 
-SCRIPTS_KEEP="apply_schema.py seed_access_users.py seed_content.py seed_equipment.py seed_texts.py reset-admin-password.sh auto-backup.sh export-site.sh import-site.sh restore-db.sh maintenance.sh"
+SCRIPTS_KEEP="apply_schema.py seed_access_users.py seed_content.py seed_equipment.py seed_texts.py reset-admin-password.sh auto-backup.sh export-site.sh import-site.sh restore-db.sh maintenance.sh maintenance-enc.mjs sync-from-online.sh apply-online-export.mjs"
 # v1.1: list_messages.py حذف شد — ابزار dump مستقیم DB بود و دلیلی برای ارسال به نصب‌کننده نداشت
 # v1.1.2: آموزش از dist/ هم پیدا می‌شود (از public/ خارج شد تا build لاغر بماند)
 PUBLIC_KEEP="icon-192.png icon-512.png favicon.ico manifest.json robots.txt"
@@ -89,16 +91,25 @@ for f in $PUBLIC_KEEP; do
 done
 
 # v1.1.2: آموزش فارسی — از dist/ به public پکیج + ریشه‌ی خروجی
+# v1.0 rev3 (audit DEPLOY-d LOW): مسیر واقعی فایل‌ها download/ است — fallback اضافه شد
 TUTORIAL_SRC=""
 if [ -f "$PROJECT_DIR/dist/TUTORIAL_FA_1.0.docx" ]; then
     TUTORIAL_SRC="$PROJECT_DIR/dist/TUTORIAL_FA_1.0.docx"
 elif [ -f "$PROJECT_DIR/public/TUTORIAL_FA_1.0.docx" ]; then
     TUTORIAL_SRC="$PROJECT_DIR/public/TUTORIAL_FA_1.0.docx"
+elif [ -f "$PROJECT_DIR/download/TUTORIAL_FA_v1.docx" ]; then
+    TUTORIAL_SRC="$PROJECT_DIR/download/TUTORIAL_FA_v1.docx"
 fi
 if [ -n "$TUTORIAL_SRC" ] && [ -d "$STAGE/public" ]; then
     cp "$TUTORIAL_SRC" "$STAGE/public/TUTORIAL_FA_1.0.docx"
-    echo "✅ TUTORIAL_FA_1.0.docx به پکیج اضافه شد"
+    echo "✅ TUTORIAL docx به پکیج اضافه شد"
 fi
+
+# v1.0 rev3: پوشه‌ی docs با آموزش + گزارش ممیزی (هم‌مثل پکیج سورس)
+mkdir -p "$STAGE/docs"
+for f in download/TUTORIAL_FA_v1.docx download/AUDIT-REPORT-FA_v1.docx; do
+    if [ -f "$PROJECT_DIR/$f" ]; then cp "$PROJECT_DIR/$f" "$STAGE/docs/"; else echo "  ⚠ $f نیست — docs ناقص می‌ماند"; fi
+done
 
 # scripts — فقط زیرمجموعه‌ی allow-list (بدون ابزارهای dev)
 mkdir -p "$STAGE/scripts"
@@ -124,6 +135,16 @@ if [ -f "$PROJECT_DIR/nginx-ehsanmorad.conf" ]; then
 else
     echo "  ⚠ nginx-ehsanmorad.conf نیست — install.sh ممکنه تو مرحله‌ی Nginx گیر کنه!"
 fi
+
+# v1.0 rev3 — سورس کامل با کامنت‌گذاری فارسی هم داخل zip رسمی است
+# (درخواست مالک: zip شامل «سورس کامنت‌گذاری فارسی» باشد؛ حالا هم نصبِ بدون npm
+# دارد — server.js standalone — هم سورس برای بازبینی/توسعه)
+mkdir -p "$STAGE/src"
+cp -a "$PROJECT_DIR/src/." "$STAGE/src/"
+for rf in tsconfig.json next.config.ts postcss.config.mjs eslint.config.mjs; do
+    [ -f "$PROJECT_DIR/$rf" ] && cp "$PROJECT_DIR/$rf" "$STAGE/$rf"
+done
+echo "✅ سورس کامل (src/) + کانفیگ‌های dev اضافه شد"
 echo "✅ stage کامل شد"
 
 # ----------------------------------------------------------------------------
@@ -163,12 +184,13 @@ fi
 # ----------------------------------------------------------------------------
 # ۵) پاک‌سازی فایلهای راه‌گونه
 # ----------------------------------------------------------------------------
-find "$STAGE" -name '*.db' -delete 2>/dev/null || true
+find "$STAGE" \( -name '*.db' -o -name '*.db-*' -o -name '*.db.gz' \) -delete 2>/dev/null || true
 find "$STAGE" -name '.env*' ! -name '.env.example' -delete 2>/dev/null || true
+find "$STAGE" \( -name '.admin-initial-password.txt' -o -name '.maintenance-token.txt' -o -name '.maintenance-edit-token.txt' -o -name '.maintenance-enc-key.txt' \) -delete 2>/dev/null || true
 find "$STAGE" -name '*.log' -delete 2>/dev/null || true
 find "$STAGE" -name '*.tsbuildinfo' -delete 2>/dev/null || true
 [ -d "$STAGE/public" ] && find "$STAGE/public" -name '*.zip' -delete 2>/dev/null || true
-echo "✅ stray files پاک شدند (*.db، .env*، *.log، *.tsbuildinfo، *.zip)"
+echo "✅ stray files پاک شدند (*.db، .env*، توکن‌ها، *.log، *.tsbuildinfo، *.zip)"
 
 # ----------------------------------------------------------------------------
 # ۶) README.md + .env.example (فارسی)
@@ -192,6 +214,14 @@ sudo ./install.sh
 - password: **یک رمز تصادفی که install.sh فقط یک بار چاپ می‌کنه** — یادداشتش کن!
 - بعد از ورود حتماً از پنل → تنظیمات → تغییر رمز، رمز جدید بذار
   (با تغییر رمز همه‌ی sessionهای قبلی خودکار باطل می‌شن — v1.1).
+
+## کانال نگهداری و ویرایش رمزشده (v1.0 rev3)
+
+install.sh سه راز تولید می‌کند و یک بار چاپ می‌کند:
+- MAINTENANCE_TOKEN (خواندن): status | db-stats | security-logs | messages | chats | backup
+- MAINTENANCE_EDIT_TOKEN (ویرایش): texts.set | settings.set | nav.* | clip.* | equipment.set | export-all
+- MAINTENANCE_ENC_KEY (رمزنگاری AES-256-GCM کانال — درخواست و پاسخ هر دو رمز می‌شوند؛
+  ts ±۵ دقیقه و nonce یک‌بارمصرف داخل پاکت، ضد replay)
 
 ## تنظیم reCAPTCHA (لازم برای فرم تماس)
 
@@ -232,6 +262,11 @@ BALE_WEBHOOK_SECRET=
 TELEGRAM_WEBHOOK_SECRET=
 NEXT_PUBLIC_SITE_URL=
 TRUST_PROXY="true"
+# کانال نگهداری (install.sh تولید می‌کند — اینجا فقط نمونه):
+MAINTENANCE_TOKEN=
+MAINTENANCE_EDIT_TOKEN=
+# v1.0 rev3 — کلید رمزنگاری کانال (۶۴ hex = ۳۲ بایت)
+MAINTENANCE_ENC_KEY=
 ENVEOF
 echo "✅ README.md و .env.example ساخته شدند"
 

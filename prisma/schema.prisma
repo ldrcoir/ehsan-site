@@ -340,7 +340,10 @@ model AccessUser {
   // لیست دسترسی‌های کاربر — با کاما جدا می‌شه
   // مثال: "messages,clips,content" یعنی فقط به این ۳ بخش دسترسی داره
   // اگه "*" یا null باشه یعنی همه بخش‌ها (برای ادمین)
-  permissions     String?                    // messages|clips|content|text|nav|themes|users|font|settings
+  // v1.0 rev3: مجموعه‌ی مجاز فقط GRANTABLE_TABS است (src/lib/rbac.ts):
+  //   messages|clips|content|text|nav|themes
+  //   — تب‌های حساس (users/font/stats/settings/chats/equipment) هرگز واگذار نمی‌شوند
+  permissions     String?                    // messages|clips|content|text|nav|themes
   // ساعت شروع دسترسی (0-23). اگه null یعنی بدون محدودیت ساعت.
   allowedHourStart Int?
   // ساعت پایان دسترسی (0-23). اگه null یعنی بدون محدودیت ساعت.

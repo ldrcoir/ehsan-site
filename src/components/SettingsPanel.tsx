@@ -428,8 +428,10 @@ export default function SettingsPanel() {
     let savedLang: Lang = "fa";
     let savedFont = "vazirmatn";
     try {
-      // Load panel language from localStorage
-      savedLang = (localStorage.getItem("panel_lang") as Lang) || "fa";
+      // v1.0 rev3 (audit BUG-c MEDIUM): مقدار localStorage اعتبارسنجی می‌شود —
+      // مقدار خراب/کهنه T[lang] را undefined می‌کرد و کل پنل سفید می‌شد
+      const raw = localStorage.getItem("panel_lang");
+      savedLang = raw === "en" || raw === "de" || raw === "fa" ? raw : "fa";
       // Load font
       savedFont = localStorage.getItem("site_font") || "vazirmatn";
     } catch {
@@ -867,7 +869,9 @@ export default function SettingsPanel() {
   // --- toggle provider ---
   async function toggleProvider(id: string) {
     const result = await postJSON("/api/admin/providers", { action: "toggle", id });
+    // v1.0 rev3 (audit PANEL-b A1): خطا دیگر بی‌صدا نیست
     if (result.ok) loadProviders();
+    else showMessage(t.error + ": " + (result.error || ""), true);
   }
 
   if (loading) {

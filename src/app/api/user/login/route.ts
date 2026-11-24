@@ -47,7 +47,11 @@ if (typeof setInterval !== "undefined") {
   }, 5 * 60 * 1000).unref?.();
 }
 
-function checkRateLimit(map: Map<string, { count: number; resetAt: number }>, key: string): boolean {
+function checkRateLimit(
+  map: Map<string, { count: number; resetAt: number }>,
+  key: string,
+  max: number = RATE_LIMIT_MAX
+): boolean {
   const now = Date.now();
   const record = map.get(key);
   if (!record || now > record.resetAt) {
@@ -69,7 +73,7 @@ function checkRateLimit(map: Map<string, { count: number; resetAt: number }>, ke
     map.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
     return true;
   }
-  if (record.count >= RATE_LIMIT_MAX) return false;
+  if (record.count >= max) return false;
   record.count++;
   return true;
 }
@@ -104,8 +108,19 @@ export async function POST(request: NextRequest) {
     const userAgent = request.headers.get("user-agent");
 
     // Rate limit check — per-IP و per-username
+    // v1.0 rev3 (audit SEC-a LOW): وقتی TRUST_PROXY خاموش است همه‌ی بازدیدکننده‌ها
+    // در یک bucket «unknown» جمع می‌شوند — سقف این bucket خاص بالاتر می‌رود تا
+    // قفل سراسری لاگین (DoS) ممکن نشود؛ محدودیت per-username (۵/۱۵د) سرِ جایش
+    // است و brute-force روی اکانت همچنان بسته است.
     const rateLimitKey = ip || "unknown";
-    if (!checkRateLimit(loginAttempts, rateLimitKey) || !checkRateLimit(usernameAttempts, username)) {
+    const degradedProxy =
+      process.env.NODE_ENV === "production" &&
+      process.env.TRUST_PROXY !== "true" &&
+      rateLimitKey === "unknown";
+    if (
+      !checkRateLimit(loginAttempts, rateLimitKey, degradedProxy ? 30 : RATE_LIMIT_MAX) ||
+      !checkRateLimit(usernameAttempts, username)
+    ) {
       return NextResponse.json(
         { ok: false, error: "rate_limit" },
         { status: 429 }

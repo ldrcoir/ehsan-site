@@ -82,6 +82,28 @@ export async function callLLMWithFallback(
 // content-length بود؛ پاسخ chunked بدون هدر تا سقف timeout کامل در حافظه buffer
 // می‌شد. حالا هر ۴ مسیر از این helper استفاده می‌کنند: بیش از 5MB → خطا.
 const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
+// v1.0 rev3 (audit SEC-a LOW): خواندن bounded برای «بدنه‌های خطا» — قبلاً
+// res.text() کل بدنه را قبل از slice در حافظه می‌گرفت (OOM روی پاسخ chunked)
+async function readBoundedText(res: Response, maxBytes: number = 64 * 1024): Promise<string> {
+  if (!res.body) return "";
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      try { await reader.cancel(); } catch { /* ignore */ }
+      return "(error body truncated)";
+    }
+    chunks.push(value);
+  }
+  const buf = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) { buf.set(c, off); off += c.byteLength; }
+  return new TextDecoder().decode(buf).slice(0, 2000);
+}
 async function readBoundedJson(res: Response): Promise<unknown> {
   const lenHeader = parseInt(res.headers.get("content-length") || "0", 10);
   if (lenHeader > MAX_RESPONSE_BYTES) throw new Error("Provider response too large");
@@ -175,7 +197,7 @@ async function callOpenAI(provider: ProviderConfig, messages: any[]): Promise<st
   });
   if (!res.ok) {
     // v1.1.1 (audit S5-L5): بدنه‌ی خطا هم سقف دارد — پاسخ چند-گیگابایتی حافظه را نمی‌بلعد
-    const err = (await res.text()).slice(0, 2000);
+    const err = await readBoundedText(res);
     throw new Error(`OpenAI API error: ${res.status} ${err}`);
   }
   // v1.0 (audit W21-25 #3): bounded read — سقف 5MB روی کل بدنه (نه فقط هدر)
@@ -205,7 +227,7 @@ async function callAnthropic(provider: ProviderConfig, messages: any[]): Promise
     }),
   });
   if (!res.ok) {
-    const err = (await res.text()).slice(0, 2000); // v1.1.1 (S5-L5): سقف بدنه خطا
+    const err = await readBoundedText(res); // v1.0 rev3: bounded read واقعی
     throw new Error(`Anthropic API error: ${res.status} ${err}`);
   }
   // v1.0 (audit W21-25 #3): bounded read — سقف 5MB روی کل بدنه
@@ -231,7 +253,7 @@ async function callOllama(provider: ProviderConfig, messages: any[]): Promise<st
     }),
   });
   if (!res.ok) {
-    const err = (await res.text()).slice(0, 2000); // v1.1.1 (S5-L5): سقف بدنه خطا
+    const err = await readBoundedText(res); // v1.0 rev3: bounded read واقعی
     throw new Error(`Ollama API error: ${res.status} ${err}`);
   }
   // v1.0 (audit W21-25 #3): bounded read — سقف 5MB روی کل بدنه
@@ -262,7 +284,7 @@ async function callGroq(provider: ProviderConfig, messages: any[]): Promise<stri
     }),
   });
   if (!res.ok) {
-    const err = (await res.text()).slice(0, 2000); // v1.1.1 (S5-L5): سقف بدنه خطا
+    const err = await readBoundedText(res); // v1.0 rev3: bounded read واقعی
     throw new Error(`Groq error: ${res.status} ${err}`);
   }
   // v1.0 (audit W21-25 #3): bounded read — سقف 5MB روی کل بدنه

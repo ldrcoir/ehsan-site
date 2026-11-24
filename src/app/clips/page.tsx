@@ -18,6 +18,18 @@ type Clip = {
 export default function ClipsPage() {
   const [clips, setClips] = useState<Clip[]>([]);
   const [loading, setLoading] = useState(true);
+  // v1.0 rev3 (audit BUG-c LOW): عنوان/پیام خالی سه‌زبانه شدند — قبلاً برای همه‌ی
+  // زبان‌ها فارسی بود؛ زبان از مرورگر تشخیص داده می‌شود (fa→فارسی، بقیه→English)
+  const [isFa, setIsFa] = useState(true);
+
+  useEffect(() => {
+    try {
+      const nav = (typeof navigator !== "undefined" && navigator.language) || "";
+      setIsFa(nav.toLowerCase().startsWith("fa"));
+    } catch {
+      setIsFa(true);
+    }
+  }, []);
 
   useEffect(() => {
     fetch("/api/clips")
@@ -44,12 +56,12 @@ export default function ClipsPage() {
       <ThemeApplier />
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
         <h1 style={{ color: "var(--fg, #00ff41)", textTransform: "uppercase", letterSpacing: 2, marginBottom: 30 }}>
-          🎬 کلیپ‌ها
+          {isFa ? "🎬 کلیپ‌ها" : "🎬 Clips"}
         </h1>
 
         {clips.length === 0 ? (
           <p style={{ color: "var(--muted, #4a7a4a)", textAlign: "center", padding: 40 }}>
-            هنوز کلیپی اضافه نشده.
+            {isFa ? "هنوز کلیپی اضافه نشده." : "No clips yet."}
           </p>
         ) : (
           <div style={{ display: "grid", gap: 30 }}>

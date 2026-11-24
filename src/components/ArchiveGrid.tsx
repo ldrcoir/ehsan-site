@@ -36,14 +36,23 @@ export default function ArchiveGrid({
     let result = [...items];
 
     // Filter by search
+    // v1.0 rev3 (audit BUG-c LOW): فیلدهای آلمانی + خلاصه‌ها هم جستجو می‌شوند —
+    // قبلاً آیتمی که فقط در titleDe/descDe بود برای جستجوی آلمانی پیدا نمی‌شد
     if (filter) {
       const f = filter.toLowerCase();
       result = result.filter(item =>
         (item.titleEn || "").toLowerCase().includes(f) ||
         (item.titleFa || "").toLowerCase().includes(f) ||
+        (item.titleDe || "").toLowerCase().includes(f) ||
         (item.descEn || "").toLowerCase().includes(f) ||
         (item.descFa || "").toLowerCase().includes(f) ||
+        (item.descDe || "").toLowerCase().includes(f) ||
+        (item.summaryEn || "").toLowerCase().includes(f) ||
+        (item.summaryFa || "").toLowerCase().includes(f) ||
+        (item.summaryDe || "").toLowerCase().includes(f) ||
         (item.venueEn || "").toLowerCase().includes(f) ||
+        (item.venueFa || "").toLowerCase().includes(f) ||
+        (item.venueDe || "").toLowerCase().includes(f) ||
         (item.publisherEn || "").toLowerCase().includes(f)
       );
     }

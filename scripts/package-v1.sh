@@ -71,9 +71,11 @@ done
 
 # --- پاکسازی staged از راز‌ها و داده‌ها -----------------------------------------
 # هرگز داخل zip: .env واقعی، دیتابیس واقعی، توکن‌ها، بک‌آپ‌ها، node_modules
+# v1.0 rev3 (audit DEPLOY-d MEDIUM): گروه‌بندی \(...\) — قبلاً به‌خاطر تقدم
+# عملگرها فقط الگوی آخر (-delete را می‌دید و *.db و *.db-* حذف نمی‌شدند
 find "$S" -name '.env*' ! -name '.env.example' -delete 2>/dev/null || true
-find "$S" -name '*.db' -o -name '*.db-*' -o -name '*.db.gz' -delete 2>/dev/null || true
-find "$S" -name '.admin-initial-password.txt' -o -name '.maintenance-token.txt' -o -name '.maintenance-edit-token.txt' -delete 2>/dev/null || true
+find "$S" \( -name '*.db' -o -name '*.db-*' -o -name '*.db.gz' \) -delete 2>/dev/null || true
+find "$S" \( -name '.admin-initial-password.txt' -o -name '.maintenance-token.txt' -o -name '.maintenance-edit-token.txt' -o -name '.maintenance-enc-key.txt' \) -delete 2>/dev/null || true
 find "$S" -type d \( -name node_modules -o -name .next -o -name backups -o -name download -o -name __pycache__ \) -exec rm -rf {} + 2>/dev/null || true
 find "$S" -name 'online-export-*.json' -delete 2>/dev/null || true
 
@@ -144,12 +146,18 @@ TRUST_PROXY="true"
 # کانال نگهداری (install.sh تولید می‌کند — اینجا فقط نمونه):
 MAINTENANCE_TOKEN=
 MAINTENANCE_EDIT_TOKEN=
+# v1.0 rev3 — کلید رمزنگاری کانال (۶۴ hex = ۳۲ بایت؛ install.sh تولیدش می‌کند)
+MAINTENANCE_ENC_KEY=
 APP_VERSION="1.0"
 ENVEOF
 
 # --- بررسی‌های نهایی قبل از zip -------------------------------------------------
 if find "$S" -name '*.db' | grep -q .; then echo "❌ خطا: دیتابیس داخل stage است"; exit 1; fi
 if grep -rE "^SESSION_SECRET=.+" "$S/.env" 2>/dev/null; then echo "❌ خطا: .env داخل stage است"; exit 1; fi
+# v1.0 rev3 (audit DEPLOY-d MEDIUM): گارد نهایی فایل‌های توکن/کلید — هیچ‌کدام نباید داخل zip باشند
+if find "$S" \( -name '.admin-initial-password.txt' -o -name '.maintenance-token.txt' -o -name '.maintenance-edit-token.txt' -o -name '.maintenance-enc-key.txt' \) | grep -q .; then
+  echo "❌ خطا: فایل توکن/کلید داخل stage است"; exit 1
+fi
 
 # --- zip ------------------------------------------------------------------------
 cd "$STAGE"

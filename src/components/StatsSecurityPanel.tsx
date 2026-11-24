@@ -87,6 +87,8 @@ const T = {
     securityTitle: "🛡️ امنیت",
     suspiciousCount: "رویدادهای مشکوک",
     failedLoginCount: "ورودهای ناموفق",
+    blockedCountLabel: "IP های بلاک‌شده (کل)",
+    todayEventsLabel: "رویدادهای ۲۴ ساعت اخیر",
     blockedIps: "IP های بلاک‌شده",
     noBlockedIps: "هیچ IP بلاک‌شده‌ای نیست.",
     unblock: "🔓 رفع بلاک",
@@ -130,6 +132,8 @@ const T = {
     securityTitle: "🛡️ Security",
     suspiciousCount: "Suspicious Events",
     failedLoginCount: "Failed Logins",
+    blockedCountLabel: "Blocked IPs (total)",
+    todayEventsLabel: "Events (last 24h)",
     blockedIps: "Blocked IPs",
     noBlockedIps: "No blocked IPs.",
     unblock: "🔓 Unblock",
@@ -173,6 +177,8 @@ const T = {
     securityTitle: "🛡️ Sicherheit",
     suspiciousCount: "Verdächtige Ereignisse",
     failedLoginCount: "Fehlgeschlagene Anmeldungen",
+    blockedCountLabel: "Gesperrte IPs (gesamt)",
+    todayEventsLabel: "Ereignisse (letzte 24h)",
     blockedIps: "Gesperrte IPs",
     noBlockedIps: "Keine gesperrten IPs.",
     unblock: "🔓 Entsperren",
@@ -319,7 +325,7 @@ export default function StatsSecurityPanel({ lang }: { lang: Lang }) {
   }
 
   // --- v1.1.1 (audit P1-G8): بلاک دستی IP — API اکشن block از قبل بود، UI نداشت
-  const IP_RE = /^(?:\d{1,3}(?:\.\d{1,3}){3}|[0-9a-fA-F:]{2,45}|[0-9a-fA-F:]{2,45}\:\/\d{1,3})$/;
+  const IP_RE = /^(?:\d{1,3}(?:\.\d{1,3}){3}|[0-9a-fA-F:]{2,45})$/; // v1.0 rev3 (audit PANEL-b A2): CIDR حذف شد — سرور فقط IP تکی می‌پذیرد و پیام خطای گمراه‌کننده نمی‌داد
   async function blockIp() {
     const ip = blockInput.trim();
     if (!ip || blocking) return;
@@ -559,6 +565,19 @@ export default function StatsSecurityPanel({ lang }: { lang: Lang }) {
                 <div className="dashboard-info-label">{t.failedLoginCount}</div>
                 <div className="dashboard-info-value">
                   {security?.stats.failedLoginCount === undefined ? "—" : security.stats.failedLoginCount.toLocaleString(localeOf(lang))}
+                </div>
+              </div>
+              {/* v1.0 rev3 (audit PANEL-b B3): این دو شمارنده از سمت سرور می‌آمدند ولی هیچ‌وقت نمایش داده نمی‌شدند */}
+              <div className="dashboard-info-card">
+                <div className="dashboard-info-label">{t.blockedCountLabel}</div>
+                <div className="dashboard-info-value">
+                  {security?.stats.blockedCount === undefined ? "—" : security.stats.blockedCount.toLocaleString(localeOf(lang))}
+                </div>
+              </div>
+              <div className="dashboard-info-card">
+                <div className="dashboard-info-label">{t.todayEventsLabel}</div>
+                <div className="dashboard-info-value">
+                  {security?.stats.todayEvents === undefined ? "—" : security.stats.todayEvents.toLocaleString(localeOf(lang))}
                 </div>
               </div>
             </div>

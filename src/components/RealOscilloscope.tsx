@@ -145,6 +145,14 @@ export default function RealOscilloscope({
     let lastTime = 0;
     let measurementTimer = 0;
 
+    // v1.0 rev3 (audit BUG-c MEDIUM): import واترمارک از حلقه‌ی RAF بیرون کشیده شد —
+    // قبلاً هر فریم یک promise + getImageData/putImageData می‌ساخت (~۶۰×/ث);
+    // حالا ماژول یک بار لود می‌شود و فراخوانی هم‌گام است
+    let watermark: ((ctx: CanvasRenderingContext2D, w: number, h: number) => void) | null = null;
+    import("@/lib/canvas-protect")
+      .then(m => { watermark = m.watermarkCanvas; })
+      .catch(() => {}); // v1.1.1 (Q3): chunk-load failure → unhandled rejection نباشد
+
     const draw = (now: number) => {
       rafRef.current = requestAnimationFrame(draw);
 
@@ -399,10 +407,8 @@ export default function RealOscilloscope({
         ctx.fillText(triggerMode === "SINGLE" && triggerFiredRef.current ? "STOPPED" : "RUN", w - 60, h - 8);
       }
 
-      // Anti-copy watermark
-      import("@/lib/canvas-protect").then(({ watermarkCanvas }) => {
-        watermarkCanvas(ctx, w, h);
-      }).catch(() => {}); // v1.1.1 (Q3): chunk-load failure → unhandled rejection نباشد
+      // Anti-copy watermark (v1.0 rev3: هم‌گام — ماژول از قبل لود شده)
+      watermark?.(ctx, w, h);
     };
 
     if (!reduce) {

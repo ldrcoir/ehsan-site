@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { processBaleWebhook } from "@/lib/bale";
 import { getSetting } from "@/lib/settings";
+import { getClientIpSafe } from "@/lib/ip";
 
 /**
  * POST /api/bale/webhook — Bale calls this when admin sends a message to the bot.
@@ -35,9 +36,11 @@ export async function POST(req: Request) {
     const expBuf = crypto.createHash("sha256").update(expectedSecret).digest();
     if (!crypto.timingSafeEqual(secretBuf, expBuf)) {
       // v1.0 (audit W31-35 #2): تلاش ناموفق لاگ می‌شود (rate limit 60/min جلوی flood را می‌گیرد)
+      // v1.0 rev3 (audit SEC-a LOW): IP واقعی (هدرهای کلاینت قابل جعل بودند) + سقف طول
       const { logSecurityEvent } = await import("@/lib/security");
-      const ip = req.headers.get("x-real-ip") || (req.headers.get("x-forwarded-for") || "").split(",").pop()?.trim() || null;
-      logSecurityEvent("webhook_bad_secret", ip && ip !== "unknown" ? ip : null, "bale webhook secret mismatch").catch(() => {});
+      const ip = getClientIpSafe(req) || null;
+      const safeIp = ip && ip !== "unknown" ? ip.slice(0, 45) : null;
+      logSecurityEvent("webhook_bad_secret", safeIp, "bale webhook secret mismatch").catch(() => {});
       return NextResponse.json({ ok: false, error: "invalid_secret" }, { status: 403 });
     }
 

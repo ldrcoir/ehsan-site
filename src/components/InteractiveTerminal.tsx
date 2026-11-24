@@ -160,10 +160,11 @@ export default function InteractiveTerminal({
       case "admin":
       case "root":
         if (typeof window !== "undefined") {
-          window.location.hash = "admin";
+          // v1.0 rev3 (audit BUG-c LOW): لنگر #admin وجود ندارد — پنل واقعی /user-dashboard است
+          window.location.href = "/user-dashboard";
           return [{ kind: "success", text: ">> opening admin panel..." }];
         }
-        return out("admin panel: visit #admin");
+        return out("admin panel: visit /user-dashboard");
       case "chat":
         if (typeof window !== "undefined") {
           document.getElementById("chat")?.scrollIntoView({ behavior: "smooth" });

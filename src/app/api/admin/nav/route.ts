@@ -3,6 +3,21 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
+// v1.0 rev3 (audit SEC-a LOW): اعتبارسنجی href سمت سرور — همان سیاست
+// isSafeHref کانال نگهداری؛ جلوگیری از javascript:/data: و href های خارجیِ
+// بدون https در منو (قبل از این فقط renderer کلاینت می‌خنثی‌شان می‌کرد).
+function isSafeHref(href: string): boolean {
+  const h = href.trim();
+  if (h.startsWith("/")) return true; // مسیر داخلی
+  if (h === "#" || h === "") return true;
+  try {
+    const u = new URL(h);
+    return u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 /** GET /api/admin/nav — v1.1 (security): fail-closed؛ کاربر غیرادمین → 401 */
 export async function GET(req: Request) {
   try {
@@ -33,9 +48,13 @@ export async function POST(req: Request) {
     switch (action) {
       case "create": {
         const d = body.data || {};
+        const href = String(d.href || "#");
+        if (!isSafeHref(href)) {
+          return NextResponse.json({ ok: false, error: "invalid_href" }, { status: 400 });
+        }
         const item = await db.navItem.create({ data: {
           labelEn: String(d.labelEn || "new"), labelFa: String(d.labelFa || ""),
-          labelDe: String(d.labelDe || ""), href: String(d.href || "#"),
+          labelDe: String(d.labelDe || ""), href,
           target: String(d.target || "_self"), visible: Boolean(d.visible ?? true),
           order: Number(d.order) || 99,
         }});
@@ -52,7 +71,13 @@ export async function POST(req: Request) {
         if (d.labelEn !== undefined) data.labelEn = String(d.labelEn);
         if (d.labelFa !== undefined) data.labelFa = String(d.labelFa);
         if (d.labelDe !== undefined) data.labelDe = String(d.labelDe);
-        if (d.href !== undefined) data.href = String(d.href);
+        if (d.href !== undefined) {
+          const href = String(d.href);
+          if (!isSafeHref(href)) {
+            return NextResponse.json({ ok: false, error: "invalid_href" }, { status: 400 });
+          }
+          data.href = href;
+        }
         if (d.target !== undefined) data.target = String(d.target);
         if (d.visible !== undefined) data.visible = Boolean(d.visible);
         if (d.order !== undefined) data.order = Number(d.order) || 99;

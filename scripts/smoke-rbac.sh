@@ -1,10 +1,10 @@
-// ============================================================================
-// smoke-rbac.sh — v1.0
-// تست دودی RBAC و کانال نگهداری — ۲۸ چک: سلسله‌مراتب نقش‌ها، immutability مالک،
-// ادمین‌سازی فقط توسط مالک، تغییر رمز مالک، توکن ویرایش، export-all.
-// ============================================================================
-
 #!/bin/bash
+# ============================================================================
+# smoke-rbac.sh — v1.0
+# تست دودی RBAC و کانال نگهداری — ۲۸ چک: سلسله‌مراتب نقش‌ها، immutability مالک،
+# ادمین‌سازی فقط توسط مالک، تغییر رمز مالک، توکن ویرایش، export-all.
+# ============================================================================
+
 # ============================================================================
 # smoke-rbac.sh — تست دودی RBAC و کانال نگهداری (v1.0)
 # ============================================================================
@@ -96,13 +96,34 @@ check "change_password owner → 200" 200 "$(curl -s -o /tmp/r.json -b "$OW" -w 
 # ---------- 9) maintenance channel ----------
 MT=$(grep MAINTENANCE_TOKEN= .env | cut -d= -f2- | tr -d '"')
 ME=$(grep MAINTENANCE_EDIT_TOKEN= .env | cut -d= -f2- | tr -d '"')
-# mreq <json> <with-edit-token: 0|1>
+# v1.0 rev3 — کلید رمزنگاری (اختیاری): اگر MAINTENANCE_ENC_KEY ست باشد، بدنه
+# با پاکت AES-256-GCM ارسال می‌شود (سرور در آن حالت درخواست متنی را 426 رد می‌کند)
+ENC_KEY_ENV="${MAINTENANCE_ENC_KEY:-}"
+if [ -z "$ENC_KEY_ENV" ] && grep -q '^MAINTENANCE_ENC_KEY=' .env 2>/dev/null; then
+    ENC_KEY_ENV=$(grep '^MAINTENANCE_ENC_KEY=' .env | cut -d= -f2- | tr -d '"')
+fi
+ENC="$(cd "$(dirname "$0")" && pwd)/maintenance-enc.mjs"
+
+# mreq <json> <with-edit-token: 0|1> — خروجی: http_code؛ پاسخ در /tmp/m.json (decrypt شده)
 mreq() {
   local json=$1 with=$2
   local args=(-s -o /tmp/m.json -w "%{http_code}" -X POST "$BASE/api/maintenance" \
-    -H "X-Maintenance-Token: $MT" -H "Content-Type: application/json" -d "$json")
+    -H "X-Maintenance-Token: $MT" -H "Content-Type: application/json")
   [ "$with" = "1" ] && args+=(-H "X-Maintenance-Edit-Token: $ME")
-  curl "${args[@]}"
+  if [ -n "$ENC_KEY_ENV" ] && [ -f "$ENC" ]; then
+    local body
+    body=$(printf '%s' "$json" | node "$ENC" enc "$ENC_KEY_ENV")
+    args+=(--data-binary "$body")
+  else
+    args+=(-d "$json")
+  fi
+  local code
+  code=$(curl "${args[@]}")
+  # باز کردن پاسخ رمزشده برای assertهای jq بعدی
+  if [ -n "$ENC_KEY_ENV" ] && [ -f "$ENC" ] && grep -q '"enc":"v1"' /tmp/m.json 2>/dev/null; then
+    node "$ENC" dec "$ENC_KEY_ENV" "$(cat /tmp/m.json)" > /tmp/m.json.dec 2>/dev/null && mv /tmp/m.json.dec /tmp/m.json
+  fi
+  echo "$code"
 }
 check "maintenance status"           200 "$(mreq '{"action":"status"}' 0)"
 check "maintenance status bad token" 401 "$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/maintenance" -H "X-Maintenance-Token: WRONGWRONGWRONGWRONGWRONGWRONGWRONGWRONG" -H "Content-Type: application/json" -d '{"action":"status"}')"

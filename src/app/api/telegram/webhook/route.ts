@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { processTelegramWebhook, sendTelegramMessage } from "@/lib/telegram";
+import { getClientIpSafe } from "@/lib/ip";
 
 /**
  * POST /api/telegram/webhook — Telegram calls this when admin sends a message to the bot.
@@ -30,9 +31,11 @@ export async function POST(req: Request) {
     const expBuf = crypto.createHash("sha256").update(expectedSecret).digest();
     if (!crypto.timingSafeEqual(secretBuf, expBuf)) {
       // v1.0 (audit W31-35 #2): تلاش ناموفق لاگ می‌شود
+      // v1.0 rev3 (audit SEC-a LOW): IP واقعی (هدرهای کلاینت قابل جعل بودند) + سقف طول
       const { logSecurityEvent } = await import("@/lib/security");
-      const ip = req.headers.get("x-real-ip") || (req.headers.get("x-forwarded-for") || "").split(",").pop()?.trim() || null;
-      logSecurityEvent("webhook_bad_secret", ip && ip !== "unknown" ? ip : null, "telegram webhook secret mismatch").catch(() => {});
+      const ip = getClientIpSafe(req) || null;
+      const safeIp = ip && ip !== "unknown" ? ip.slice(0, 45) : null;
+      logSecurityEvent("webhook_bad_secret", safeIp, "telegram webhook secret mismatch").catch(() => {});
       return NextResponse.json({ ok: false, error: "invalid_secret" }, { status: 403 });
     }
     const body = await req.json().catch(() => null);

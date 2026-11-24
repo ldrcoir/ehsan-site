@@ -7,6 +7,7 @@
 import { checkAdminAuth } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { ROLES } from "@/lib/rbac";
 
 /**
  * GET /api/admin/security-dashboard?password=xxx
@@ -89,8 +90,35 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true });
       }
       case "clear_logs": {
+        // v1.0 rev3 (audit SEC-a MEDIUM): پاک‌کردن کامل ردپای audit در یک POST
+        // از خودِ اکشن بی‌اثر بود (wipe بدون trace). حالا:
+        //  ۱) فقط owner اجازه دارد لاگ‌های امنیتی را پاک کند؛
+        //  ۲) ابتدا تعداد رکوردها شمرده می‌شود، بعد حذف انجام می‌شود و بلافاصله
+        //     یک رکورد «security_logs_cleared» با شمارنده و IP actor ثبت می‌شود
+        //     تا خودِ عملیات پاک‌سازی هم همیشه در تاریخچه بماند.
+        if (authCheck.role !== ROLES.OWNER) {
+          await db.securityLog
+            .create({
+              data: {
+                type: "clear_logs_denied",
+                ip,
+                detail: `non-owner (role=${authCheck.role}) attempted clear_logs`,
+              },
+            })
+            .catch(() => {});
+          return NextResponse.json({ ok: false, error: "owner_only" }, { status: 403 });
+        }
+        const count = await db.securityLog.count();
         await db.securityLog.deleteMany({});
-        return NextResponse.json({ ok: true });
+        // ثبت «بعد از» deleteMany — تا خودِ رکورد پاک نشود
+        await db.securityLog.create({
+          data: {
+            type: "security_logs_cleared",
+            ip,
+            detail: `owner cleared security logs — ${count} record(s) removed`,
+          },
+        });
+        return NextResponse.json({ ok: true, cleared: count });
       }
       default:
         return NextResponse.json({ ok: false, error: "invalid_action" }, { status: 400 });

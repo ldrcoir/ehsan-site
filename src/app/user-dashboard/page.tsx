@@ -9,7 +9,7 @@
 
 "use client";
 
-import { Component, useEffect, useState } from "react";
+import { Component, useEffect, useRef, useState } from "react";
 import type { ErrorInfo, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import ContentManager from "@/components/ContentManager";
@@ -144,7 +144,10 @@ export default function UserDashboardPage() {
     // v1.0 (audit W36-40 #7): storage بلاک‌شده باعث crash کامل dashboard می‌شد
     let savedLang: Lang = "fa";
     try {
-      savedLang = (localStorage.getItem("panel_lang") as Lang) || "fa";
+      // v1.0 rev3 (audit BUG-c MEDIUM): مقدار localStorage اعتبارسنجی می‌شود —
+      // مقدار خراب/کهنه T[lang] را undefined می‌کرد و کل dashboard سفید می‌شد
+      const raw = localStorage.getItem("panel_lang");
+      savedLang = raw === "en" || raw === "de" || raw === "fa" ? raw : "fa";
     } catch {
       savedLang = "fa";
     }
@@ -347,7 +350,7 @@ export default function UserDashboardPage() {
                 {lang === "en" && "💡 Here you can add/edit/delete books, articles, tutorials, skills, and equipment. Toggle visible to show."}
                 {lang === "de" && "💡 Hier können Sie Bücher, Artikel, Tutorials, Fähigkeiten und Geräte hinzufügen/bearbeiten."}
               </div>
-              <ContentManager lang={lang} />
+              <ContentManager lang={lang} viewerRole={user?.role} />
             </div>
           )}
 
@@ -449,6 +452,9 @@ function MessagesPanel({ lang }: { lang: Lang }) {
   const [noteText, setNoteText] = useState("");
   const [taggingId, setTaggingId] = useState<string | null>(null);
   const [tagText, setTagText] = useState("");
+  // v1.0 rev3 (audit BUG-c LOW): رفرش‌های بعد از ذخیره هم signal دارند —
+  // setState بعد از unmount دیگر رخ نمی‌دهد
+  const abortRef = useRef<AbortController | null>(null);
 
   // v1.0: بارگذاری پیام‌ها استخراج شد به تابع — addNote/setTags هم بعد از ذخیره
   // لیست را رفرش می‌کنند
@@ -477,6 +483,7 @@ function MessagesPanel({ lang }: { lang: Lang }) {
   useEffect(() => {
     // FIX: AbortController — اگر کامپوننت unmount شد، درخواست در حال پرواز لغو شود
     const controller = new AbortController();
+    abortRef.current = controller;
     loadMessages(controller.signal);
     return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -572,7 +579,7 @@ function MessagesPanel({ lang }: { lang: Lang }) {
       if (data.ok) {
         setNotingId(null);
         setNoteText("");
-        loadMessages();
+        loadMessages(abortRef.current?.signal);
       } else {
         setError(data.error || "note_failed");
       }
@@ -595,7 +602,7 @@ function MessagesPanel({ lang }: { lang: Lang }) {
       if (data.ok) {
         setTaggingId(null);
         setTagText("");
-        loadMessages();
+        loadMessages(abortRef.current?.signal);
       } else {
         setError(data.error || "tags_failed");
       }
@@ -651,6 +658,15 @@ function MessagesPanel({ lang }: { lang: Lang }) {
   const searchPlaceholder = lang === "fa" ? "جستجو در پیام‌ها (نام/ایمیل/متن)..." : lang === "en" ? "Search messages (name/email/body)..." : "Nachrichten durchsuchen (Name/E-Mail/Text)...";
   const allStatusLabel = lang === "fa" ? "همه وضعیت‌ها" : lang === "en" ? "All statuses" : "Alle Status";
   const deleteAllLabel = lang === "fa" ? "🗑️ حذف همه پیام‌ها" : lang === "en" ? "🗑️ Delete all" : "🗑️ Alle löschen";
+  // v1.0 rev3 (audit BUG-c LOW): برچسب‌های فارسی-تنها سه‌زبانه شدند
+  const noteLabel = lang === "fa" ? "📝 یادداشت" : lang === "en" ? "📝 Note" : "📝 Notiz";
+  const tagLabel = lang === "fa" ? "🏷️ تگ" : lang === "en" ? "🏷️ Tag" : "🏷️ Tag";
+  const notePlaceholder = lang === "fa" ? "یادداشت (فقط ادمین می‌بیند)..." : lang === "en" ? "Note (only admins see this)..." : "Notiz (nur für Admins sichtbar)...";
+  const saveNoteLabel = lang === "fa" ? "💾 ثبت یادداشت" : lang === "en" ? "💾 Save note" : "💾 Notiz speichern";
+  const tagPlaceholder = lang === "fa" ? "تگ‌ها با کاما: important, followup" : lang === "en" ? "Comma-separated: important, followup" : "Mit Komma: wichtig, nachfassen";
+  const saveTagsLabel = lang === "fa" ? "💾 ذخیره تگ‌ها" : lang === "en" ? "💾 Save tags" : "💾 Tags speichern";
+  const markAllReadLabel = lang === "fa" ? "✓ همه خوانده شد" : lang === "en" ? "✓ Mark all read" : "✓ Alle als gelesen";
+  const cancelLabel2 = lang === "fa" ? "انصراف" : lang === "en" ? "Cancel" : "Abbrechen";
   const statusLabels: Record<string, string> = lang === "fa"
     ? { new: "🆕 جدید", read: "👁 خوانده", replied: "↩ پاسخ داده شد", archived: "📦 بایگانی" }
     : lang === "en"
@@ -706,7 +722,29 @@ function MessagesPanel({ lang }: { lang: Lang }) {
       )}
       {/* v1.1.1: bulk delete — فقط وقتی حداقل یک پیام هست */}
       {messages && messages.length > 0 && (
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 8 }}>
+          {/* v1.0 rev3 (audit PANEL-b suggestion): همه‌ی پیام‌های جدید یک‌جا خوانده شوند */}
+          {messages.some(m => (m.status || "new") === "new") && (
+            <button
+              onClick={async () => {
+                const news = messages.filter(m => (m.status || "new") === "new");
+                for (const m of news) {
+                  await fetch("/api/messages", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({ action: "set_status", id: m.id, status: "read" }),
+                  });
+                }
+                const controller = abortRef.current;
+                loadMessages(controller?.signal);
+              }}
+              className="dashboard-btn"
+              style={{ fontSize: "11px", padding: "4px 10px" }}
+            >
+              {markAllReadLabel}
+            </button>
+          )}
           <button onClick={deleteAllMessages} className="dashboard-btn danger" style={{ fontSize: "11px", padding: "4px 10px" }}>
             {deleteAllLabel} ({messages.length})
           </button>
@@ -723,7 +761,7 @@ function MessagesPanel({ lang }: { lang: Lang }) {
               <div className="dashboard-message-header">
                 <div>
                   <strong className="dashboard-message-name">{msg.name}</strong>
-                  <span className="dashboard-message-email">{msg.email}</span>
+                  <span className="dashboard-message-email" dir="ltr">{msg.email}</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   {/* v1.1.1: نشان وضعیت پیام */}
@@ -775,14 +813,14 @@ function MessagesPanel({ lang }: { lang: Lang }) {
                   <textarea
                     value={noteText}
                     onChange={e => setNoteText(e.target.value)}
-                    placeholder="یادداشت (فقط ادمین می‌بیند)..."
+                    placeholder={notePlaceholder}
                     rows={2}
                     className="dashboard-reply-textarea"
                     autoFocus
                   />
                   <div className="dashboard-message-actions">
-                    <button onClick={() => addNote(msg.id)} className="dashboard-btn">💾 ثبت یادداشت</button>
-                    <button onClick={() => { setNotingId(null); setNoteText(""); }} className="dashboard-btn">انصراف</button>
+                    <button onClick={() => addNote(msg.id)} className="dashboard-btn">{saveNoteLabel}</button>
+                    <button onClick={() => { setNotingId(null); setNoteText(""); }} className="dashboard-btn">{cancelLabel2}</button>
                   </div>
                 </div>
               )}
@@ -793,7 +831,7 @@ function MessagesPanel({ lang }: { lang: Lang }) {
                     type="text"
                     value={tagText}
                     onChange={e => setTagText(e.target.value)}
-                    placeholder="تگ‌ها با کاما: important, followup"
+                    placeholder={tagPlaceholder}
                     className="admin-search"
                     style={{ width: "100%" }}
                     autoFocus
@@ -811,8 +849,8 @@ function MessagesPanel({ lang }: { lang: Lang }) {
                         if (tags.length > 0) setTags(msg.id, tags);
                       }}
                       className="dashboard-btn"
-                    >💾 ذخیره تگ‌ها</button>
-                    <button onClick={() => { setTaggingId(null); setTagText(""); }} className="dashboard-btn">انصراف</button>
+                    >{saveTagsLabel}</button>
+                    <button onClick={() => { setTaggingId(null); setTagText(""); }} className="dashboard-btn">{cancelLabel2}</button>
                   </div>
                 </div>
               )}
@@ -834,11 +872,11 @@ function MessagesPanel({ lang }: { lang: Lang }) {
                 <button
                   onClick={() => { setNotingId(notingId === msg.id ? null : msg.id); setNoteText(""); }}
                   className="dashboard-btn"
-                >📝 یادداشت</button>
+                >{noteLabel}</button>
                 <button
                   onClick={() => { setTaggingId(taggingId === msg.id ? null : msg.id); setTagText((msg.tags || []).map((t: any) => t.name).join(", ")); }}
                   className="dashboard-btn"
-                >🏷️ تگ</button>
+                >{tagLabel}</button>
                 {/* v1.1.1: علامت‌گذاری خوانده‌شده — فقط برای پیام‌های جدید */}
                 {/* FIX: دکمه‌های وضعیت read/unread/archive — همگی با اکشن set_status */}
                 {msg.status !== "read" && (

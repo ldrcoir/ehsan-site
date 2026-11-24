@@ -12,7 +12,7 @@ type ContentType = "book" | "article" | "tutorial" | "skill" | "aiInstruction" |
 
 interface Item { id?: string; [key: string]: any; }
 
-export default function ContentManager({ lang }: { lang: string }) {
+export default function ContentManager({ lang, viewerRole }: { lang: string; viewerRole?: string }) {
   const [activeType, setActiveType] = useState<ContentType>("tutorial");
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
@@ -272,12 +272,19 @@ export default function ContentManager({ lang }: { lang: string }) {
   return (
     <div>
       <div className="admin-tabs">
-        {(Object.keys(typeLabels) as ContentType[]).map(t => (
-          <button key={t} className={`admin-tab ${activeType === t ? "active" : ""}`}
-            onClick={() => { setActiveType(t); setEditing(null); }}>
-            {lang === "fa" ? typeLabels[t].fa : typeLabels[t].en}
-          </button>
-        ))}
+        {(Object.keys(typeLabels) as ContentType[]).map(t => {
+          // v1.0 rev3 (audit PANEL-b B4): تب قواعد AI برای کاربر limited پنهان می‌شود —
+          // سرور نوشتن/خواندن ai.* را برای non-elevated بسته (403)؛ UI هم دیگر گمراه نمی‌کند
+          if (t === "aiInstruction" && viewerRole && viewerRole !== "owner" && viewerRole !== "admin") {
+            return null;
+          }
+          return (
+            <button key={t} className={`admin-tab ${activeType === t ? "active" : ""}`}
+              onClick={() => { setActiveType(t); setEditing(null); }}>
+              {lang === "fa" ? typeLabels[t].fa : typeLabels[t].en}
+            </button>
+          );
+        })}
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>

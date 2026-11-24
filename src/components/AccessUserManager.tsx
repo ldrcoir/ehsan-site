@@ -61,6 +61,8 @@ export default function AccessUserManager() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // v1.0 rev3 (audit PANEL-b A3): پیام موفقیت — حذف کاربر دیگر بی‌صدا نیست
+  const [okMsg, setOkMsg] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [showLogs, setShowLogs] = useState(false);
@@ -69,6 +71,11 @@ export default function AccessUserManager() {
   // v1.0 (RBAC cleanup): نقش کاربرِ واردشده — تعیین می‌کند کدام دکمه‌ها/گزینه‌ها رندر شوند
   // (اعمال واقعی قواعد همیشه سمت سرور در /api/admin/users انجام می‌شود؛ این فقط UI است)
   const [viewerRole, setViewerRole] = useState<string>("user");
+  // v1.0 rev3 (audit PANEL-b B1): id کاربرِ واردشده — owner باید بتواند ردیف خودش را ویرایش کند
+  const [viewerId, setViewerId] = useState<string>("");
+  // v1.0 rev3 (audit BUG-c LOW): زبان پنل برای toLocaleString — از localStorage در useEffect
+  // (نه در رندر، تا hydration mismatch پیش نیاید)
+  const [locale, setLocale] = useState("fa-IR");
   // نام کاربری وقتی لاگ‌ها برای یک کاربر خاص فیلتر شدن (برای عنوان پنل)
   const [logsUser, setLogsUser] = useState("");
 
@@ -97,8 +104,17 @@ export default function AccessUserManager() {
     // v1.0 (RBAC cleanup): نقش کاربر فعلی را می‌خوانیم تا UI هم‌سو با قواعد سرور باشد
     fetch("/api/user/verify", { cache: "no-store", credentials: "include" })
       .then(r => r.json())
-      .then(d => { if (d?.ok && d?.user?.role) setViewerRole(d.user.role); })
+      .then(d => {
+        if (d?.ok && d?.user?.role) setViewerRole(d.user.role);
+        if (d?.ok && d?.user?.id) setViewerId(d.user.id);
+      })
       .catch(() => {});
+    // v1.0 rev3: زبان پنل برای فرمت تاریخ/عدد
+    try {
+      const l = localStorage.getItem("panel_lang");
+      if (l === "en") setLocale("en-US");
+      else if (l === "de") setLocale("de-DE");
+    } catch {}
   }, []);
 
   async function fetchUsers() {
@@ -209,6 +225,13 @@ export default function AccessUserManager() {
     setError("");
 
     const passwordChanged = form.password.length > 0;
+    // v1.0 rev3 (audit PANEL-b B2): دلیل غیرفعال‌سازی — سرور فیلد را می‌پذیرفت ولی UI جمعش نمی‌کرد
+    let deactivatedReason: string | undefined;
+    if (editingUser && editingUser.active && !form.active) {
+      const input = window.prompt("دلیل غیرفعال‌سازی این حساب (اختیاری — بدون پر کردن Enter بزنید):");
+      if (input === null) return; // کاربر منصرف شد
+      if (input.trim()) deactivatedReason = input.trim().slice(0, 200);
+    }
     const body: any = {
       username: form.username,
       password: form.password || undefined,
@@ -220,6 +243,7 @@ export default function AccessUserManager() {
       permissions: form.permissions.length > 0 ? form.permissions.join(",") : null,
       expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : null,
       active: form.active,
+      ...(deactivatedReason ? { deactivatedReason } : {}),
     };
 
     try {
@@ -278,6 +302,9 @@ export default function AccessUserManager() {
       const res = await fetch(`/api/admin/users/${user.id}`, { method: "DELETE", credentials: "include" });
       const data = await res.json();
       if (data.ok) {
+        // v1.0 rev3 (audit PANEL-b A3): بازخورد موفقیت
+        setOkMsg(`کاربر "${user.username}" حذف شد.`);
+        setError("");
         fetchUsers();
       } else {
         const msgs: Record<string, string> = {
@@ -333,7 +360,7 @@ export default function AccessUserManager() {
             <tbody>
               {logs.map((log: any) => (
                 <tr key={log.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                  <td style={{ padding: 8, color: "var(--text-dim)" }}>{new Date(log.createdAt).toLocaleString("fa-IR")}</td>
+                  <td style={{ padding: 8, color: "var(--text-dim)" }}>{new Date(log.createdAt).toLocaleString(locale)}</td>
                   <td style={{ padding: 8, color: "var(--primary-bright)" }}>{log.user?.username || "—"}</td>
                   <td style={{ padding: 8, color: getActionColor(log.action) }}>{log.action}</td>
                   <td style={{ padding: 8, color: "var(--text-dim)", fontFamily: "monospace" }}>{log.ip || "—"}</td>
@@ -363,6 +390,11 @@ export default function AccessUserManager() {
         {error && (
           <div style={{ padding: 10, marginBottom: 16, background: "rgba(255,0,64,0.1)", border: "1px solid var(--red)", color: "var(--red)", fontSize: 11, borderRadius: 4 }}>
             {error}
+          </div>
+        )}
+        {okMsg && (
+          <div style={{ padding: 10, marginBottom: 16, background: "rgba(0,255,64,0.08)", border: "1px solid var(--primary, #00ff41)", color: "var(--primary-bright)", fontSize: 11, borderRadius: 4 }}>
+            ✅ {okMsg}
           </div>
         )}
 
@@ -635,6 +667,11 @@ export default function AccessUserManager() {
           )}
         </div>
       )}
+      {okMsg && (
+        <div style={{ padding: 10, marginBottom: 16, background: "rgba(0,255,64,0.08)", border: "1px solid var(--primary, #00ff41)", color: "var(--primary-bright)", fontSize: 11, borderRadius: 4 }}>
+          ✅ {okMsg}
+        </div>
+      )}
 
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
@@ -671,16 +708,16 @@ export default function AccessUserManager() {
                 <td style={tdStyle}>{user.allowedDays || "all"}</td>
                 <td style={tdStyle}>
                   {user.expiresAt
-                    ? new Date(user.expiresAt).toLocaleDateString("fa-IR")
+                    ? new Date(user.expiresAt).toLocaleDateString(locale)
                     : "—"}
                 </td>
                 <td style={tdStyle}>
                   {user.active ? "✅" : "❌"}
                 </td>
-                <td style={tdStyle}>{typeof user.loginCount === "number" ? user.loginCount.toLocaleString("fa-IR") : "—"}</td>
+                <td style={tdStyle}>{typeof user.loginCount === "number" ? user.loginCount.toLocaleString(locale) : "—"}</td>
                 <td style={tdStyle}>
                   {user.lastLoginAt
-                    ? new Date(user.lastLoginAt).toLocaleDateString("fa-IR")
+                    ? new Date(user.lastLoginAt).toLocaleDateString(locale)
                     : "never"}
                 </td>
                 <td style={tdStyle}>
@@ -692,6 +729,11 @@ export default function AccessUserManager() {
                   )}
                   {viewerRole === "owner" && user.role !== "owner" && (
                     <button onClick={() => handleDelete(user)} className="signal-waveform-btn" style={{ padding: "4px 8px" }}>🗑️</button>
+                  )}
+                  {/* v1.0 rev3 (audit PANEL-b B1): owner روی ردیف خودش هم دکمه‌ی ویرایش دارد
+                      (سرور از قبل owner self-edit را مجاز می‌دانست — UI عقب مانده بود) */}
+                  {viewerRole === "owner" && user.id === viewerId && (
+                    <button onClick={() => startEdit(user)} className="signal-waveform-btn" style={{ padding: "4px 8px", marginRight: 4 }}>✏️</button>
                   )}
                   {viewerRole !== "owner" && user.role === "user" && (
                     <button onClick={() => startEdit(user)} className="signal-waveform-btn" style={{ padding: "4px 8px", marginRight: 4 }}>✏️</button>

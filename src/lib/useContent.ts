@@ -34,6 +34,9 @@ const fallback: SiteContent = {
   settings: {},
 };
 
+// v1.0 rev3 (audit BUG-c LOW): کش per-lang — تعویض زبان بدون فلشِ متن زبان قبلی
+const langCache = new Map<string, SiteContent>();
+
 export function useContent(lang: string = "en") {
   const [content, setContent] = useState<SiteContent>(fallback);
   const [loading, setLoading] = useState(true);
@@ -48,6 +51,15 @@ export function useContent(lang: string = "en") {
       localStorage.removeItem("site_content_cache_time");
     } catch {
       // storage بلاک‌شده (private mode/quota) — cache فقط skip می‌شود
+    }
+
+    // v1.0 rev3 (audit BUG-c LOW): کش per-lang در حافظه — هنگام تعویض زبان
+    // به‌جای «متن زبان قبلی در قالب زبان جدید» بلافاصله محتوای کش‌شده‌ی
+    // همان زبان رندر می‌شود و fetch در پس‌زمینه تازه‌اش می‌کند
+    const cached = langCache.get(lang);
+    if (cached) {
+      setContent(cached);
+      setLoading(false);
     }
 
     // fetch از /api/content که شامل متن‌ها هم هست
@@ -71,6 +83,7 @@ export function useContent(lang: string = "en") {
           navItems: data.ok ? data.navItems || [] : [],
           settings: data.ok ? data.settings || {} : {},
         };
+        langCache.set(lang, result);
         setContent(result);
         setLoading(false);
       })
