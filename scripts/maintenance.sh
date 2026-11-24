@@ -16,7 +16,7 @@
 #   bash scripts/maintenance.sh texts.set --data '{"key":"hero.greeting","valueFa":"سلام"}'
 #   bash scripts/maintenance.sh settings.get
 #   bash scripts/maintenance.sh settings.set --data '{"key":"contact_email","value":"info@ehsanmorad.ir"}'
-#   bash scripts/maintenance.sh nav.get | clip.add | equipment.set | content.get | export-all
+#   bash scripts/maintenance.sh nav.get | clip.add | clip.update | equipment.set | content.get | export-all
 #
 # v1.0 rev5 — حالت AI-bind:
 #   bash scripts/maintenance.sh --ai-bind status
@@ -141,7 +141,7 @@ case "$ACTION" in
         echo "actionهای ویرایشی (همچنین MAINTENANCE_EDIT_TOKEN لازم است):"
         echo "  texts.get / texts.set / settings.get / settings.set"
         echo "  nav.get / nav.add / nav.set-visible / nav.delete"
-        echo "  clips.get / clip.add / clip.set-visible / clip.delete"
+        echo "  clips.get / clip.add / clip.update / clip.set-visible / clip.delete"
         echo "  equipment.get / equipment.set / content.get / content.set-visible"
         echo "  export-all     — dump کامل برای همگام‌سازی نسخه‌ی آفلاین (ببین sync-from-online.sh)"
         echo ""

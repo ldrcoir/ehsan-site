@@ -225,6 +225,7 @@ const EDIT_ACTIONS = new Set([
   "nav.delete",
   "clips.get",
   "clip.add",
+  "clip.update",
   "clip.set-visible",
   "clip.delete",
   "equipment.get",
@@ -505,7 +506,7 @@ async function runEditAction(action: string, body: any): Promise<EditResult | nu
           "settings.get       — تنظیمات غیرمحرمانه (توکن‌ها ماسک)",
           "settings.set       — {key, value} فقط از whitelist",
           "nav.get | nav.add | nav.set-visible | nav.delete",
-          "clips.get | clip.add | clip.set-visible | clip.delete",
+          "clips.get | clip.add | clip.update | clip.set-visible | clip.delete",
           "equipment.get | equipment.set   — وضعیت دستگاه‌های آزمایشگاه",
           "content.get        — dump کتاب/مقاله/آموزش/مهارت",
           "content.set-visible — {model, id, visible}",
@@ -614,6 +615,8 @@ async function runEditAction(action: string, body: any): Promise<EditResult | nu
       // امنیت: امبد حتماً باید بعد از sanitize معتبر بماند (فقط iframe آپارات/یوتیوب/vimeo https)
       const safeEmbed = sanitizeEmbed(String(b.embedCode || ""));
       if (!title || !safeEmbed) return { error: "invalid_input" };
+      // v1.0 rev5: ترتیب دلخواه هم قابل ست‌کردن است (برای چیدمان قشنگ کلیپ‌ها)
+      const order = Number.isFinite(Number(b.order)) && Number(b.order) >= 0 ? Math.floor(Number(b.order)) : undefined;
       const clip = await db.aparatClip.create({
         data: {
           title,
@@ -621,9 +624,47 @@ async function runEditAction(action: string, body: any): Promise<EditResult | nu
           description: String(b.description || "").slice(0, 2000),
           category: String(b.category || "general").slice(0, 50),
           visible: b.visible === undefined ? true : b.visible === true,
+          ...(order !== undefined ? { order } : {}),
         },
       });
       return { ok: true, id: clip.id };
+    }
+
+    case "clip.update": {
+      // v1.0 rev5 — ویرایش کلیپ موجود (بدون نیاز به حذف + افزودن دوباره)
+      // همه‌ی فیلدها اختیاری‌اند؛ فقط همان‌هایی که داده شده‌اند عوض می‌شوند
+      const id = String(b.id || "");
+      if (!id) return { error: "missing_id" };
+      const data: Record<string, unknown> = {};
+      if (b.title !== undefined) {
+        const title = String(b.title).slice(0, 200);
+        if (!title) return { error: "invalid_title" };
+        data.title = title;
+      }
+      if (b.embedCode !== undefined) {
+        // امنیت: امبد جدید هم باید بعد از sanitize معتبر بماند
+        const safeEmbed = sanitizeEmbed(String(b.embedCode));
+        if (!safeEmbed) return { error: "invalid_embed" };
+        data.embedCode = safeEmbed;
+      }
+      if (b.description !== undefined) {
+        data.description = String(b.description).slice(0, 2000);
+      }
+      if (b.category !== undefined) {
+        data.category = String(b.category).slice(0, 50);
+      }
+      if (b.visible !== undefined) {
+        data.visible = b.visible === true;
+      }
+      if (b.order !== undefined) {
+        if (!Number.isFinite(Number(b.order)) || Number(b.order) < 0) {
+          return { error: "invalid_order" };
+        }
+        data.order = Math.floor(Number(b.order));
+      }
+      if (Object.keys(data).length === 0) return { error: "nothing_to_update" };
+      await db.aparatClip.update({ where: { id }, data });
+      return { ok: true, id, updatedFields: Object.keys(data) };
     }
 
     case "clip.set-visible": {
@@ -972,6 +1013,6 @@ export async function GET() {
     ok: true,
     service: "maintenance",
     enc: "اگر MAINTENANCE_ENC_KEY ست شده باشد، بدنه باید پاکت AES-256-GCM باشد (scripts/maintenance.sh خودکار رمز می‌کند) و پاسخ هم رمز شده برمی‌گردد",
-    usage: "POST { action: 'status'|'db-stats'|'security-logs'|'messages'|'chats'|'backup'|'help'|'help-edit'|'texts.get'|'texts.set'|'settings.get'|'settings.set'|'nav.get'|'nav.add'|'clips.get'|'clip.add'|'equipment.get'|'equipment.set'|'content.get'|'export-all'|... } با هدر X-Maintenance-Token — actionهای ویرایشی هدر دوم X-Maintenance-Edit-Token هم لازم دارند",
+    usage: "POST { action: 'status'|'db-stats'|'security-logs'|'messages'|'chats'|'backup'|'help'|'help-edit'|'texts.get'|'texts.set'|'settings.get'|'settings.set'|'nav.get'|'nav.add'|'clips.get'|'clip.add'|'clip.update'|'clip.set-visible'|'clip.delete'|'equipment.get'|'equipment.set'|'content.get'|'content.set-visible'|'export-all'|... } با هدر X-Maintenance-Token — actionهای ویرایشی هدر دوم X-Maintenance-Edit-Token هم لازم دارند",
   }, { headers: { "Cache-Control": "no-store" } });
 }
