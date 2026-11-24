@@ -99,8 +99,11 @@ __pycache__/
 __pycache__/
 
 # v1.0 rev2 — بسته‌ی انتشار رسمی داخل ریپو (به درخواست صاحب سایت):
+# v1.0 rev5 — بعد از سازمان‌دهی مجدد، مسیر بسته‌ها EMA/releases/ شد
 !releases/
 !releases/*.zip
+!EMA/releases/
+!EMA/releases/*.zip
 
 # v1.0 rev5 — GitHub token (never commit; 600 perms; user-provided for AI push)
 .gh-token
