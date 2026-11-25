@@ -13,11 +13,17 @@ Qabl az in, hameh file-ha dar risheh asli (root) budand ke ashgoft kar mikard. H
 ehsan-site/                    ← risheh asli
 ├── EMA/                       ← posheh-ye karbar (chiz-ha-ye ke shoma mikhohid)
 │   ├── VERSION.txt            ← tarikhche-ye version-ha + taghirat
+│   ├── STATE.md               ← hol-e seh laayeheh (version/tarikh/hash)
 │   ├── AUDIT-REPORT-v1.0.md   ← gozaresh-e momtazi-e amniyati
 │   ├── PROJECT_LOG.md         ← log-e tamami-e project
 │   ├── DEPLOYMENT-GUIDE-FA-v5.md  ← in file-e khod-e
-│   └── releases/
-│       └── ehsan-site-v1.0-rev5-1405-09-04.zip  ← pakejh-e nasb-e server
+│   └── deployment/            ← pakejh-e nasb-e mofassal
+│       ├── 01-UPLOAD-ZIP/     ← pakejh-e nasb-e server (tanha zip-e rasmi)
+│       ├── 02-Rahnama-ye-Nasb.docx
+│       ├── 03-Rahnama-ye-Vasl-e-AI.docx
+│       ├── 04-Rahnama-ye-Agent-Arzontar.docx
+│       ├── 05-CHEAT-SHEET.txt
+│       └── README.md
 │
 ├── AI/                        ← posheh-ye AI (kar-ha-ye dakheli-e AI)
 │   ├── push-to-github.sh      ← push-e code be GitHub
@@ -139,7 +145,7 @@ sqlite3 db/custom.db ".backup '/root/custom-db-pre-rev5-$(date +%Y%m%d).db'"
 
 ```bash
 # Az local (laptop-e shoma):
-scp EMA/releases/ehsan-site-v1.0-rev5-1405-09-04.zip root@31.70.76.10:/root/
+scp EMA/deployment/01-UPLOAD-ZIP/ehsan-site-v1.0-rev5-1405-09-05.zip root@31.70.76.10:/root/
 
 # Dar server:
 ssh root@31.70.76.10
@@ -459,7 +465,7 @@ bash scripts/sync-server-to-github.sh
 bash AI/push-to-github.sh
 
 # Sakht-e pakejh-e nasb:
-RELEASE_OUT="EMA/releases/ehsan-site-v1.0-<date>.zip" bash AI/package-v1.1.sh
+RELEASE_OUT="EMA/deployment/01-UPLOAD-ZIP/ehsan-site-v1.0-<date>.zip" bash AI/package-v1.1.sh
 
 # Test-e kamel:
 bash AI/test-harness.sh

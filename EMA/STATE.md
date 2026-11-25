@@ -48,8 +48,8 @@
 |------|---------|
 | Masir | `EMA/deployment/01-UPLOAD-ZIP/ehsan-site-v1.0-rev5-1405-09-05.zip` |
 | Andaze | 13,796,820 bytes (~13.8 MB) |
-| MD5 | 6051dd5a65b2a52031d25e1f38744689 |
-| Sha256 | (bebin: `sha256sum EMA/deployment/01-UPLOAD-ZIP/*.zip`) |
+| MD5 | `6051dd5a65b2a52031d25e1f38744689` |
+| Sha256 | `7253391010520738c0494ea8341fa6fc1ad051fa694edc692a9dcb678a7c7c48` |
 | Mohataviat | standalone (server.js + node_modules + .next/static) + src + install.sh + scripts |
 
 **Chera 13.8 MB?** (soal-e shoma — javab-e kamel):
