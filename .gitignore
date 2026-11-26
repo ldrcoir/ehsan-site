@@ -120,3 +120,6 @@ EMA/deployment/**/*.pdf
 
 # Vazirmatn Persian font (فقط برای sandbox، نه برای ریپو)
 scripts/fonts/
+
+# credentials کانال AI (هرگز commit نشود)
+db/.channel-credentials.env
