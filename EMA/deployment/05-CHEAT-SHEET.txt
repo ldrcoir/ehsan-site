@@ -1,243 +1,221 @@
 ================================================================
-  CHEAT SHEET — Bara-ye Ehsan Morad (ehsanmorad.ir)
-  Version 1.0 rev5 — 1405-09-05
+  برگه تقلب — برای احسان مراد (ehsanmorad.ir)
+  نسخه ۱.۰ rev5 — ۱۴۰۵/۰۹/۰۵
 ================================================================
 
-Hameh farman-ha dar in file mokhtasar hastand. Bara-ye tozih-e mofassal
-be sanad-ha-ye Word (02, 03, 04) raje besheid.
+همه فرمان‌ها در این فایل خلاصه هستند. برای توضیح مفصل به سندهای
+Word (۰۲، ۰۳، ۰۴) رجوع کنید.
 
 
 ================================================================
-  QESMAT 1: NASB-E AVVALI (yek bar)
+  بخش ۱: نصب اولیه (یک‌بار)
 ================================================================
 
-# 1. Upload-e zip be VPS (az laptop):
+# ۱. آپلود zip به سرور (از لپ‌تاپ):
 scp EMA/deployment/01-UPLOAD-ZIP/ehsan-site-v1.0-rev5-1405-09-05.zip \
     root@31.70.76.10:/root/
 
-# 2. Dar VPS:
+# ۲. در سرور:
 ssh root@31.70.76.10
 mkdir -p /home/ehsan/personal-site-rev5
 cd /home/ehsan/personal-site-rev5
 unzip -q /root/ehsan-site-v1.0-rev5-1405-09-05.zip
 cd personal-site
 
-# 3. IP-e khareji-e khod ra peyda kon (az laptop, baa VPN):
+# ۳. IP خارجی خود را پیدا کنید (از لپ‌تاپ، با VPN):
 curl -s https://api.ipify.org && echo
 
-# 4. Run-e install.sh baa AI-bind va IP allowlist:
+# ۴. اجرای install.sh با AI-bind و IP allowlist:
 sudo ./install.sh --ai-bind --ip-allowlist "203.0.113.42"
-# (IP ra avaz konid)
+# (IP را عوض کنید)
 
-# 5. Token-ha ra yad daashteh bashid (yek bar chap mishavand):
-sudo cat db/.maintenance-token.txt         # Read token
-sudo cat db/.maintenance-edit-token.txt    # Edit token
-sudo cat db/.maintenance-enc-key.txt       # Encryption key
+# ۵. توکن‌ها را یادداشت کنید (یک‌بار چاپ می‌شوند):
+sudo cat db/.maintenance-token.txt         # توکن خواندن
+sudo cat db/.maintenance-edit-token.txt    # توکن ویرایش
+sudo cat db/.maintenance-enc-key.txt       # کلید رمزنگاری
 
 
 ================================================================
-  QESMAT 2: TANZIM-E reCAPTCHA (yek bar, baed az nasb)
+  بخش ۲: تنظیم reCAPTCHA (یک‌بار، بعد از نصب)
 ================================================================
 
-# Dar .env server:
+# در فایل .env روی سرور:
 RECAPTCHA_SECRET="<secret-key>"
 NEXT_PUBLIC_RECAPTCHA_SITEKEY="<site-key>"
 
-# Restart service:
-sudo systemctl restart personal-site
+# ری‌استارت سرویس:
+sudo systemctl restart ehsan-site
 
 
 ================================================================
-  QESMAT 3: TEST-E KANAL-E MAINTENANCE
+  بخش ۳: تست کانال نگهداری
 ================================================================
 
-# Az server:
-cd /home/ehsan/personal-site-rev5/personal-site
+# روی سرور:
+cd /home/ehsan/personal-site
 bash scripts/maintenance.sh --ai-bind status
 
-# Az laptop (ba env variable-ha set shodeh):
-export MAINTENANCE_TOKEN="..."
-export MAINTENANCE_EDIT_TOKEN="..."
-export MAINTENANCE_ENC_KEY="..."
-export MAINTENANCE_URL="https://ehsanmorad.ir"
+# خروجی باید ok:true باشد.
+
+
+================================================================
+  بخش ۴: تغییر IP در لیست مجاز
+================================================================
+
+# وقتی IP اینترنت شما عوض شد:
+ssh root@31.70.76.10
+cd /home/ehsan/personal-site
+./install.sh --ai-bind --ip-allowlist "IP-جدید"
+sudo systemctl restart ehsan-site
+
+
+================================================================
+  بخش ۵: همه actionهای کانال
+================================================================
+
+# عملیات خواندن (در حالت AI-Bind نیاز به توکن ویرایش):
 bash scripts/maintenance.sh --ai-bind status
+bash scripts/maintenance.sh --ai-bind db-stats
+bash scripts/maintenance.sh --ai-bind security-logs
+bash scripts/maintenance.sh --ai-bind messages
+bash scripts/maintenance.sh --ai-bind chats
+bash scripts/maintenance.sh --ai-bind backup
+bash scripts/maintenance.sh --ai-bind texts.get
+bash scripts/maintenance.sh --ai-bind settings.get
+bash scripts/maintenance.sh --ai-bind nav.get
+bash scripts/maintenance.sh --ai-bind clips.get
+bash scripts/maintenance.sh --ai-bind equipment.get
+bash scripts/maintenance.sh --ai-bind content.get
+bash scripts/maintenance.sh --ai-bind export-all
+
+# عملیات ویرایش:
+bash scripts/maintenance.sh --ai-bind texts.set --data '{"key":"home_title","value":"..."}'
+bash scripts/maintenance.sh --ai-bind settings.set --data '{"key":"site_name","value":"..."}'
+bash scripts/maintenance.sh --ai-bind nav.add --data '{"label":"...","href":"/...","order":3}'
+bash scripts/maintenance.sh --ai-bind nav.update --data '{"id":5,"label":"..."}'
+bash scripts/maintenance.sh --ai-bind clip.add --data '{"aparat_id":"xxx","title":"..."}'
+bash scripts/maintenance.sh --ai-bind clip.update --data '{"id":12,"title":"..."}'
+bash scripts/maintenance.sh --ai-bind clip.set-visible --data '{"id":12,"visible":true}'
+bash scripts/maintenance.sh --ai-bind equipment.set --data '{"id":3,"name":"...","count":2}'
+bash scripts/maintenance.sh --ai-bind content.set-visible --data '{"id":7,"visible":true}'
 
 
 ================================================================
-  QESMAT 4: TAGHIR-E IP (agar IP-e AI taghir kard)
+  بخش ۶: همگام‌سازی سه‌لایه (سرور ↔ گیت‌هاب ↔ آفلاین)
 ================================================================
 
-# Dar server:
-cd /home/ehsan/personal-site-rev5/personal-site
-sudo ./install.sh --ip-allowlist "IP-E-JADID"
-# ya chand IP:
-sudo ./install.sh --ip-allowlist "IP1,IP2,IP3"
-# ya CIDR:
-sudo ./install.sh --ip-allowlist "203.0.113.0/24"
+# ۱. از سرور به گیت‌هاب:
+bash AI/sync-server-to-github.sh
 
-
-================================================================
-  QESMAT 5: ACTION-HA-YE KHOOONDAN
-================================================================
-
-bash scripts/maintenance.sh --ai-bind status          # hal-e server
-bash scripts/maintenance.sh --ai-bind db-stats        # tedad-e records
-bash scripts/maintenance.sh --ai-bind security-logs   # 50 rokhad-e amniyati
-bash scripts/maintenance.sh --ai-bind messages        # 50 payam-e contact
-bash scripts/maintenance.sh --ai-bind chats           # chat-ha-ye faal
-bash scripts/maintenance.sh --ai-bind backup          # backup-e fori
-bash scripts/maintenance.sh --ai-bind texts.get       # hameh matn-ha
-bash scripts/maintenance.sh --ai-bind settings.get    # hameh settings
-bash scripts/maintenance.sh --ai-bind nav.get         # menu items
-bash scripts/maintenance.sh --ai-bind clips.get       # clip-ha-ye Aparat
-bash scripts/maintenance.sh --ai-bind equipment.get   # dastgah-ha
-bash scripts/maintenance.sh --ai-bind content.get     # books/articles/...
-bash scripts/maintenance.sh --ai-bind export-all      # snapshot-e kamel
-
-
-================================================================
-  QESMAT 6: ACTION-HA-YE VIRAYESH
-================================================================
-
-# Taghir-e matn:
-bash scripts/maintenance.sh --ai-bind texts.set --data '{
-  "key": "hero.greeting",
-  "valueFa": "Salam, man Ehsan Morad hastam",
-  "valueEn": "Hello, I am Ehsan Morad",
-  "valueDe": "Hallo, ich bin Ehsan Morad"
-}'
-
-# Taghir-e contact email:
-bash scripts/maintenance.sh --ai-bind settings.set --data '{
-  "key": "contact_email",
-  "value": "info@ehsanmorad.ir"
-}'
-
-# Ezafeh-e clip-e Aparat:
-bash scripts/maintenance.sh --ai-bind clip.add --data '{
-  "title": "Moqaddeme-ye Azmayeshgah",
-  "embedCode": "<iframe src=\"https://www.aparat.com/video/...\" ...></iframe>",
-  "category": "intro",
-  "visible": true
-}'
-
-# Ezafeh-e nav item:
-bash scripts/maintenance.sh --ai-bind nav.add --data '{
-  "labelFa": "Blog",
-  "labelEn": "Blog",
-  "labelDe": "Blog",
-  "href": "/blog",
-  "visible": true
-}'
-
-# Taghir-e visible-e yek clip:
-bash scripts/maintenance.sh --ai-bind clip.set-visible --data '{
-  "id": "<clip-id>",
-  "visible": false
-}'
-
-
-================================================================
-  QESMAT 7: SYNC BE GITHUB (baed az har taghir)
-================================================================
-
-# Yek farman: virayesh + sync-e khodkar:
-bash scripts/ai-edit-online.sh texts.set --data '{...}'
-
-# Ya faghat sync (bedoon-e virayesh):
-bash scripts/sync-server-to-github.sh
-
-
-================================================================
-  QESMAT 8: SYNC AZ GITHUB BE OFFLINE
-================================================================
-
-# Dar laptop (offline):
-cd /home/z/my-project
+# ۲. از گیت‌هاب به آفلاین:
 bash AI/sync-from-github-to-offline.sh
 
-# Dry-run (bedoon-e apply):
-bash AI/sync-from-github-to-offline.sh --dry-run
+# ۳. اعمال snapshot:
+node AI/apply-snapshot.mjs snapshot.json
 
 
 ================================================================
-  QESMAT 9: KHATA-HA-YE MOMKEN
+  بخش ۷: خطاهای رایج
 ================================================================
 
-403 Forbidden          → IP dar allowlist nist: curl ifconfig.me + install.sh --ip-allowlist
-401 Unauthorized       → TOKEN eshtebah: sudo cat db/.maintenance-token.txt
-403 edit_token_required → AI_BIND=1 vali EDIT_TOKEN nist: export MAINTENANCE_EDIT_TOKEN=...
-426 encryption_required → ENC_KEY nist: export MAINTENANCE_ENC_KEY=...
-503 maintenance_disabled → TOKEN kamtar az 32 char: sudo ./install.sh
-400 enc_stale_timestamp → saat-e client/server >5min: sudo systemctl restart systemd-timesyncd
-400 enc_replay_detected → haman request dobarh: script khod nonce mikonad
-429 rate_limit         → 60 req/5min: sabr kon
-502 Bad Gateway        → service run nist: sudo systemctl status personal-site
+# ۴۰۳ Forbidden:
+#   IP شما در لیست مجاز نیست.
+#   راه‌حل: ./install.sh --ai-bind --ip-allowlist "YOUR_IP"
 
+# ۴۰۱ Unauthorized:
+#   توکن اشتباه.
+#   راه‌حل: cat db/.maintenance-edit-token.txt
 
-================================================================
-  QESMAT 10: AGENT-E ARZONTAR (agar in AI gheymati shod)
-================================================================
+# ۴۰۸ Timeout:
+#   timestamp قدیمی.
+#   راه‌حل: date  (ساعت سیستم را چک کنید)
 
-1. Yek agent-e arzontar entekhab kon (mesl-e Claude Haiku, GPT-4o-mini, GLM-4 Flash).
-2. In 5 chiz ra behesh bedeh:
-   - scripts/maintenance.sh (az GitHub: github.com/ldrcoir/ehsan-site)
-   - scripts/maintenance-enc.mjs
-   - MAINTENANCE_TOKEN (az server: sudo cat db/.maintenance-token.txt)
-   - MAINTENANCE_EDIT_TOKEN (az server: sudo cat db/.maintenance-edit-token.txt)
-   - MAINTENANCE_ENC_KEY (az server: sudo cat db/.maintenance-enc-key.txt)
-3. In system prompt ra behesh bedeh (az sanad-e 04 be-gir).
-4. IP-e mashin-e an ra be install.sh --ip-allowlist ezafeh kon.
-5. Test kon: bash scripts/maintenance.sh --ai-bind status
+# ۵۰۳ Service Unavailable:
+#   سرویس پایین است.
+#   راه‌حل: systemctl status ehsan-site
+#           journalctl -u ehsan-site -n 50
+
+# ۵۰۰ Internal Error:
+#   خطای داخلی.
+#   راه‌حل: journalctl -u ehsan-site -n 50
 
 
 ================================================================
-  QESMAT 11: RESET-E PASSWORD-E ADMIN
+  بخش ۸: تحویل به ایجنت ارزان‌تر
 ================================================================
 
-# Agar password-e admin ra faramoosh kardi:
-cd /home/ehsan/personal-site-rev5/personal-site
-sudo bash scripts/reset-admin-password.sh
-# Password-e jadid yek bar chap mishavad.
+# ۱. گرفتن توکن‌ها از سرور:
+ssh root@31.70.76.10
+cd /home/ehsan/personal-site
+echo "READ_TOKEN:$(cat db/.maintenance-token.txt)"
+echo "EDIT_TOKEN:$(cat db/.maintenance-edit-token.txt)"
+echo "ENC_KEY:$(cat db/.maintenance-enc-key.txt)"
 
+# ۲. اضافه کردن IP ایجنت جدید به لیست مجاز:
+./install.sh --ai-bind --ip-allowlist "YOUR_IP,AGENT_IP"
 
-================================================================
-  QESMAT 12: BACKUP-E KHODKAR
-================================================================
+# ۳. کپی System Prompt از سند ۰۴ به ایجنت جدید.
 
-# Cron nasb shodeh: /etc/cron.d/personal-site-backup
-# Har shab saat 3: auto-backup.sh run mishavad.
-# Output: backups/db_*.db.gz (7 version-e akhar negah midarad).
-
-# Backup-e fori:
-bash scripts/maintenance.sh --ai-bind backup
+# ۴. تست:
+bash scripts/maintenance.sh --ai-bind status
 
 
 ================================================================
-  QESMAT 13: PUSH-E CODE BE GITHUB (bara-ye developer)
+  بخش ۹: ریست رمز admin (اگر فراموش کردید)
 ================================================================
 
-# Dar laptop-e developer (ke GITHUB_TOKEN darad):
+ssh root@31.70.76.10
+cd /home/ehsan/personal-site
+bash scripts/reset-admin-password.sh
+# رمز جدید روی صفحه نمایش داده می‌شود.
+
+
+================================================================
+  بخش ۱۰: بک‌آپ دستی
+================================================================
+
+# بک‌آپ دیتابیس:
+ssh root@31.70.76.10
+cd /home/ehsan/personal-site
+sqlite3 db/site.db ".backup '/root/site-backup-$(date +%Y%m%d).db'"
+
+# بک‌آپ کامل پروژه:
+tar -czf /root/ehsan-site-backup-$(date +%Y%m%d).tar.gz .
+ls -lh /root/ehsan-site-backup-*.tar.gz
+
+
+================================================================
+  بخش ۱۱: پوش تغییرات به گیت‌هاب
+================================================================
+
+# از لپ‌تاپ (پس از ویرایش کد):
 cd /home/z/my-project
-bash AI/push-to-github.sh
+git add -A
+git commit -m "توضیح تغییرات به فارسی"
+git push origin main
 
 
 ================================================================
-  QESMAT 14: TEST-E KAMEL (43 test)
+  بخش ۱۲: اجرای تست امنیتی ۴۳ مرحله‌ای
 ================================================================
 
-# Dar posheh-e project:
-cd /home/z/my-project
+# روی سرور:
+cd /home/ehsan/personal-site
 bash AI/test-harness.sh
-# Bayad 43/43 sabz shavad.
+
+# همه ۴۳ تست باید PASS شوند.
 
 
 ================================================================
-  SANAD-HA-YE WORD
+  بخش ۱۳: اطلاعات کلیدی
 ================================================================
 
-- 02-Rahnama-ye-Nasb.docx          → rahnama-ye mofassal-e nasb
-- 03-Rahnama-ye-Vasl-e-AI.docx     → rahnama-ye vasl-e AI
-- 04-Rahnama-ye-Agent-Arzontar.docx → rahnama-ye estefadeh az agent-e arzontar
+دامنه:           ehsanmorad.ir
+IP سرور:         31.70.76.10
+ریپو گیت‌هاب:     github.com/ldrcoir/ehsan-site
+مسیر روی سرور:   /home/ehsan/personal-site
+پورت Next.js:    3000
+پورت nginx:      80, 443
+دیتابیس:         SQLite (db/site.db)
 
-================================================================
+# پایان برگه تقلب

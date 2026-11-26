@@ -117,3 +117,6 @@ EMA/deployment/**/*.pdf
 # v1.0 rev5 — GitHub token (never commit; 600 perms; user-provided for AI push)
 .gh-token
 .gh-token-*
+
+# Vazirmatn Persian font (فقط برای sandbox، نه برای ریپو)
+scripts/fonts/
