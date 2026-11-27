@@ -294,7 +294,8 @@ fi
 echo ""
 echo "=== [۵/۸] تست ==="
 sleep 2
-curl -sS -o /dev/null -w "  پورت ۸۰   → HTTP %{http_code}\n" --max-time 5 http://localhost/ || echo "  ❌ پورت ۸۰"
+# با هدر دامنه تست می‌کنیم — درخواست بدون دامنه عمداً با 444 بسته می‌شود (امنیتی)
+curl -sS -o /dev/null -w "  سایت از nginx → HTTP %{http_code}\n" --max-time 5 -H "Host: $MAIN_DOMAIN" http://127.0.0.1/ || echo "  ❌ nginx جواب نمی‌دهد"
 if systemctl list-unit-files | grep -q $SERVICE_NAME; then
     curl -sS -o /dev/null -w "  پورت ۳۰۰۰ → HTTP %{http_code}\n" --max-time 5 http://127.0.0.1:$APP_PORT/ \
         || { echo "  ⚠ پورت ۳۰۰۰ — لاگ:"; journalctl -u $SERVICE_NAME -n 10 --no-pager | tail -5; }
