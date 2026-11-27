@@ -630,7 +630,7 @@ export const UI = {
       ].join("\n"),
       cleared: "",
     },
-    footer: { built: "ساخته‌شده با عشق.", admin: "ادمین" },
+    footer: { built: "", admin: "ادمین" },
     toTop: "بازگشت به بالا",
   },
 };

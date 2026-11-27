@@ -21,7 +21,9 @@ essential_texts = [
     ("hero.greeting", "Hello", "Hallo", "سلام"),
     ("hero.cta1", "View Work", "Arbeiten", "نمونه‌کارها"),
     ("hero.cta2", "Contact", "Kontakt", "تماس"),
-    ("footer.built", "Built with Next.js", "Gebaut mit Next.js", "ساخته‌شده با Next.js"),
+    # فوتر: فقط «© سال نام» — بدون خط «ساخته‌شده با ...» (درخواست صاحب سایت).
+    # فاصله‌ی خالی عمدی است تا fallback کد هم نمایش داده نشود.
+    ("footer.built", " ", " ", " "),
     # --- V1.1: about ---
     ("about.title", "Whoami", "Whoami", "whoami"),
     ("about.p1",
