@@ -57,7 +57,7 @@ if ! git fetch origin server-state 2>/dev/null; then
     echo "   برای ساختنش، در سرور اجرا کن:"
     echo "     bash scripts/sync-server-to-github.sh"
     echo ""
-    echo "   یا اگر هنوز سرور نصب نشده، اول rev5 را deploy کن (ببین DEPLOYMENT-GUIDE-FA-v5.md)"
+    echo "   یا اگر هنوز سرور نصب نشده، نصاب تک‌فایلی NASB-KAMEL.sh را اجرا کن (سند ۰۲ بخش ۶)"
     exit 1
 fi
 echo "  ✅ fetch موفق"
