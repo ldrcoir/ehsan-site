@@ -137,7 +137,7 @@ const T = {
     status: "وضعیت",
     save: "ذخیره",
     passwordSection: "🔐 تغییر رمز",
-    newPassword: "رمز جدید (حداقل ۱۲ کاراکتر)",
+    newPassword: "رمز جدید (حداقل ۶ کاراکتر)",
     changePassword: "تغییر رمز",
     emailSection: "📧 ایمیل فوروارد",
     emailHint: "پیام‌های تماس به این ایمیل فوروارد می‌شن (رایگان با formsubmit.co)",
@@ -214,7 +214,7 @@ const T = {
     status: "Status",
     save: "Save",
     passwordSection: "🔐 Change Password",
-    newPassword: "New password (min 12 chars)",
+    newPassword: "New password (min 6 chars)",
     changePassword: "Change Password",
     emailSection: "📧 Forward Email",
     emailHint: "Contact messages are forwarded to this email (free with formsubmit.co)",
@@ -291,7 +291,7 @@ const T = {
     status: "Status",
     save: "Speichern",
     passwordSection: "🔐 Passwort ändern",
-    newPassword: "Neues Passwort (min 12 Zeichen)",
+    newPassword: "Neues Passwort (min 6 Zeichen)",
     changePassword: "Passwort ändern",
     emailSection: "📧 Weiterleitungs-E-Mail",
     emailHint: "Kontaktnachrichten werden an diese E-Mail weitergeleitet (kostenlos mit formsubmit.co)",
@@ -586,8 +586,8 @@ export default function SettingsPanel() {
       showMessage(t.error + ": " + (panelLang === "fa" ? "رمز فعلی الزامی" : "Current password required"), true);
       return;
     }
-    if (newPassword.length < 12) {
-      showMessage(t.error + ": " + (panelLang === "fa" ? "رمز جدید حداقل ۱۲ کاراکتر" : "New password min 12 chars"), true);
+    if (newPassword.length < 6) {
+      showMessage(t.error + ": " + (panelLang === "fa" ? "رمز جدید حداقل ۶ کاراکتر" : "New password min 6 chars"), true);
       return;
     }
     if (currentPassword === newPassword) {

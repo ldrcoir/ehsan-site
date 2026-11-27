@@ -33,9 +33,9 @@ const firaCode = Fira_Code({ variable: "--font-fira-code", subsets: ["latin"] })
 // ============================================================================
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ehsanmorad.ir";
 
-const FALLBACK_SITE_NAME = "Personal Site";
+const FALLBACK_SITE_NAME = "احسان مراد";
 const FALLBACK_DESCRIPTION =
-  "Personal portfolio website — built with Next.js, TypeScript, Prisma, and SQLite.";
+  "وب‌سایت رسمی احسان مراد";
 
 export async function generateMetadata(): Promise<Metadata> {
   let siteName = FALLBACK_SITE_NAME;

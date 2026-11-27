@@ -1073,8 +1073,8 @@ export default function Home() {
       {/* FOOTER */}
       <footer className="footer">
         <div className="container footer-inner">
-          {/* V1.1: footer.built از DB با fallback به content.ts */}
-          <p>© {year ?? ""} {siteContent.settings?.["name_" + lang] || PERSONAL.fullName[lang]}. {tx("footer.built", tt.footer.built)}</p>
+          {/* V1.1: footer.built از DB — v1.1.3: خط «© سال نام» به خواست صاحب سایت حذف شد */}
+          <p aria-hidden="true" style={{ display: "none" }}>© {year ?? ""} {siteContent.settings?.["name_" + lang] || PERSONAL.fullName[lang]}. {tx("footer.built", tt.footer.built)}</p>
           {/* V1.1: footer links از DB (navItems) با fallback به لینک‌های ثابت */}
           <ul className="footer-links">
             {siteContent.navItems.length > 0 ? (

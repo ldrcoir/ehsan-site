@@ -57,8 +57,8 @@ export async function POST(req: Request) {
       case "change_password": {
         const newPassword = String(body.newPassword || "").trim();
         const currentPassword = String(body.currentPassword || "");
-        // v1.1.1 (audit S1-M2): رمز ادمین حداقل ۱۲ کاراکتر (قبلش ۶ بود)
-        if (newPassword.length < 12) {
+        // v1.1.3: به خواست صاحب سایت حداقل رمز ۶ کاراکتر است (قبلاً ۱۲ بود)
+        if (newPassword.length < 6) {
           return NextResponse.json({ ok: false, error: "password_too_short" }, { status: 400 });
         }
         if (newPassword.length > 128) {

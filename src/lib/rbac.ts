@@ -80,7 +80,7 @@ export function canManageTarget(requesterRole: string, targetRole: string): bool
 
 // حداقل طول رمز بر اساس نقش هدف — ادمین/مالک ۱۲، کاربر عادی ۸
 export function minPasswordLength(role: string): number {
-  return isElevated(role) ? 12 : 8;
+  return 6; // v1.1.3: به خواست صاحب سایت حداقل رمز همه نقش‌ها ۶ کاراکتر
 }
 
 // ---------------------------------------------------------------------------

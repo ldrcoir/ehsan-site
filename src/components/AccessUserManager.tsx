@@ -274,7 +274,7 @@ export default function AccessUserManager() {
       } else {
         const msgs: Record<string, string> = {
           username_too_short: "نام کاربری خیلی کوتاه است (حداقل ۳ کاراکتر).",
-          password_too_short: "رمز خیلی کوتاه است (ادمین: حداقل ۱۲، کاربر: حداقل ۸ کاراکتر).",
+          password_too_short: "رمز خیلی کوتاه است (حداقل ۶ کاراکتر).",
           password_too_long: "رمز خیلی طولانی است (حداکثر ۱۲۸ کاراکتر).",
           username_exists: "این نام کاربری قبلاً گرفته شده.",
           invalid_hour_start: "ساعت شروع نامعتبر (۰-۲۳).",
@@ -448,7 +448,7 @@ export default function AccessUserManager() {
             </div>
             <small style={{ color: "var(--text-faint)", fontSize: 10, display: "block", marginTop: 4 }}>
               {form.password.length > 0
-                ? `طول رمز: ${form.password.length} کاراکتر${ELEVATED_ROLES.has(form.role) ? " (ادمین/مالک: حداقل ۱۲)" : " (حداقل ۸)"} — با دکمه‌ی 👁 می‌توانی رمز را ببینی`
+                ? `طول رمز: ${form.password.length} کاراکتر${ELEVATED_ROLES.has(form.role) ? " (حداقل ۶)" : " (حداقل ۶)"} — با دکمه‌ی 👁 می‌توانی رمز را ببینی`
                 : "حداقل: ادمین ۱۲ و کاربر عادی ۸ کاراکتر — یا با 🎲 رمز قوی بساز"}
             </small>
           </div>
