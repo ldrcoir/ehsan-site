@@ -691,46 +691,83 @@ echo "  ✅ بک‌آپ شبانه ۳ بامداد فعال شد (/etc/cron.d/pe
 echo "  ✅ logrotate لاگ بک‌آپ فعال شد (/etc/logrotate.d/personal-site-backup)"
 
 # ============================================================================
-# قدم ۱۰: Nginx
+# قدم ۱۰: Nginx — v1.0 rev6: مقاوم‌سازی کامل (نصب مجدد، استارت، کانفیگ، تست)
 # ============================================================================
 echo ""
 echo "[10/11] Nginx..."
+
+# v1.0 rev6: اگر nginx نصب نیست، حداکثر ۳ بار تلاش کن — شکست apt گاهی موقتی است
+# (mirror کند، lock موقت). اگر بعد از ۳ بار نشد، نصب ادامه می‌یابد ولی هشدار پررنگ می‌دهیم.
+NGINX_OK=false
+for ATTEMPT in 1 2 3; do
+    if command -v nginx &>/dev/null; then
+        NGINX_OK=true
+        break
+    fi
+    echo "  » تلاش $ATTEMPT برای نصب nginx..."
+    apt-get update -qq 2>/dev/null || true
+    if apt-get install -y -qq nginx 2>&1 | tail -2; then
+        NGINX_OK=true
+        break
+    fi
+    sleep 5
+done
+if [ "$NGINX_OK" = "true" ]; then
+    echo "  ✅ nginx نصب است: $(nginx -v 2>&1 || echo '?')"
+else
+    echo "  ❌ nginx نصب نشد! سایت فقط با nginx از بیرون دیده می‌شود."
+    echo "     بعداً دستی اجرا کن:  apt-get install -y nginx  و بعد دوباره install.sh"
+    echo "     (ادامه می‌دهم تا حداقل سایت و کانال AI بالا بیایند)"
+fi
+
+# v1.0 rev6: سرویس nginx باید فعال باشد — استارت با retry
+if [ "$NGINX_OK" = "true" ]; then
+    if ! systemctl is-active --quiet nginx 2>/dev/null; then
+        systemctl enable nginx >/dev/null 2>&1
+        systemctl start nginx 2>/dev/null || systemctl restart nginx 2>/dev/null || true
+        sleep 2
+    fi
+    systemctl is-active --quiet nginx \
+        && echo "  ✅ سرویس nginx: $(systemctl is-active nginx)" \
+        || echo "  ⚠ سرویس nginx بالا نیامد — بعداً: systemctl start nginx"
+fi
+
 # v1.1.2 (fix): || true حذف شد — خطای کپی کانفیگ یا nginx -t باید نصب را متوقف کند
 # (سایت بدون nginx کار نمی‌کند؛ پوشاندن خطا یعنی «موفق» گزارش‌کردنِ نصب خراب)
 # v1.0 (audit W46-50 #1 — HIGH): مسیر مطلق — در شاخه‌ی standalone، cd به
 # .next/standalone انجام شده بود و cp نسبی فایل conf را پیدا نمی‌کرد و کل نصب
 # بعد از تمام شدن کارهای سنگین abort می‌شد
-echo "" 
-echo "[10/11] Nginx..."
-# v1.0 rev3 (audit DEPLOY-d MEDIUM): اگر کانفیگِ نصب‌شده از قبل TLS دارد (certbot
-# بلوک‌های 443/redirect را داخل همان فایل می‌نویسد)، بازنویسی با نسخه‌ی HTTP-only
-# ریپو «HTTPS فعال» را بی‌صدا می‌شکست — پس کانفیگ TLS-دار دست‌نخورده می‌ماند.
-INSTALLED_NGINX_CONF=/etc/nginx/sites-available/nginx-ehsanmorad.conf
-if [ -f "$INSTALLED_NGINX_CONF" ] && grep -qE 'ssl_certificate|443 ssl' "$INSTALLED_NGINX_CONF"; then
-    echo "  ⏭ کانفیگ nginx نصب‌شده TLS/certbot-managed است — بازنویسی نشد"
-    echo "    (برای اعمال نسخه‌ی جدید: اول بک‌آپ بگیر و بلوک‌های TLS را دستی منتقل کن)"
-else
-    if ! cp "$PROJECT_ROOT/nginx-ehsanmorad.conf" "$INSTALLED_NGINX_CONF"; then
-        echo "  ❌ کپی nginx config ناموفق بود — فایل nginx-ehsanmorad.conf کنار install.sh هست؟"
+if [ "$NGINX_OK" = "true" ]; then
+    INSTALLED_NGINX_CONF=/etc/nginx/sites-available/nginx-ehsanmorad.conf
+    # v1.0 rev3 (audit DEPLOY-d MEDIUM): اگر کانفیگِ نصب‌شده از قبل TLS دارد (certbot
+    # بلوک‌های 443/redirect را داخل همان فایل می‌نویسد)، بازنویسی با نسخه‌ی HTTP-only
+    # ریپو «HTTPS فعال» را بی‌صدا می‌شکست — پس کانفیگ TLS-دار دست‌نخورده می‌ماند.
+    if [ -f "$INSTALLED_NGINX_CONF" ] && grep -qE 'ssl_certificate|443 ssl' "$INSTALLED_NGINX_CONF"; then
+        echo "  ⏭ کانفیگ nginx نصب‌شده TLS/certbot-managed است — بازنویسی نشد"
+        echo "    (برای اعمال نسخه‌ی جدید: اول بک‌آپ بگیر و بلوک‌های TLS را دستی منتقل کن)"
+    else
+        if ! cp "$PROJECT_ROOT/nginx-ehsanmorad.conf" "$INSTALLED_NGINX_CONF"; then
+            echo "  ❌ کپی nginx config ناموفق بود — فایل nginx-ehsanmorad.conf کنار install.sh هست؟"
+            exit 1
+        fi
+    fi
+    ln -sf /etc/nginx/sites-available/nginx-ehsanmorad.conf /etc/nginx/sites-enabled/nginx-ehsanmorad.conf 2>/dev/null || true
+    # v1.0 (audit W36-40 #11): symlink بی‌صدا نباید فرض شود — در چیدمان‌های بدون sites-enabled،
+    # nginx -t با سایت default سبز می‌شد و هیچ proxys به :3000 وجود نداشت
+    if [ ! -e /etc/nginx/sites-enabled/nginx-ehsanmorad.conf ]; then
+        echo "  ❌ symlink sites-enabled ساخته نشد — چیدمان nginx را دستی بررسی کن (conf.d یا include)"
+        exit 1
+    fi
+    rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
+    if nginx -t 2>&1; then
+        systemctl reload nginx || systemctl restart nginx || true
+        echo "  ✅ Nginx تنظیم شد (۳ دامنه: ehsanmorad.ir / ehsan-morad.ir / ehsanmorad.id.ir)"
+    else
+        echo "  ❌ nginx -t ناموفق بود — config نامعتبر است؛ nginx reload نشد. نصب متوقف شد."
+        echo "     بررسی دستی: nginx -t   و   cat /etc/nginx/sites-available/nginx-ehsanmorad.conf"
         exit 1
     fi
 fi
-ln -sf /etc/nginx/sites-available/nginx-ehsanmorad.conf /etc/nginx/sites-enabled/nginx-ehsanmorad.conf 2>/dev/null || true
-# v1.0 (audit W36-40 #11): symlink بی‌صدا نباید فرض شود — در چیدمان‌های بدون sites-enabled،
-# nginx -t با سایت default سبز می‌شد و هیچ proxys به :3000 وجود نداشت
-if [ ! -e /etc/nginx/sites-enabled/nginx-ehsanmorad.conf ]; then
-    echo "  ❌ symlink sites-enabled ساخته نشد — چیدمان nginx را دستی بررسی کن (conf.d یا include)"
-    exit 1
-fi
-rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
-if nginx -t 2>&1; then
-    systemctl reload nginx
-else
-    echo "  ❌ nginx -t ناموفق بود — config نامعتبر است؛ nginx reload نشد. نصب متوقف شد."
-    echo "     بررسی دستی: nginx -t   و   cat /etc/nginx/sites-available/nginx-ehsanmorad.conf"
-    exit 1
-fi
-echo "  ✅ Nginx تنظیم شد"
 
 # تست — v1.0 (audit W46-50 #14): retry تا ۱۵ ثانیه؛ start سرد standalone گاهی
 # بیشتر از 5s طول می‌کشید و «سایت بالا نیومد» کاذب گزارش می‌شد
@@ -749,44 +786,47 @@ if [ "$SUCCESS" != "true" ]; then
 fi
 
 # ============================================================================
-# قدم ۱۱: HTTPS (اگه دامنه ست شده)
+# قدم ۱۱: HTTPS — v1.0 rev6: SSL برای «هر ۳ دامنه» (نه فقط اولی) با چک DNS هر دامنه
 # ============================================================================
 echo ""
 echo "[11/11] HTTPS..."
-DOMAIN_FOUND=""
+# v1.0 rev6: قبلاً فقط اولین دامنه‌ی پیدا شده گواهی می‌گرفت و دو دامنه‌ی دیگر
+# بدون SSL می‌ماندند. حالا برای هر دامنه‌ای که DNS آن به IP همین سرور اشاره
+# می‌کند گواهی می‌گیریم؛ دامنه‌های بدون DNS با راهنمای دستی رد می‌شوند.
+SITE_URL=""
+SSL_OK_COUNT=0
 for domain in ehsanmorad.ir ehsan-morad.ir ehsanmorad.id.ir; do
-    if host "$domain" &>/dev/null; then
-        DOMAIN_FOUND="$domain"
-        break
+    DOMAIN_IP=$(getent hosts "$domain" 2>/dev/null | awk '{print $1}' | head -1)
+    SERVER_IP=$(curl -s --max-time 5 https://api.ipify.org 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}')
+    if [ -z "$DOMAIN_IP" ]; then
+        echo "  ⚠ $domain — در DNS نیست. در Cloudflare رکورد A بده: $SERVER_IP (پروکسی خاموش)"
+        continue
+    fi
+    if [ "$DOMAIN_IP" != "$SERVER_IP" ]; then
+        echo "  ⚠ $domain — به $DOMAIN_IP اشاره می‌کند نه $SERVER_IP. DNS را اصلاح کن."
+        continue
+    fi
+    echo "  » $domain → DNS اوکی، گرفتن گواهی..."
+    WWW_ARGS=""
+    if getent hosts "www.$domain" >/dev/null 2>&1; then
+        WWW_ARGS="-d www.$domain"
+    else
+        echo "    (رکورد www در DNS نیست — فقط دامنه‌ی اصلی)"
+    fi
+    # v1.1.1 (audit S10-H2): --redirect — HTTP به HTTPS ریدایرکت می‌شود
+    if certbot --nginx -d "$domain" $WWW_ARGS --redirect --non-interactive --agree-tos --register-unsafely-without-email 2>&1 | grep -E "Successfully|error|Error|Failed|fail" | tail -2; then
+        echo "  ✅ HTTPS فعال شد: $domain"
+        SSL_OK_COUNT=$((SSL_OK_COUNT + 1))
+        [ -z "$SITE_URL" ] && SITE_URL="https://$domain"
+    else
+        echo "  ⚠ certbot برای $domain ناموفق — بعداً دستی: sudo certbot --nginx -d $domain --redirect"
+        echo "    (مطمئن شو پروکسی Cloudflare خاموش است — ابر خاکستری — وگرنه certbot گواهی نمی‌گیرد)"
     fi
 done
-
-if [ -n "$DOMAIN_FOUND" ]; then
-    echo "  دامنه پیدا شد: $DOMAIN_FOUND"
-    echo "  در حال دریافت SSL certificate..."
-    # v1.1.1 (audit S10-H2): --redirect — بعد از صدور گواهی، HTTP به HTTPS ریدایرکت
-    # می‌شود؛ قبلاً HTTP باز می‌ماند و رمز ادمین می‌توانست در HTTPِ خالی ارسال شود
-    # v1.0 (audit W46-50 #5): www فقط وقتی در DNS هست درخواست می‌شود — نبودِ رکورد
-    # www کل order را می‌شکست و HTTPS کلاً skip می‌شد
-    WWW_ARGS=""
-    if host "www.$DOMAIN_FOUND" >/dev/null 2>&1; then
-        WWW_ARGS="-d www.$DOMAIN_FOUND"
-    else
-        echo "  (رکورد www در DNS نیست — فقط دامنه‌ی اصلی درخواست می‌شود)"
-    fi
-    if certbot --nginx -d "$DOMAIN_FOUND" $WWW_ARGS --redirect --non-interactive --agree-tos --register-unsafely-without-email 2>&1 | tail -5; then
-        echo "  ✅ HTTPS فعال شد (HTTP → HTTPS redirect)"
-        SITE_URL="https://$DOMAIN_FOUND"
-    else
-        echo "  ⚠ certbot ناموفق بود. بعداً دستی اجرا کن:"
-        echo "    sudo certbot --nginx -d $DOMAIN_FOUND --redirect"
-        SITE_URL="http://$DOMAIN_FOUND"
-    fi
-else
-    echo "  ⚠ دامنه‌ای DNS ست نشده. فعلاً HTTP (از طریق nginx پورت ۸۰)."
-    # v1.1: hardcoded VPS IP removed (info leak) — use hostname instead
-    # v1.1.1: آدرس بدون پورت 3000 — پورت 3000 فایروال‌شده و app فقط روی loopback است؛
-    # ورود از مرورگر فقط از طریق nginx (پورت 80) ممکن است
+if [ $SSL_OK_COUNT -gt 0 ]; then
+    echo "  ✅ مجموع: SSL برای $SSL_OK_COUNT دامنه فعال شد"
+elif [ -z "$SITE_URL" ]; then
+    echo "  ⚠ هیچ دامنه‌ای DNS ندارد — فعلاً HTTP از طریق nginx پورت ۸۰."
     SITE_URL="http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'YOUR_IP')"
 fi
 

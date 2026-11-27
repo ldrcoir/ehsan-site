@@ -123,3 +123,6 @@ scripts/fonts/
 
 # credentials کانال AI (هرگز commit نشود)
 db/.channel-credentials.env
+
+# اسکریپت بازگردانی توکن — هرگز commit نشود
+download/bazgardani-token.sh
