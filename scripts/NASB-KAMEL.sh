@@ -1,20 +1,23 @@
 #!/bin/bash
 # ============================================================================
-# NASB-KAMEL.sh — نصب کامل سایت + nginx + SSL + اتصال هوش مصنوعی
+# NASB-KAMEL.sh v2 — نصب کامل سایت + nginx + SSL + اتصال هوش مصنوعی
 # ============================================================================
+# تغییرات نسخه ۲ (رفع خطای اجرای قبلی):
+#   ✚ خطای «server_tokens is duplicate» رفع شد — server_tokens فقط داخل
+#     هر server block نوشته می‌شود، نه در سطح http
+#   ✚ map و limit_req_zone فقط اگر از قبل در nginx وجود نداشته باشند اضافه
+#     می‌شوند (ضد تکرار)
+#   ✚ کانفیگ‌های قدیمی ehsan*.conf و ehsan-3domains.conf پاک می‌شوند
+#   ✚ کاملاً قابل اجرای مجدد است — هر بار اجرا کنی، بخش‌های انجام‌شده رد می‌شوند
+#   ✚ توکن‌های کانال داخل اسکریپت هست‌اند و به‌طور خودکار در .env ست می‌شوند
+#   ✚ اگر دیتابیس نباشد، با prisma db push ساخته می‌شود
+#
 # راهنما:
 #   ۱. این فایل را از چت دانلود کن
 #   ۲. scp NASB-KAMEL.sh root@31.70.76.10:/root/
-#   ۳. ssh root@31.70.76.10
-#   ۴. bash /root/NASB-KAMEL.sh
+#   ۳. ssh root@31.70.76.10 'bash /root/NASB-KAMEL.sh'
 #
-# این اسکریپت:
-#   - nginx و certbot نصب می‌کند
-#   - کانفیگ ۳ دامنه می‌نویسد (ehsanmorad.ir / ehsan-morad.ir / ehsanmorad.id.ir)
-#   - سایت را پیدا می‌کند (یا از zip نصب می‌کند)
-#   - سرویس systemd می‌سازد و استارت می‌کند
-#   - SSL برای هر ۳ دامنه می‌گیرد
-#   - توکن‌های کانال هوش مصنوعی را چاپ می‌کند
+# اگر وسط کار قطع شد، نگران نباش — دوباره همان دستور را اجرا کن.
 # ============================================================================
 export DEBIAN_FRONTEND=noninteractive
 DOMAINS="ehsanmorad.ir ehsan-morad.ir ehsanmorad.id.ir"
@@ -23,18 +26,24 @@ MAIN_DOMAIN="ehsanmorad.ir"
 APP_PORT=3000
 SERVICE_NAME="ehsan-site"
 BASE="/home/ehsan"
+PRISMA_VER="6.11.1"
+
+# ── توکن‌های کانال هوش مصنوعی (ثابت — با چت هم‌خوان هستند) ──────────────────
+READ_TOKEN="e5f11035680e2eca4a303d165ee79f089b5c8fe950965cf815d00fc490454764"
+EDIT_TOKEN="28418d648fc14f30cf685c1d3adcfe6ad232491e02da1bb50f1e2b4917f5f9df"
+ENC_KEY="74cbddeeab75d3788deeba55676ac14adad621f9d8ddd54b9954b02450e2e416"
 
 echo "=============================================="
-echo "  نصب کامل ehsanmorad.ir — $(date)"
+echo "  نصب کامل ehsanmorad.ir — نسخه ۲ — $(date)"
 echo "=============================================="
 
 # ----------------------------------------------------------------------------
 # ۱) پیش‌نیازها
 # ----------------------------------------------------------------------------
 echo ""
-echo "=== [۱/۸] نصب پیش‌نیازها (nginx, certbot, node, ...) ==="
+echo "=== [۱/۸] پیش‌نیازها (nginx, certbot, node, ...) ==="
 apt-get update -qq 2>/dev/null || echo "  ⚠ apt update کامل نشد — ادامه می‌دهم"
-for pkg in nginx python3-certbot-nginx curl unzip sqlite3 jq; do
+for pkg in nginx python3-certbot-nginx curl unzip sqlite3 jq openssl; do
     if ! command -v "$pkg" &>/dev/null && ! dpkg -s "$pkg" &>/dev/null 2>&1; then
         apt-get install -y -qq "$pkg" 2>&1 | tail -1 && echo "  ✅ $pkg نصب شد" || echo "  ⚠ $pkg نصب نشد"
     else
@@ -54,7 +63,7 @@ else
 fi
 
 # ----------------------------------------------------------------------------
-# ۲) پیدا کردن یا نصب سایت
+# ۲) پیدا کردن یا باز کردن zip سایت
 # ----------------------------------------------------------------------------
 echo ""
 echo "=== [۲/۸] پیدا کردن سایت ==="
@@ -66,55 +75,92 @@ if [ -z "$PROJECT" ]; then
     PROJECT=$(find "$BASE" /root /opt /srv -maxdepth 4 -name package.json -path "*personal-site*" 2>/dev/null | head -1 | xargs -r dirname)
 fi
 
-# اگر پیدا نشد، دنبال zip بگرد
 if [ -z "$PROJECT" ]; then
-    echo "  ⚠ سایت پیدا نشد — دنبال zip نصب می‌گردم..."
+    echo "  ⚠ سایت پیدا نشد — دنبال zip می‌گردم..."
     ZIP=$(find /root "$BASE" -maxdepth 3 -name "ehsan-site-*.zip" 2>/dev/null | head -1)
     if [ -n "$ZIP" ]; then
         echo "  » zip پیدا شد: $ZIP"
         mkdir -p "$BASE"
         unzip -q -o "$ZIP" -d "$BASE/"
-        PROJECT=$(find "$BASE" -maxdepth 3 -name package.json -path "*personal-site*" 2>/dev/null | head -1 | xargs -r dirname)
+        PROJECT="$BASE/personal-site"
         echo "  ✅ باز شد: $PROJECT"
     else
         echo "  ❌ نه سایت هست نه zip!"
-        echo "     zip را با scp آپلود کن: scp ehsan-site-v1.0-rev5-*.zip root@$VPS_IP:/root/"
-        echo "     بعد دوباره این اسکریپت را اجرا کن."
-        echo "     (nginx و SSL همین‌جا نصب می‌شود؛ ادامه می‌دهم)"
+        echo "     zip را آپلود کن: scp ehsan-site-*.zip root@$VPS_IP:/root/"
+        echo "     بعد دوباره همین اسکریپت را اجرا کن. (nginx و SSL همین‌جا نصب می‌شوند)"
     fi
 else
     echo "  ✅ سایت: $PROJECT"
 fi
 
 # ----------------------------------------------------------------------------
-# ۳) systemd service
+# ۳) دیتابیس + .env + سرویس systemd
 # ----------------------------------------------------------------------------
 echo ""
-echo "=== [۳/۸] ساخت سرویس systemd ==="
+echo "=== [۳/۸] دیتابیس، .env و سرویس systemd ==="
 if [ -n "$PROJECT" ] && [ -d "$PROJECT" ]; then
-    # standalone یا build موجود؟
-    if [ -f "$PROJECT/.next/standalone/server.js" ]; then
-        SERVER_JS="$PROJECT/.next/standalone/server.js"
-        cd "$PROJECT/.next/standalone" 2>/dev/null || true
-    elif [ -f "$PROJECT/server.js" ]; then
+
+    # server.js — اول root پروژه، بعد standalone
+    if [ -f "$PROJECT/server.js" ]; then
         SERVER_JS="$PROJECT/server.js"
+    elif [ -f "$PROJECT/.next/standalone/server.js" ]; then
+        SERVER_JS="$PROJECT/.next/standalone/server.js"
     else
         SERVER_JS=""
-        echo "  » standalone نیست — build می‌گیرم (۲-۳ دقیقه)..."
-        cd "$PROJECT"
-        command -v bun &>/dev/null && bun install >/dev/null 2>&1 || npm install --legacy-peer-deps >/dev/null 2>&1
-        npx prisma generate >/dev/null 2>&1
-        npm run build >/dev/null 2>&1 && echo "  ✅ build شد" || echo "  ❌ build شکست خورد"
-        [ -f "$PROJECT/.next/standalone/server.js" ] && SERVER_JS="$PROJECT/.next/standalone/server.js"
+        echo "  ❌ server.js پیدا نشد — zip ناقص است"
     fi
 
-    if [ -n "$SERVER_JS" ]; then
-        # SESSION_SECRET اگر نیست بساز
-        if [ -f "$PROJECT/.env" ] && ! grep -q SESSION_SECRET "$PROJECT/.env" 2>/dev/null; then
-            echo "SESSION_SECRET=$(openssl rand -hex 32)" >> "$PROJECT/.env"
-        elif [ ! -f "$PROJECT/.env" ]; then
-            echo "SESSION_SECRET=$(openssl rand -hex 32)" > "$PROJECT/.env"
+    # .env — مقدارهای موجود حفظ می‌شوند، فقط چیزی که نیست اضافه می‌شود
+    mkdir -p "$PROJECT/db"
+    touch "$PROJECT/.env"
+    set_env() {  # set_env KEY VALUE → اگر کلید بود عوض کن، نبود اضافه کن
+        if grep -q "^$1=" "$PROJECT/.env" 2>/dev/null; then
+            sed -i "s|^$1=.*|$1=\"$2\"|" "$PROJECT/.env"
+        else
+            echo "$1=\"$2\"" >> "$PROJECT/.env"
         fi
+    }
+    grep -q "^SESSION_SECRET=" "$PROJECT/.env" 2>/dev/null \
+        || echo "SESSION_SECRET=$(openssl rand -hex 32)" >> "$PROJECT/.env"
+    set_env DATABASE_URL "file:$PROJECT/db/custom.db"
+    set_env TRUST_PROXY "true"
+    set_env NEXT_PUBLIC_SITE_URL "https://$MAIN_DOMAIN"
+
+    # توکن‌های کانال: اگر فایل بود همان مقدار، نبود مقدار ثابت اسکریپت
+    READ_V=$(cat "$PROJECT/db/.maintenance-token.txt" 2>/dev/null || echo "$READ_TOKEN")
+    EDIT_V=$(cat "$PROJECT/db/.maintenance-edit-token.txt" 2>/dev/null || echo "$EDIT_TOKEN")
+    ENC_V=$(cat "$PROJECT/db/.maintenance-enc-key.txt" 2>/dev/null || echo "$ENC_KEY")
+    echo "$READ_V" > "$PROJECT/db/.maintenance-token.txt"
+    echo "$EDIT_V" > "$PROJECT/db/.maintenance-edit-token.txt"
+    echo "$ENC_V" > "$PROJECT/db/.maintenance-enc-key.txt"
+    chmod 600 "$PROJECT/db/.maintenance-"*.txt
+    set_env MAINTENANCE_TOKEN "$READ_V"
+    set_env MAINTENANCE_EDIT_TOKEN "$EDIT_V"
+    set_env MAINTENANCE_ENC_KEY "$ENC_V"
+    echo "  ✅ .env و توکن‌های کانال آماده شد"
+
+    # دیتابیس — اگر فایل db نیست با prisma ساخته می‌شود
+    DB_FRESH=0
+    if [ ! -f "$PROJECT/db/custom.db" ]; then
+        echo "  » ساخت دیتابیس با prisma db push..."
+        if (cd "$PROJECT" && npx -y "prisma@$PRISMA_VER" db push --skip-generate >/dev/null 2>&1); then
+            DB_FRESH=1
+            echo "  ✅ دیتابیس ساخته شد: $PROJECT/db/custom.db"
+        else
+            echo "  ⚠ db push نشد — دستی: cd $PROJECT && npx -y prisma@$PRISMA_VER db push"
+        fi
+    else
+        echo "  ✅ دیتابیس از قبل هست"
+    fi
+
+    # اگر دیتابیس تازه ساخته شد، رمز ادمین تولید و فقط همین یک بار چاپ می‌شود
+    if [ "$DB_FRESH" = "1" ] && [ -f "$PROJECT/scripts/reset-admin-password.sh" ]; then
+        echo "  » تولید رمز ادمین (همین یک بار نمایش داده می‌شود):"
+        (cd "$PROJECT" && bash scripts/reset-admin-password.sh) 2>/dev/null | tail -4
+    fi
+
+    # systemd
+    if [ -n "$SERVER_JS" ]; then
         cat > /etc/systemd/system/$SERVICE_NAME.service << SVC
 [Unit]
 Description=Ehsan Morad Personal Site (Next.js)
@@ -122,7 +168,7 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=$(dirname "$SERVER_JS")
+WorkingDirectory=$PROJECT
 ExecStart=$(command -v node) $SERVER_JS
 Restart=always
 RestartSec=5
@@ -135,29 +181,45 @@ WantedBy=multi-user.target
 SVC
         systemctl daemon-reload
         systemctl enable $SERVICE_NAME >/dev/null 2>&1
-        systemctl restart $SERVICE_NAME || systemctl start $SERVICE_NAME
+        systemctl restart $SERVICE_NAME
         sleep 3
         echo "  ✅ سرویس: $(systemctl is-active $SERVICE_NAME)"
-    else
-        echo "  ⚠ server.js پیدا نشد — سرویس ساخته نشد"
     fi
 else
-    echo "  ⚠ پروژه نیست — سرویس ساخته نشد (بعد از آپلود zip دوباره اجرا کن)"
+    echo "  ⚠ پروژه نیست — این بخش رد شد (بعد از آپلود zip دوباره اجرا کن)"
 fi
 
 # ----------------------------------------------------------------------------
-# ۴) کانفیگ nginx
+# ۴) کانفیگ nginx — ضد تکرار (رفع خطای نسخه ۱)
 # ----------------------------------------------------------------------------
 echo ""
 echo "=== [۴/۸] کانفیگ nginx برای ۳ دامنه ==="
-mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
-cat > /etc/nginx/sites-available/ehsan.conf << 'NGX'
-map $http_upgrade $connection_upgrade { default upgrade; '' close; }
-server_tokens off;
-limit_req_zone $binary_remote_addr zone=login_zone:1m rate=10r/m;
-limit_req_zone $binary_remote_addr zone=maint_zone:1m rate=10r/m;
-server { listen 80 default_server; server_name _; return 444; }
+
+# پاک کردن کانفیگ‌های قدیمی خودمان و سایت پیش‌فرض
+rm -f /etc/nginx/sites-enabled/default \
+      /etc/nginx/sites-enabled/ehsan*.conf /etc/nginx/sites-available/ehsan*.conf \
+      /etc/nginx/conf.d/ehsan*.conf \
+      /etc/nginx/sites-enabled/*morad*.conf /etc/nginx/sites-available/*morad*.conf \
+      /etc/nginx/conf.d/*morad*.conf
+
+# موارد سطح http فقط اگر از قبل در nginx نباشند (ضد duplicate)
+CONF_DIRS="/etc/nginx/nginx.conf /etc/nginx/conf.d/*.conf /etc/nginx/sites-enabled/* /etc/nginx/modules-enabled/*.conf"
+HTTP_TOP=""
+grep -qsE 'map\s+\$http_upgrade\s+\$connection_upgrade' $CONF_DIRS 2>/dev/null \
+    || HTTP_TOP+="map \$http_upgrade \$connection_upgrade { default upgrade; '' close; }"$'\n'
+grep -qs 'zone=login_zone' $CONF_DIRS 2>/dev/null \
+    || HTTP_TOP+="limit_req_zone \$binary_remote_addr zone=login_zone:1m rate=10r/m;"$'\n'
+grep -qs 'zone=maint_zone' $CONF_DIRS 2>/dev/null \
+    || HTTP_TOP+="limit_req_zone \$binary_remote_addr zone=maint_zone:1m rate=10r/m;"$'\n'
+
+# default_server فقط اگر جای دیگری نباشد
+CATCH_BLOCK="server { listen 80 default_server; server_name _; return 444; }"
+grep -qsE 'listen[^;]*default_server' $CONF_DIRS 2>/dev/null \
+    && CATCH_BLOCK="server { listen 80; server_name _; return 444; }"
+
+SERVERS=$(cat << 'NGX'
 server {
+    server_tokens off;
     listen 80;
     server_name ehsanmorad.ir www.ehsanmorad.ir;
     client_max_body_size 10m;
@@ -175,6 +237,7 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; proxy_set_header X-Forwarded-Proto $scheme; }
 }
 server {
+    server_tokens off;
     listen 80;
     server_name ehsan-morad.ir www.ehsan-morad.ir;
     client_max_body_size 10m;
@@ -192,6 +255,7 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; proxy_set_header X-Forwarded-Proto $scheme; }
 }
 server {
+    server_tokens off;
     listen 80;
     server_name ehsanmorad.id.ir www.ehsanmorad.id.ir;
     client_max_body_size 10m;
@@ -209,11 +273,20 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; proxy_set_header X-Forwarded-Proto $scheme; }
 }
 NGX
+)
+
+printf '%s%s%s\n%s' "$HTTP_TOP" "$CATCH_BLOCK" '
+' "$SERVERS" > /etc/nginx/sites-available/ehsan.conf
 ln -sf /etc/nginx/sites-available/ehsan.conf /etc/nginx/sites-enabled/ehsan.conf
-rm -f /etc/nginx/sites-enabled/default
-nginx -t && systemctl enable nginx >/dev/null 2>&1 && systemctl restart nginx \
-    && echo "  ✅ nginx: $(systemctl is-active nginx)" \
-    || { echo "  ❌ nginx -t شکست — کانفیگ را چک کن: nginx -t"; }
+
+if nginx -t >/dev/null 2>&1; then
+    systemctl enable nginx >/dev/null 2>&1
+    systemctl restart nginx && echo "  ✅ nginx: $(systemctl is-active nginx)"
+else
+    echo "  ❌ nginx -t شکست — خروجی:"
+    nginx -t 2>&1 | tail -4
+    echo "  ↑ این چند خط را برای من بفرست"
+fi
 
 # ----------------------------------------------------------------------------
 # ۵) تست سایت
@@ -228,19 +301,24 @@ if systemctl list-unit-files | grep -q $SERVICE_NAME; then
 fi
 
 # ----------------------------------------------------------------------------
-# ۶) SSL
+# ۶) SSL — اگر گواهی از قبل باشد رد می‌شود
 # ----------------------------------------------------------------------------
 echo ""
 echo "=== [۶/۸] SSL برای ۳ دامنه ==="
 for d in $DOMAINS; do
+    if [ -d "/etc/letsencrypt/live/$d" ]; then
+        echo "  ✅ $d — گواهی از قبل هست"
+        continue
+    fi
     IP=$(getent hosts "$d" | awk '{print $1}' | head -1)
     if [ "$IP" = "$VPS_IP" ]; then
         echo "  » $d — DNS اوکی، گرفتن گواهی..."
-        certbot --nginx -d "$d" -d "www.$d" --redirect --non-interactive \
-            --agree-tos --register-unsafely-without-email 2>&1 | grep -E "Successfully|error|Error|Failed" | tail -2 \
-            && echo "    ✅ $d" || echo "    ⚠ $d شکست — بعداً: certbot --nginx -d $d"
+        OUT=$(certbot --nginx -d "$d" -d "www.$d" --redirect --non-interactive \
+            --agree-tos --register-unsafely-without-email 2>&1 | tail -3)
+        echo "$OUT" | grep -q "Successfully received certificate" \
+            && echo "    ✅ $d" || { echo "    ⚠ $d — خروجی:"; echo "$OUT" | sed 's/^/      /'; }
     else
-        echo "  ⚠ $d → DNS ست نشده (الان: ${IP:-هیچ}) — در Cloudflare رکورد A بده: $VPS_IP (پروکسی خاموش)"
+        echo "  ⚠ $d → DNS هنوز ست نشده (الان: ${IP:-هیچ}) — در Cloudflare رکورد A بده: $VPS_IP با پروکسی خاموش"
     fi
 done
 
@@ -260,38 +338,17 @@ else
 fi
 
 # ----------------------------------------------------------------------------
-# ۸) توکن‌های اتصال هوش مصنوعی
+# ۸) گزارش اتصال هوش مصنوعی
 # ----------------------------------------------------------------------------
 echo ""
 echo "=== [۸/۸] اتصال هوش مصنوعی ==="
-TOKEN_FILE=""
-for p in "$PROJECT/db/.maintenance-token.txt" "$BASE/personal-site/db/.maintenance-token.txt"; do
-    [ -f "$p" ] && TOKEN_FILE="$p" && break
-done
-
-if [ -n "$TOKEN_FILE" ]; then
-    DB_DIR=$(dirname "$TOKEN_FILE")
-    # اگر AI-bind فعال نیست، توکن ویرایش بساز
-    if [ ! -f "$DB_DIR/.maintenance-edit-token.txt" ]; then
-        openssl rand -hex 32 > "$DB_DIR/.maintenance-edit-token.txt" && chmod 600 "$DB_DIR/.maintenance-edit-token.txt"
-    fi
-    if [ ! -f "$DB_DIR/.maintenance-enc-key.txt" ]; then
-        openssl rand -hex 32 > "$DB_DIR/.maintenance-enc-key.txt" && chmod 600 "$DB_DIR/.maintenance-enc-key.txt"
-    fi
+if [ -n "$PROJECT" ]; then
+    echo "  توکن‌ها همین حالا در .env ست شده‌اند — چیزی لازم نیست بفرستی."
+    echo "  (مقدارها در db/.maintenance-*.txt هم ذخیره شد)"
     echo ""
-    echo "┌─────────────────────────────────────────────┐"
-    echo "│  این ۳ مقدار را کپی کن و در چت به AI بده:   │"
-    echo "└─────────────────────────────────────────────┘"
-    echo ""
-    echo "EDIT_TOKEN=$(cat "$DB_DIR/.maintenance-edit-token.txt")"
-    echo "ENC_KEY=$(cat "$DB_DIR/.maintenance-enc-key.txt")"
-    echo "READ_TOKEN=$(cat "$TOKEN_FILE")"
-    echo ""
-    echo "AI_URL=https://$MAIN_DOMAIN/api/maintenance"
+    echo "  AI_URL=$([ -d /etc/letsencrypt/live/$MAIN_DOMAIN ] && echo https || echo http)://$MAIN_DOMAIN/api/maintenance"
 else
-    echo "  ⚠ توکن‌های کانال هنوز ساخته نشده‌اند (install.sh با --ai-bind اجرا نشده)"
-    echo "    بعد از نصب کامل، اجرا کن:"
-    echo "      cd $PROJECT && ./install.sh --ai-bind"
+    echo "  ⚠ بعد از آپلود zip و اجرای مجدد، توکن‌ها ست می‌شوند"
 fi
 
 # ----------------------------------------------------------------------------
@@ -305,8 +362,9 @@ echo "  nginx:        $(systemctl is-active nginx 2>/dev/null || echo 'نصب ن
 echo "  سایت:         $(systemctl is-active $SERVICE_NAME 2>/dev/null || echo 'نصب نشده')"
 echo "  مسیر پروژه:   ${PROJECT:-پیدا نشد}"
 echo ""
-ss -tlnp 2>/dev/null | grep -E ':80|:443|:3000' | awk '{print "  پورت:", $4}'
+ss -tlnp 2>/dev/null | grep -E ':80 |:443 |:3000' | awk '{print "  پورت:", $4}'
 echo ""
 echo "  از مرورگر تست کن:"
-for d in $DOMAINS; do echo "    https://$d"; done
+for d in $DOMAINS; do echo "    http(s)://$d"; done
+echo "  آخرین قدم: فقط در چت بنویس «نصب شد» — بقیه‌اش با من"
 echo "=============================================="

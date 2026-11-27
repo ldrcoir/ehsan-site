@@ -264,10 +264,11 @@ def build_doc1_nasb():
 
     add_para(doc,
         "قبل از شروع، یک نگاه کلی به آنچه انجام می‌دهیم: شما یک پکیج zip از هوش مصنوعی "
-        "می‌گیرید (در پوشه 01-UPLOAD-ZIP). این zip را به سرور آپلود می‌کنید، آن را باز "
-        "می‌کنید، و یک اسکریپت نصب (install.sh) را اجرا می‌کنید. این اسکریپت همه کار را "
-        "خودکار انجام می‌دهد: نصب Node.js، نصب nginx، ساخت دیتابیس، تولید رمز admin، "
-        "نصب سرویس systemd، و نصب بک‌آپ شبانه.")
+        "می‌گیرید (در پوشه 01-UPLOAD-ZIP) و آن را به سرور آپلود می‌کنید. برای نصب دو راه "
+        "دارید: راه سریع با نصاب تک‌فایلی NASB-KAMEL.sh نسخه ۲ (پیشنهادی — بخش ۶) که "
+        "nginx و SSL و دیتابیس و توکن‌ها را همه را خودش انجام می‌دهد، و راه دوم با "
+        "اسکریپت install.sh داخل zip (بخش ۷). هر دو راه به یک نتیجه می‌رسند؛ اگر وسط "
+        "راه قطع شد، اجرای دوباره همان نصاب بخش‌های انجام‌شده را تکرار نمی‌کند.")
 
     add_callout(doc,
         "نکته مهم:",
@@ -359,14 +360,59 @@ def build_doc1_nasb():
         "cd /home/ehsan/personal-site\n"
         "cat VERSION.txt   # باید بنویسد: 1.0 rev5 1405-09-05")
 
-    # ---- ۶. اجرای install.sh ----
-    add_heading(doc, "۶. اجرای اسکریپت نصب (install.sh)", level=1)
+    # ---- ۶. روش سریع: نصاب تک‌فایلی ----
+    add_heading(doc, "۶. روش سریع (پیشنهادی): نصاب تک‌فایلی NASB-KAMEL.sh نسخه ۲", level=1)
     add_para(doc,
-        "این مهم‌ترین مرحله است. اسکریپت install.sh همه کار را خودکار انجام می‌دهد: "
-        "نصب Node.js، نصب nginx، ساخت دیتابیس، نصب وابستگی‌ها، تنظیم سرویس systemd، "
-        "و تنظیم بک‌آپ شبانه.")
+        "این نصاب همه کار را با دو دستور انجام می‌دهد: نصب nginx و certbot، کانفیگ ۳ "
+        "دامنه، باز کردن zip، ساخت دیتابیس، سرویس systemd، گرفتن SSL و ست کردن توکن‌های "
+        "کانال در فایل .env. نسخه ۲ خطای نسخه قبل (تکراری شدن server_tokens در nginx) را "
+        "رفع کرده است. این نصاب کاملاً قابل اجرای مجدد است — اگر وسط کار قطع شد، همان "
+        "دستور را دوباره اجرا کنید؛ بخش‌های انجام‌شده رد می‌شوند و توکن‌ها حفظ می‌شوند.")
 
-    add_heading(doc, "۶.۱. پیدا کردن IP خودتان برای لیست مجاز", level=2)
+    add_heading(doc, "۶.۱. فقط دو دستور — از لپ‌تاپ", level=2)
+    add_code_block(doc,
+        "# ۱) آپلود نصاب به سرور:\n"
+        "scp NASB-KAMEL.sh root@31.70.76.10:/root/\n\n"
+        "# ۲) اجرا:\n"
+        "ssh root@31.70.76.10 'bash /root/NASB-KAMEL.sh'")
+
+    add_heading(doc, "۶.۲. چه چیزهایی خودکار انجام می‌شود؟", level=2)
+    add_table(doc,
+        ["مرحله", "کاری که نصاب انجام می‌دهد", "اگر از قبل انجام شده باشد"],
+        [
+            ["۱", "نصب nginx، certbot، Node.js 20 و ابزارها", "رد می‌شود"],
+            ["۲", "پیدا کردن سایت یا باز کردن zip از /root", "همان را استفاده می‌کند"],
+            ["۳", "ساخت db/custom.db با prisma db push + نوشتن .env + سرویس systemd (ehsan-site)", "توکن‌ها و .env حفظ می‌شود"],
+            ["۴", "کانفیگ nginx برای ۳ دامنه + بستن هاست‌های ناشناس — ضد تکرار", "کانفیگ‌های قدیمی ehsan*.conf پاک و از نو نوشته می‌شود"],
+            ["۵", "تست پورت ۸۰ و ۳۰۰۰", "همیشه اجرا می‌شود"],
+            ["۶", "گرفتن SSL با certbot برای هر ۳ دامنه (فقط اگر DNS درست باشد)", "گواهی موجود رد می‌شود"],
+            ["۷", "باز کردن پورت‌های 22/80/443 در فایروال ufw", "بدون تغییر"],
+            ["۸", "ست کردن MAINTENANCE_TOKEN / EDIT_TOKEN / ENC_KEY در .env", "چیزی لازم نیست بفرستید"],
+        ],
+        col_widths=[1.5, 8, 5.5])
+
+    add_callout(doc,
+        "نکته:",
+        "با این نصاب، توکن‌های کانال از قبل در .env ست می‌شوند — نیازی به اجرای "
+        "install.sh --ai-bind و نیازی به فرستادن توکنی به هوش مصنوعی نیست. بعد از پایان "
+        "نصب فقط در چت بنویسید «نصب شد» تا تست اتصال انجام شود. اگر دیتابیس تازه ساخته "
+        "شود، رمز ادمین هم یک‌بار روی صفحه چاپ می‌شود — آن را ذخیره کنید.")
+
+    add_callout(doc,
+        "انتقال داده‌های قدیمی (مهاجرت):",
+        "اگر از سرور قبلی دیتابیس دارید، بعد از نصب کافی است فایل custom.db را با scp "
+        "روی مسیر db/custom.db کپی کنید و بعد بگویید: systemctl restart ehsan-site — "
+        "همه محتوا و تنظیمات قبلی برمی‌گردد.",
+        color='E8F5E9')
+
+    # ---- ۷. روش دوم: install.sh داخل zip ----
+    add_heading(doc, "۷. روش دوم: اسکریپت نصب داخل zip (install.sh)", level=1)
+    add_para(doc,
+        "اگر نصاب تک‌فایلی را اجرا نکردید، این روش هم هست. اسکریپت install.sh همه کار را "
+        "خودکار انجام می‌دهد: نصب Node.js، نصب nginx، ساخت دیتابیس، نصب وابستگی‌ها، "
+        "تنظیم سرویس systemd، تنظیم بک‌آپ شبانه و فعال کردن لیست مجاز IP برای کانال.")
+
+    add_heading(doc, "۷.۱. پیدا کردن IP خودتان برای لیست مجاز", level=2)
     add_para(doc,
         "قبل از اجرای install.sh، باید IP عمومی خودتان را پیدا کنید تا به لیست مجاز "
         "کانال نگهداری اضافه شود. این کار امنیت کانال را بالا می‌برد — فقط شما (و "
@@ -378,7 +424,7 @@ def build_doc1_nasb():
         "# خروجی چیزی مثل: 91.92.93.94\n"
         "# همین عدد را یادداشت کنید")
 
-    add_heading(doc, "۶.۲. اجرای install.sh", level=2)
+    add_heading(doc, "۷.۲. اجرای install.sh", level=2)
     add_para(doc,
         "حالا install.sh را با دو پرچم مهم اجرا کنید: --ai-bind برای فعال‌سازی حالت "
         "AI-Bind (حتی خواندن نیاز به توکن ویرایش دارد) و --ip-allowlist برای محدود "
@@ -393,7 +439,7 @@ def build_doc1_nasb():
         "# اگر نمی‌خواهید لیست IP بگذارید (پیشنهاد نمی‌شود):\n"
         "./install.sh --ai-bind --no-ip-allowlist")
 
-    add_heading(doc, "۶.۳. مراحل اجرای install.sh (rev6)", level=2)
+    add_heading(doc, "۷.۳. مراحل اجرای install.sh (rev6)", level=2)
     add_table(doc,
         ["مرحله", "کاری که انجام می‌شود", "زمان تقریبی"],
         [
@@ -418,12 +464,12 @@ def build_doc1_nasb():
         "نمی‌شوند. همچنین در فایل‌های زیر ذخیره شده‌اند:\n"
         "  /home/ehsan/personal-site/db/.admin-password.txt\n"
         "  /home/ehsan/personal-site/db/.maintenance-token.txt\n"
-        "  /home/z/my-project/personal-site/db/.maintenance-edit-token.txt\n"
+        "  /home/ehsan/personal-site/db/.maintenance-edit-token.txt\n"
         "  /home/ehsan/personal-site/db/.maintenance-enc-key.txt",
         color='FFE4E1')
 
-    # ---- ۷. ورود اول admin ----
-    add_heading(doc, "۷. اولین ورود به پنل مدیریت", level=1)
+    # ---- ۸. ورود اول admin ----
+    add_heading(doc, "۸. اولین ورود به پنل مدیریت", level=1)
     add_para(doc,
         "بعد از نصب، به آدرس سایت بروید و با رمز نمایش‌داده‌شده وارد شوید.")
 
@@ -435,8 +481,8 @@ def build_doc1_nasb():
         "# بعد از اولین ورود، حتماً رمز را عوض کنید:\n"
         "# پنل مدیریت → تنظیمات → تغییر رمز")
 
-    # ---- ۸. تنظیم reCAPTCHA ----
-    add_heading(doc, "۸. تنظیم reCAPTCHA", level=1)
+    # ---- ۹. تنظیم reCAPTCHA ----
+    add_heading(doc, "۹. تنظیم reCAPTCHA", level=1)
     add_para(doc,
         "برای جلوگیری از اسپم در فرم‌های تماس و نظرات، باید reCAPTCHA v2 را تنظیم کنید.")
 
@@ -457,13 +503,13 @@ def build_doc1_nasb():
         "# ۵. سرویس را ری‌استارت کنید:\n"
         "systemctl restart ehsan-site")
 
-    # ---- ۹. تنظیم بات‌ها ----
-    add_heading(doc, "۹. تنظیم بات‌های بله و تلگرام (اختیاری)", level=1)
+    # ---- ۱۰. تنظیم بات‌ها ----
+    add_heading(doc, "۱۰. تنظیم بات‌های بله و تلگرام (اختیاری)", level=1)
     add_para(doc,
         "اگر می‌خواهید پیام‌های تماس و نظرات به بله یا تلگرام شما هم ارسال شوند، بات "
         "تنظیم کنید.")
 
-    add_heading(doc, "۹.۱. بات بله", level=2)
+    add_heading(doc, "۱۰.۱. بات بله", level=2)
     add_code_block(doc,
         "# ۱. در بله به @botfather پیام بدهید:\n"
         "#    /newbot\n"
@@ -477,7 +523,7 @@ def build_doc1_nasb():
         "# ۶. ری‌استارت:\n"
         "systemctl restart ehsan-site")
 
-    add_heading(doc, "۹.۲. بات تلگرام", level=2)
+    add_heading(doc, "۱۰.۲. بات تلگرام", level=2)
     add_code_block(doc,
         "# ۱. در تلگرام به @BotFather پیام بدهید: /newbot\n"
         "# ۲. توکن و chat_id را بگیرید (مشابه بله)\n"
@@ -487,8 +533,8 @@ def build_doc1_nasb():
         "# ۴. ری‌استارت:\n"
         "systemctl restart ehsan-site")
 
-    # ---- ۱۰. تست کانال ----
-    add_heading(doc, "۱۰. تست کانال نگهداری", level=1)
+    # ---- ۱۱. تست کانال ----
+    add_heading(doc, "۱۱. تست کانال نگهداری", level=1)
     add_para(doc,
         "بعد از نصب، مطمئن شوید کانال نگهداری کار می‌کند. این کانال همان چیزی است که "
         "هوش مصنوعی از طریق آن به سایت وصل می‌شود تا باگ‌ها را بگیرد و تغییرات روزانه "
@@ -507,14 +553,14 @@ def build_doc1_nasb():
         "IP را اشتباه وارد کرده‌اید. اگر خطای 503 گرفتید، سرویس بالا نیامده — با "
         "systemctl status ehsan-site لاگ را ببینید.")
 
-    # ---- ۱۱. جدول خطاها ----
-    add_heading(doc, "۱۱. خطاهای رایج و راه‌حل", level=1)
+    # ---- ۱۲. جدول خطاها ----
+    add_heading(doc, "۱۲. خطاهای رایج و راه‌حل", level=1)
     add_table(doc,
         ["خطا", "علت", "راه‌حل"],
         [
             ["ECONNREFUSED در پورت 3000", "سرویس بالا نیامده", "systemctl status ehsan-site && systemctl restart ehsan-site"],
             ["502 Bad Gateway از nginx", "سرویس Next.js کرش کرده", "journalctl -u ehsan-site -n 50 — لاگ را ببینید"],
-            ["403 Forbidden روی /api/maintenance", "IP در لیست مجاز نیست", "install.sh --ip-allowlist را دوباره با IP درست اجرا کنید"],
+            ["403 Forbidden روی /api/maintenance", "IP در لیست مجاز نیست", "این حالت فقط با install.sh --ip-allowlist فعال می‌شود؛ با نصاب تک‌فایلی پیش نمی‌آید"],
             ["401 Unauthorized روی /api/maintenance", "توکن اشتباه", "cat db/.maintenance-edit-token.txt — توکن درست را بگیرید"],
             ["SSL Certificate خطا", "certbot/Caddy certificate نگرفته", "caddy reload یا certbot --nginx"],
             ["DB locked", "دو پروسه همزمان به دیتابیس دسترسی دارند", "systemctl restart ehsan-site"],
@@ -523,8 +569,8 @@ def build_doc1_nasb():
         ],
         col_widths=[4, 4, 6])
 
-    # ---- ۱۲. توصیه نهایی ----
-    add_heading(doc, "۱۲. توصیه‌های نهایی", level=1)
+    # ---- ۱۳. توصیه نهایی ----
+    add_heading(doc, "۱۳. توصیه‌های نهایی", level=1)
     add_bullet(doc, "هر شب بک‌آپ خودکار گرفته می‌شود — ولی هفته‌ای یک‌بار دستی هم بک‌آپ بگیرید و روی لپ‌تاپ خودتان ذخیره کنید.")
     add_bullet(doc, "رمز admin را هر ۳ ماه یک‌بار عوض کنید.")
     add_bullet(doc, "اگر IP اینترنت شما عوض شد، install.sh --ip-allowlist را با IP جدید اجرا کنید.")

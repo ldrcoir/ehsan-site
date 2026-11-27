@@ -42,11 +42,10 @@ print(json.dumps(d, ensure_ascii=False))
 ENVELOPE=$(echo "$PAYLOAD" | node scripts/maintenance-enc.mjs enc "$ENC_KEY")
 [ -z "$ENVELOPE" ] && { echo "❌ رمزنگاری شکست خورد"; exit 1; }
 
-# ساخت هدرها
-HEADERS=(-H "Content-Type: application/json" -H "x-maintenance-token: $READ_TOKEN")
-if [ "$NEED_EDIT" = "--edit" ] || [ -n "${MAINTENANCE_AI_BIND:-}" ]; then
-    HEADERS+=(-H "x-maintenance-edit-token: $EDIT_TOKEN")
-fi
+# ساخت هدرها — هر دو توکن همیشه فرستاده می‌شوند (با AI-bind و بدون آن کار می‌کند)
+HEADERS=(-H "Content-Type: application/json" \
+         -H "x-maintenance-token: $READ_TOKEN" \
+         -H "x-maintenance-edit-token: $EDIT_TOKEN")
 
 # ارسال درخواست
 HTTP_CODE=$(curl -sS -o /tmp/channel-response.json -w "%{http_code}" --max-time 15 \
